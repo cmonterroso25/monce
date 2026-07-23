@@ -10,7 +10,9 @@ import {
   Users,
   UserCircle,
   ClipboardList,
-  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  CheckSquare,
   Settings,
   LogOut,
   Menu,
@@ -30,8 +32,10 @@ const modulos: Modulo[] = [
   { nombre: 'Propiedades', href: '/dashboard/propiedades', icono: Building2, construido: true },
   { nombre: 'Contactos', href: '/dashboard/contactos', icono: UserCircle, construido: true },
   { nombre: 'Leads', href: '/dashboard/leads', icono: ClipboardList, construido: true },
+  { nombre: 'Calendario', href: '/dashboard/calendario', icono: CalendarDays, construido: true },
+  { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarClock, construido: true },
   { nombre: 'Agentes', href: '/dashboard/agentes', icono: Users, construido: true },
-  { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarCheck, construido: true },
+  { nombre: 'Tareas', href: '/dashboard/tareas', icono: CheckSquare, construido: true },
   { nombre: 'Configuración', href: '/dashboard/configuracion', icono: Settings, construido: false },
 ]
 
@@ -39,9 +43,10 @@ type SidebarProps = {
   nombreCompleto: string | null
   rol: string | null
   email: string | null
+  citasHoy?: number
 }
 
-export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
+export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: SidebarProps) {
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
 
@@ -61,10 +66,7 @@ export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
       </button>
 
       {abierto && (
-        <div
-          onClick={() => setAbierto(false)}
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-        />
+        <div onClick={() => setAbierto(false)} className="fixed inset-0 z-40 bg-black/40 lg:hidden" />
       )}
 
       <aside
@@ -74,24 +76,14 @@ export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
       >
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-5 py-5">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Image
-              src="/logo-monce.png"
-              alt="Monce Inmobiliaria"
-              width={36}
-              height={36}
-              className="rounded"
-            />
+            <Image src="/logo-monce.png" alt="Monce Inmobiliaria" width={36} height={36} className="rounded" />
             <span className="text-sm font-semibold leading-tight">
               Monce
               <br />
               Inmobiliaria
             </span>
           </Link>
-          <button
-            onClick={() => setAbierto(false)}
-            className="text-white/70 hover:text-white lg:hidden"
-            aria-label="Cerrar menú"
-          >
+          <button onClick={() => setAbierto(false)} className="text-white/70 hover:text-white lg:hidden" aria-label="Cerrar menú">
             <X size={20} />
           </button>
         </div>
@@ -100,6 +92,7 @@ export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
           {modulos.map((modulo) => {
             const Icono = modulo.icono
             const activo = esActivo(modulo.href)
+            const mostrarBadgeCitas = modulo.href === '/dashboard/calendario' && citasHoy > 0
 
             if (!modulo.construido) {
               return (
@@ -112,9 +105,7 @@ export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
                     <Icono size={18} />
                     {modulo.nombre}
                   </span>
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                    Próximo
-                  </span>
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide">Próximo</span>
                 </div>
               )
             }
@@ -124,14 +115,19 @@ export default function Sidebar({ nombreCompleto, rol, email }: SidebarProps) {
                 key={modulo.href}
                 href={modulo.href}
                 onClick={() => setAbierto(false)}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-                  activo
-                    ? 'bg-[#38B6FF] text-[#2C3E50] font-semibold'
-                    : 'text-white/85 hover:bg-white/10'
+                className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
+                  activo ? 'bg-[#38B6FF] text-[#2C3E50] font-semibold' : 'text-white/85 hover:bg-white/10'
                 }`}
               >
-                <Icono size={18} />
-                {modulo.nombre}
+                <span className="flex items-center gap-3">
+                  <Icono size={18} />
+                  {modulo.nombre}
+                </span>
+                {mostrarBadgeCitas && (
+                  <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    {citasHoy}
+                  </span>
+                )}
               </Link>
             )
           })}
