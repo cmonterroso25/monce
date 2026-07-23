@@ -50,23 +50,7 @@ export default async function EditarLead({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Valor estimado (Q)</label>
-            <input name="valor_negocio" type="number" defaultValue={lead.valor_negocio ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Probabilidad (%)</label>
-            <input name="probabilidad" type="number" min="0" max="100" defaultValue={lead.probabilidad ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de cierre esperada</label>
-          <input name="fecha_cierre_esperada" type="date" defaultValue={lead.fecha_cierre_esperada ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-
-        {lead.etapa === 'perdido' && (
+        {lead.etapa === 'perdida' && (
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Motivo de pérdida</label>
             <textarea name="motivo_perdida" defaultValue={lead.motivo_perdida ?? ''} rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />

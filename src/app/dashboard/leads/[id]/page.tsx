@@ -2,6 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Phone, Mail } from 'lucide-react'
 import CambiarEtapaLead from './cambiar-etapa'
+import GenerarRecibo from './generar-recibo'
+import GenerarInforme from './generar-informe'
+import EstadoInforme from './estado-informe'
+import { ProveedorInforme } from './contexto-informe'
+import { obtenerUltimoInforme } from './informes'
+import MarcarCompletada from '../../actividades/marcar-completada'
 import { crearActividad } from '../acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
 
@@ -26,13 +32,27 @@ export default async function DetalleLead({
 
   if (!lead) return <div className="p-8">Lead no encontrado.</div>
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: agentes } = await supabase
+    .from('perfiles')
+    .select('id, nombre_completo')
+    .eq('organization_id', lead.organization_id)
+    .eq('activo', true)
+    .order('nombre_completo')
+
   const { data: actividades } = await supabase
     .from('actividades')
     .select('*, agente:perfiles(nombre_completo)')
     .eq('lead_id', id)
     .order('creado_en', { ascending: false })
 
+  const informeInicial = await obtenerUltimoInforme(id)
+
   return (
+    <ProveedorInforme informeInicial={informeInicial}>
     <div className="mx-auto max-w-3xl p-8">
       <Link href="/dashboard/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-[#38B6FF]">
         <ArrowLeft size={16} /> Volver a leads
@@ -40,9 +60,23 @@ export default async function DetalleLead({
 
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#2C3E50]">{lead.contacto?.nombre_completo ?? 'Lead'}</h1>
-        <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
-          <Pencil size={16} /> Editar
-        </Link>
+        <div className="flex items-center gap-2">
+          <GenerarRecibo
+            leadId={id}
+            contactoId={lead.contacto_id}
+            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+            agentes={agentes ?? []}
+            agenteActualId={user?.id ?? ''}
+          />
+          <GenerarInforme
+            leadId={id}
+            contactoId={lead.contacto_id}
+            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+          />
+          <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
+            <Pencil size={16} /> Editar
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -51,7 +85,7 @@ export default async function DetalleLead({
 
       <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
-          <CambiarEtapaLead leadId={id} etapaActual={lead.etapa ?? 'nuevo'} />
+          <CambiarEtapaLead leadId={id} etapaActual={lead.etapa ?? 'contacto_inicial'} />
         </div>
 
         <div className="grid grid-cols-2 gap-4 text-sm">
@@ -76,11 +110,13 @@ export default async function DetalleLead({
           </p>
           <p className="text-slate-600"><span className="font-medium">Probabilidad:</span> {lead.probabilidad ? `${lead.probabilidad}%` : '—'}</p>
           <p className="text-slate-600"><span className="font-medium">Cierre esperado:</span> {lead.fecha_cierre_esperada ?? '—'}</p>
-          {lead.etapa === 'perdido' && (
+          {lead.etapa === 'perdida' && (
             <p className="col-span-2 text-slate-600"><span className="font-medium">Motivo de pérdida:</span> {lead.motivo_perdida ?? '—'}</p>
           )}
         </div>
       </div>
+
+      <EstadoInforme />
 
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Actividades</h2>
@@ -108,20 +144,29 @@ export default async function DetalleLead({
 
         <div className="space-y-3">
           {(actividades ?? []).map((a) => (
-            <div key={a.id} className="border-l-2 border-slate-200 pl-3 text-sm">
-              <p className="font-medium text-[#2C3E50]">
-                {ETIQUETAS_ACTIVIDAD[a.tipo_actividad] ?? a.tipo_actividad}
-                <span className="ml-2 text-xs font-normal text-slate-400">
-                  {new Date(a.creado_en).toLocaleString('es-GT')}
-                </span>
-              </p>
-              {a.notas && <p className="text-slate-600">{a.notas}</p>}
-              {a.agente?.nombre_completo && <p className="text-xs text-slate-400">{a.agente.nombre_completo}</p>}
-              {a.completada_en && <p className="text-xs text-green-600">Completada</p>}
+            <div key={a.id} className="flex items-start justify-between gap-3 border-l-2 border-slate-200 pl-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-[#2C3E50]">
+                  {ETIQUETAS_ACTIVIDAD[a.tipo_actividad] ?? a.tipo_actividad}
+                  <span className="ml-2 text-xs font-normal text-slate-400">
+                    {new Date(a.creado_en).toLocaleString('es-GT')}
+                  </span>
+                </p>
+                {a.notas && <p className="text-slate-600">{a.notas}</p>}
+                {a.agente?.nombre_completo && <p className="text-xs text-slate-400">{a.agente.nombre_completo}</p>}
+              </div>
+              <div className="shrink-0">
+                {a.completada_en ? (
+                  <span className="whitespace-nowrap text-xs text-green-600">Completada</span>
+                ) : (
+                  <MarcarCompletada actividadId={a.id} leadId={id} />
+                )}
+              </div>
             </div>
           ))}
         </div>
       </div>
     </div>
+    </ProveedorInforme>
   )
 }
