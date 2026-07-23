@@ -14,6 +14,7 @@ const coloresEstado: Record<string, string> = {
 }
 
 const ESTADOS = ['disponible', 'reservada', 'vendida', 'rentada', 'inactiva']
+const MODALIDADES = ['Directo', 'Compartida']
 
 function urlImagen(ruta: string) {
   if (ruta.startsWith('http')) return ruta
@@ -21,7 +22,7 @@ function urlImagen(ruta: string) {
 }
 
 // Columnas de la "tabla": ancho de imagen, código+estado, propiedad, ubicación, hab/baños/m2, precio, acción
-const GRID_COLS = 'grid-cols-[72px_100px_2fr_1.4fr_1.6fr_140px_48px]'
+const GRID_COLS = 'grid-cols-[64px_90px_2.6fr_0.9fr_1.1fr_130px_40px]'
 
 export default async function ListadoPropiedades({
   searchParams,
@@ -33,6 +34,7 @@ export default async function ListadoPropiedades({
     municipio_id?: string
     colega_id?: string
     captado_por?: string
+    modalidad_captacion?: string
     precio_min?: string
     precio_max?: string
     m2_min?: string
@@ -72,7 +74,7 @@ export default async function ListadoPropiedades({
 
   let query = supabase
     .from('propiedades')
-    .select('*, imagenes_propiedad(ruta_almacenamiento, es_portada)')
+    .select('*, imagenes_propiedad(ruta_almacenamiento, es_portada), municipio:municipios(nombre)')
     .order('creado_en', { ascending: false })
 
   if (params.estado) query = query.eq('estado', params.estado)
@@ -81,10 +83,11 @@ export default async function ListadoPropiedades({
   if (params.municipio_id) query = query.eq('municipio_id', params.municipio_id)
   if (params.colega_id) query = query.eq('colega_id', params.colega_id)
   if (params.captado_por) query = query.eq('captado_por', params.captado_por)
+  if (params.modalidad_captacion) query = query.eq('modalidad_captacion', params.modalidad_captacion)
   if (params.precio_min) query = query.gte('precio', Number(params.precio_min))
   if (params.precio_max) query = query.lte('precio', Number(params.precio_max))
-  if (params.m2_min) query = query.gte('area_m2', Number(params.m2_min))
-  if (params.m2_max) query = query.lte('area_m2', Number(params.m2_max))
+  if (params.m2_min) query = query.gte('area_construccion_m2', Number(params.m2_min))
+  if (params.m2_max) query = query.lte('area_construccion_m2', Number(params.m2_max))
 
   const { data: propiedades } = await query
 
@@ -106,6 +109,7 @@ export default async function ListadoPropiedades({
         municipios={municipios ?? []}
         colegas={colegas ?? []}
         agentes={agentes}
+        modalidades={MODALIDADES}
       />
 
       {(!propiedades || propiedades.length === 0) && (
@@ -189,7 +193,7 @@ export default async function ListadoPropiedades({
                       <MapPin size={14} className="flex-shrink-0 text-slate-400" />
                       <span className="truncate">
                         {propiedad.zona ? `${propiedad.zona}, ` : ''}
-                        {propiedad.ciudad}
+                        {propiedad.municipio?.nombre ?? propiedad.ciudad}
                       </span>
                     </div>
 
@@ -205,7 +209,7 @@ export default async function ListadoPropiedades({
                       </span>
                       <span className="flex items-center gap-1">
                         <Ruler size={15} className="text-slate-400" />
-                        {propiedad.area_m2 ?? '—'} m²
+                        {propiedad.area_construccion_m2 ?? '—'} m²
                       </span>
                     </div>
 

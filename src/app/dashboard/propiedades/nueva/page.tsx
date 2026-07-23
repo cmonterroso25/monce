@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { crearPropiedad } from '../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
+import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
+import SelectorRequisitosRenta from '../selector-requisitos-renta'
 
 export default async function NuevaPropiedad({
   searchParams,
@@ -26,6 +29,13 @@ export default async function NuevaPropiedad({
 
   return (
     <div className="mx-auto max-w-2xl p-8">
+      <Link
+        href="/dashboard/propiedades"
+        className="mb-4 inline-block text-sm text-slate-500 hover:text-[#38B6FF]"
+      >
+        ← Volver a propiedades
+      </Link>
+
       <h1 className="mb-6 text-2xl font-bold">Nueva propiedad</h1>
 
       {params.error && (
@@ -33,6 +43,12 @@ export default async function NuevaPropiedad({
       )}
 
       <form action={crearPropiedad} className="space-y-4">
+
+        <div className="mb-2 border-b border-gray-200 pb-2">
+          <h2 className="text-base font-semibold text-[#2C3E50]">Información pública</h2>
+          <p className="text-xs text-gray-500">Estos datos se muestran en el portal público de la propiedad.</p>
+        </div>
+
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Título</label>
           <input
@@ -44,7 +60,6 @@ export default async function NuevaPropiedad({
           />
         </div>
 
-        {/* Ubicación */}
         <div className="grid grid-cols-2 gap-4">
           <SelectConNuevo
             name="municipio_id"
@@ -81,19 +96,18 @@ export default async function NuevaPropiedad({
         </div>
         <input type="hidden" name="ciudad" value="Guatemala" />
 
-        {/* Tipo de inmueble y negocio */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Inmueble</label>
             <select
               name="tipo_propiedad"
               required
+              defaultValue="casa"
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             >
-              <option value="casa">Casa</option>
-              <option value="apartamento">Apartamento</option>
-              <option value="terreno">Terreno</option>
-              <option value="comercial">Comercial</option>
+              {TIPOS_PROPIEDAD.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -109,18 +123,7 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Modalidad de captación</label>
-          <select
-            name="modalidad_captacion"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="Directo">Directo</option>
-            <option value="Compartida">Compartida</option>
-          </select>
-        </div>
-
-        {/* Distribución */}
+        <SelectorRequisitosRenta />
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
@@ -148,6 +151,7 @@ export default async function NuevaPropiedad({
             />
           </div>
         </div>
+
 
         <div className="grid grid-cols-2 gap-4">
           {[
@@ -191,7 +195,6 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        {/* Áreas */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">M² construcción</label>
@@ -221,7 +224,6 @@ export default async function NuevaPropiedad({
           />
         </div>
 
-        {/* Financiero */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Precio</label>
@@ -245,7 +247,7 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Mantenimiento</label>
             <input
@@ -264,15 +266,57 @@ export default async function NuevaPropiedad({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Comisión</label>
-            <input
-              type="number"
-              name="comision"
-              step="0.01"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Mascota</label>
+          <input
+            type="text"
+            name="mascota"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Descripción</label>
+          <textarea
+            name="descripcion"
+            rows={5}
+            placeholder="Descripción de la propiedad, visible en el portal público"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="mb-2 mt-8 border-b border-gray-200 pb-2">
+          <h2 className="text-base font-semibold text-[#2C3E50]">Información interna (No publicar)</h2>
+          <p className="text-xs text-gray-500">Solo visible dentro del CRM, nunca en el portal público.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Modalidad de captación</label>
+          <select
+            name="modalidad_captacion"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="Directo">Directo</option>
+            <option value="Compartida">Compartida</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Comisión</label>
+          <select
+            name="comision"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona</option>
+            <option value="Primera renta">Primera renta</option>
+            <option value="1/2 renta">1/2 renta</option>
+            <option value="5%">5%</option>
+            <option value="4%">4%</option>
+            <option value="3%">3%</option>
+            <option value="2.5">2.5</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -298,34 +342,23 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Mascota</label>
-            <input
-              type="text"
-              name="mascota"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Acceso</label>
-            <select
-              name="acceso"
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">Selecciona</option>
-              <option value="Carlos Monterroso">Carlos Monterroso</option>
-              <option value="Laura Ceballos">Laura Ceballos</option>
-              <option value="Lucy Aguilar">Lucy Aguilar</option>
-              <option value="Vivi Gonzalez">Vivi Gonzalez</option>
-              <option value="Adan Suret">Adan Suret</option>
-              <option value="Yenni Ceballos">Yenni Ceballos</option>
-              <option value="Pamela Aguilar">Pamela Aguilar</option>
-            </select>
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Acceso coordinar con:</label>
+          <select
+            name="acceso"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona</option>
+            <option value="Carlos Monterroso">Carlos Monterroso</option>
+            <option value="Laura Ceballos">Laura Ceballos</option>
+            <option value="Lucy Aguilar">Lucy Aguilar</option>
+            <option value="Vivi Gonzalez">Vivi Gonzalez</option>
+            <option value="Adan Suret">Adan Suret</option>
+            <option value="Yenni Ceballos">Yenni Ceballos</option>
+            <option value="Pamela Aguilar">Pamela Aguilar</option>
+          </select>
         </div>
 
-        {/* Personas involucradas */}
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Propietario</label>
           <input
@@ -359,24 +392,16 @@ export default async function NuevaPropiedad({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Descripción</label>
-          <textarea
-            name="descripcion"
-            rows={4}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">No Publicar</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Otra información</label>
           <textarea
             name="comentarios"
-            rows={3}
+            rows={4}
+            placeholder="Notas internas adicionales sobre la propiedad"
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
 
-        <div>
+        <div className="mt-8">
           <label className="mb-1 block text-sm font-medium text-gray-700">
             Fotos (la primera será la portada)
           </label>

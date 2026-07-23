@@ -15,12 +15,14 @@ export default function FiltrosPropiedades({
   municipios,
   colegas,
   agentes,
+  modalidades,
 }: {
   estados: string[]
   tipos: string[]
   municipios: Opcion[]
   colegas: Opcion[]
   agentes: Opcion[]
+  modalidades: string[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -84,6 +86,7 @@ export default function FiltrosPropiedades({
     searchParams.get('municipio_id'),
     searchParams.get('colega_id'),
     searchParams.get('captado_por'),
+    searchParams.get('modalidad_captacion'),
     searchParams.get('precio_min'),
     searchParams.get('precio_max'),
     searchParams.get('m2_min'),
@@ -138,6 +141,19 @@ export default function FiltrosPropiedades({
           {municipios.map((m) => (
             <option key={m.id} value={m.id}>
               {m.nombre}
+            </option>
+          ))}
+        </select>
+
+        <select
+          defaultValue={searchParams.get('modalidad_captacion') || ''}
+          onChange={(e) => actualizarFiltro('modalidad_captacion', e.target.value)}
+          className={`${campoBase} pr-7`}
+        >
+          <option value="">Modalidad</option>
+          {modalidades.map((m) => (
+            <option key={m} value={m}>
+              {m}
             </option>
           ))}
         </select>

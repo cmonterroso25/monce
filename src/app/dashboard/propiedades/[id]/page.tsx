@@ -1,9 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { Lock, ExternalLink } from 'lucide-react'
 import Galeria from './galeria'
 import CompartirWhatsapp from './compartir-whatsapp'
 import CambiarEstado from './cambiar-estado'
+import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
+import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
+import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -16,6 +20,7 @@ const coloresEstado: Record<string, string> = {
 }
 
 const ESTADOS = ['disponible', 'reservada', 'vendida', 'rentada', 'inactiva']
+const ESTADOS_VISIBLES_PORTAL = ['disponible', 'reservada']
 
 function urlImagen(ruta: string) {
   if (ruta.startsWith('http')) return ruta
@@ -65,16 +70,22 @@ export default async function DetallePropiedad({
     return (a.orden ?? 0) - (b.orden ?? 0)
   })
 
-  const amenidades = [
-    ['Sala', propiedad.sala],
-    ['Comedor', propiedad.comedor],
-    ['Cocina', propiedad.cocina],
-    ['Estudio', propiedad.estudio],
-    ['Sala familiar', propiedad.sala_familiar],
-    ['Habitación de servicio', propiedad.habitacion_servicio],
-    ['Lavandería', propiedad.lavanderia],
-    ['Jardín', propiedad.jardin],
-  ].filter(([, valor]) => valor)
+  const requisitosRenta = propiedad.requisitos_renta
+    ? REQUISITOS_RENTA[propiedad.requisitos_renta as CodigoRequisitosRenta]
+    : null
+
+  const visibleEnPortal = propiedad.slug && ESTADOS_VISIBLES_PORTAL.includes(propiedad.estado)
+
+  const hayInformacionPrivada =
+    propiedad.modalidad_captacion ||
+    propiedad.comision ||
+    propiedad.hipoteca ||
+    propiedad.valor_hipoteca ||
+    propiedad.acceso ||
+    propiedad.comentarios ||
+    propiedad.propietario ||
+    propiedad.capturador ||
+    propiedad.colega
 
   return (
     <div className="mx-auto max-w-5xl p-8">
@@ -119,6 +130,18 @@ export default async function DetallePropiedad({
             {propiedad.ciudad}
           </p>
 
+          {visibleEnPortal && (
+            <a
+              href={`/propiedades/${propiedad.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#38B6FF] hover:underline"
+            >
+              <ExternalLink size={12} />
+              Ver en portal público
+            </a>
+          )}
+
           <p className="mt-3 text-3xl font-bold text-[#2C3E50]">
             {propiedad.moneda} {Number(propiedad.precio).toLocaleString()}
           </p>
@@ -138,7 +161,7 @@ export default async function DetallePropiedad({
             </div>
             <div className="rounded-lg border border-slate-200 py-3">
               <p className="text-lg font-semibold text-[#2C3E50]">
-                {propiedad.area_m2 ?? '—'} m²
+                {propiedad.area_construccion_m2 ?? '—'} m²
               </p>
               <p className="text-xs text-slate-500">Área</p>
             </div>
@@ -148,7 +171,6 @@ export default async function DetallePropiedad({
             <p className="mt-4 text-sm text-slate-600">
               <span className="font-medium text-[#2C3E50]">Tipo: </span>
               {propiedad.tipo_propiedad}
-              {propiedad.modalidad_captacion && ` · ${propiedad.modalidad_captacion}`}
             </p>
           )}
 
@@ -161,79 +183,73 @@ export default async function DetallePropiedad({
             </div>
           )}
 
-          {/* Areas */}
-          <div className="mt-6">
-            <h2 className="mb-2 font-semibold text-[#2C3E50]">Areas</h2>
-            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-              <Dato etiqueta="Niveles" valor={propiedad.niveles} />
-              <Dato etiqueta="Parqueos" valor={propiedad.parqueos} />
-              <Dato etiqueta="Número de casa" valor={propiedad.numero_casa} />
-              <Dato etiqueta="M² construcción" valor={propiedad.area_construccion_m2} />
-              <Dato etiqueta="M² terreno" valor={propiedad.area_terreno_m2} />
-              <Dato etiqueta="Medidas del terreno" valor={propiedad.medidas_terreno} />
-              <Dato etiqueta="Extras" valor={propiedad.extras} />
-            </div>
-          </div>
+          {/* ============================================================ */}
+          {/* INFORMACION PUBLICA */}
+          {/* ============================================================ */}
+          <SeccionAreasYAmbientes propiedad={propiedad} className="mt-8" />
 
-          {amenidades.length > 0 && (
-            <div className="mt-4">
-              <h2 className="mb-2 font-semibold text-[#2C3E50]">Ambientes</h2>
-              <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-                {amenidades.map(([etiqueta, valor]) => (
-                  <Dato key={etiqueta as string} etiqueta={etiqueta as string} valor={valor as string} />
-                ))}
+          {/* ============================================================ */}
+          {/* REQUISITOS DE RENTA - antes de la información privada */}
+          {/* ============================================================ */}
+          {requisitosRenta && (
+            <div className="mt-8">
+              <DetalleRequisitosRenta paquete={requisitosRenta} />
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* INFORMACION PRIVADA - solo visible para agentes en el dashboard */}
+          {/* Esta seccion NUNCA se expone en /propiedades/[slug] (portal publico) */}
+          {/* ============================================================ */}
+          {hayInformacionPrivada && (
+            <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+              <h2 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                <Lock size={12} />
+                Información privada — solo visible para agentes
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Dato etiqueta="Modalidad de captación" valor={propiedad.modalidad_captacion} />
+                <Dato etiqueta="Comisión" valor={propiedad.comision} />
+                <Dato etiqueta="Hipoteca" valor={propiedad.hipoteca} />
+                <Dato
+                  etiqueta="Valor hipoteca"
+                  valor={propiedad.valor_hipoteca ? Number(propiedad.valor_hipoteca).toLocaleString() : null}
+                />
+                <Dato etiqueta="Acceso coordinar con" valor={propiedad.acceso} />
               </div>
-            </div>
-          )}
 
-          {/* Datos financieros */}
-          <div className="mt-4">
-            <h2 className="mb-2 font-semibold text-[#2C3E50]">Datos financieros</h2>
-            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-              <Dato
-                etiqueta="Mantenimiento"
-                valor={propiedad.mantenimiento ? Number(propiedad.mantenimiento).toLocaleString() : null}
-              />
-              <Dato etiqueta="IUSI" valor={propiedad.iusi ? Number(propiedad.iusi).toLocaleString() : null} />
-              <Dato etiqueta="Comisión" valor={propiedad.comision ? Number(propiedad.comision).toLocaleString() : null} />
-              <Dato etiqueta="Hipoteca" valor={propiedad.hipoteca} />
-              <Dato etiqueta="Mascota" valor={propiedad.mascota} />
-              <Dato etiqueta="Acceso" valor={propiedad.acceso} />
-            </div>
-          </div>
-
-          {propiedad.comentarios && (
-            <div className="mt-4">
-              <h2 className="mb-1 font-semibold text-[#2C3E50]">Comentarios internos</h2>
-              <p className="whitespace-pre-line text-sm text-slate-600">
-                {propiedad.comentarios}
-              </p>
-            </div>
-          )}
-
-          {/* Personas involucradas */}
-          {(propiedad.propietario || propiedad.capturador || propiedad.colega) && (
-            <div className="mt-4 space-y-2 rounded-lg border border-slate-200 p-4">
-              {propiedad.propietario && (
-                <p className="text-sm text-slate-600">
-                  <span className="font-medium text-[#2C3E50]">Propietario: </span>
-                  {propiedad.propietario.nombre_completo}
-                  {propiedad.propietario.telefono && ` · ${propiedad.propietario.telefono}`}
-                </p>
+              {(propiedad.propietario || propiedad.capturador || propiedad.colega) && (
+                <div className="mt-3 space-y-1.5 border-t border-amber-200 pt-3">
+                  {propiedad.propietario && (
+                    <p className="text-sm text-slate-700">
+                      <span className="font-medium">Propietario: </span>
+                      {propiedad.propietario.nombre_completo}
+                      {propiedad.propietario.telefono && ` · ${propiedad.propietario.telefono}`}
+                    </p>
+                  )}
+                  {propiedad.capturador && (
+                    <p className="text-sm text-slate-700">
+                      <span className="font-medium">Captado por: </span>
+                      {propiedad.capturador.nombre_completo}
+                    </p>
+                  )}
+                  {propiedad.colega && (
+                    <p className="text-sm text-slate-700">
+                      <span className="font-medium">Colega: </span>
+                      {propiedad.colega.nombre}
+                      {propiedad.colega.inmobiliaria && ` · ${propiedad.colega.inmobiliaria}`}
+                      {propiedad.colega.telefono && ` · ${propiedad.colega.telefono}`}
+                    </p>
+                  )}
+                </div>
               )}
-              {propiedad.capturador && (
-                <p className="text-sm text-slate-600">
-                  <span className="font-medium text-[#2C3E50]">Captado por: </span>
-                  {propiedad.capturador.nombre_completo}
-                </p>
-              )}
-              {propiedad.colega && (
-                <p className="text-sm text-slate-600">
-                  <span className="font-medium text-[#2C3E50]">Colega: </span>
-                  {propiedad.colega.nombre}
-                  {propiedad.colega.inmobiliaria && ` · ${propiedad.colega.inmobiliaria}`}
-                  {propiedad.colega.telefono && ` · ${propiedad.colega.telefono}`}
-                </p>
+
+              {propiedad.comentarios && (
+                <div className="mt-3 border-t border-amber-200 pt-3">
+                  <p className="mb-1 text-sm font-medium text-slate-700">Comentarios internos</p>
+                  <p className="whitespace-pre-line text-sm text-slate-600">{propiedad.comentarios}</p>
+                </div>
               )}
             </div>
           )}

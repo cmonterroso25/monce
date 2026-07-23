@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { actualizarPropiedad } from '../../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
 import GestorFotos from './gestor-fotos'
+import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
+import SelectorRequisitosRenta from '../../selector-requisitos-renta'
 
 export default async function EditarPropiedad({
   params,
@@ -65,7 +67,7 @@ export default async function EditarPropiedad({
           <p className="text-sm text-amber-700">
             {nombreCaptador
               ? `Esta propiedad fue capturada por ${nombreCaptador}. Solo esa persona o un administrador puede editarla.`
-              : 'Solo quien capturó esta propiedad o un administrador puede editarla.'}
+              : 'Solo quien capturo esta propiedad o un administrador puede editarla.'}
           </p>
           <Link
             href={`/dashboard/propiedades/${propiedad.id}`}
@@ -81,7 +83,7 @@ export default async function EditarPropiedad({
   return (
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="mb-6 text-2xl font-bold">
-        Editar propiedad {propiedad.codigo ? `· ${propiedad.codigo}` : ''}
+        Editar propiedad {propiedad.codigo ? `- ${propiedad.codigo}` : ''}
       </h1>
 
       {sp.error && (
@@ -96,8 +98,13 @@ export default async function EditarPropiedad({
       <form action={actualizarPropiedad} className="space-y-4">
         <input type="hidden" name="propiedad_id" value={propiedad.id} />
 
+        <div className="mb-2 border-b border-gray-200 pb-2">
+          <h2 className="text-base font-semibold text-[#2C3E50]">Informacion publica</h2>
+          <p className="text-xs text-gray-500">Estos datos se muestran en el portal publico de la propiedad.</p>
+        </div>
+
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Título</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Titulo</label>
           <input
             type="text"
             name="titulo"
@@ -156,10 +163,9 @@ export default async function EditarPropiedad({
               defaultValue={propiedad.tipo_propiedad ?? 'casa'}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             >
-              <option value="casa">Casa</option>
-              <option value="apartamento">Apartamento</option>
-              <option value="terreno">Terreno</option>
-              <option value="comercial">Comercial</option>
+              {TIPOS_PROPIEDAD.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -176,18 +182,7 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Modalidad de captación</label>
-          <select
-            name="modalidad_captacion"
-            defaultValue={propiedad.modalidad_captacion ?? 'Directo'}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="Directo">Directo</option>
-            <option value="Compartida">Compartida</option>
-          </select>
-        </div>
-
+        <SelectorRequisitosRenta defaultValue={propiedad.requisitos_renta ?? ''} />
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
@@ -208,7 +203,7 @@ export default async function EditarPropiedad({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Baños</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Banos</label>
             <input
               type="number"
               step="0.5"
@@ -219,6 +214,7 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
+
         <div className="grid grid-cols-2 gap-4">
           {[
             ['sala', 'Sala'],
@@ -226,9 +222,9 @@ export default async function EditarPropiedad({
             ['cocina', 'Cocina'],
             ['estudio', 'Estudio'],
             ['sala_familiar', 'Sala Familiar'],
-            ['habitacion_servicio', 'Habitación de servicio'],
-            ['lavanderia', 'Lavandería'],
-            ['jardin', 'Jardín'],
+            ['habitacion_servicio', 'Habitacion de servicio'],
+            ['lavanderia', 'Lavanderia'],
+            ['jardin', 'Jardin'],
           ].map(([campo, etiqueta]) => (
             <div key={campo}>
               <label className="mb-1 block text-sm font-medium text-gray-700">{etiqueta}</label>
@@ -266,7 +262,7 @@ export default async function EditarPropiedad({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">M² construcción</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">M2 construccion</label>
             <input
               type="number"
               name="area_construccion_m2"
@@ -275,7 +271,7 @@ export default async function EditarPropiedad({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">M² terreno</label>
+            <label className="mb-1 block text-sm font-medium text-gray-700">M2 terreno</label>
             <input
               type="number"
               name="area_terreno_m2"
@@ -321,7 +317,7 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Mantenimiento</label>
             <input
@@ -342,16 +338,61 @@ export default async function EditarPropiedad({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Comisión</label>
-            <input
-              type="number"
-              name="comision"
-              step="0.01"
-              defaultValue={propiedad.comision ?? ''}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Mascota</label>
+          <input
+            type="text"
+            name="mascota"
+            defaultValue={propiedad.mascota ?? ''}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Descripción</label>
+          <textarea
+            name="descripcion"
+            rows={5}
+            defaultValue={propiedad.descripcion ?? ''}
+            placeholder="Descripción de la propiedad, visible en el portal público"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="mb-2 mt-8 border-b border-gray-200 pb-2">
+          <h2 className="text-base font-semibold text-[#2C3E50]">Informacion interna (No publicar)</h2>
+          <p className="text-xs text-gray-500">Solo visible dentro del CRM, nunca en el portal publico.</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Modalidad de captacion</label>
+          <select
+            name="modalidad_captacion"
+            defaultValue={propiedad.modalidad_captacion ?? 'Directo'}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="Directo">Directo</option>
+            <option value="Compartida">Compartida</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Comisión</label>
+          <select
+            name="comision"
+            defaultValue={propiedad.comision ?? ''}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona</option>
+            <option value="Primera renta">Primera renta</option>
+            <option value="1/2 renta">1/2 renta</option>
+            <option value="5%">5%</option>
+            <option value="4%">4%</option>
+            <option value="3%">3%</option>
+            <option value="2.5">2.5</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -363,7 +404,7 @@ export default async function EditarPropiedad({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="">Selecciona</option>
-              <option value="Si">Sí</option>
+              <option value="Si">Si</option>
               <option value="No">No</option>
             </select>
           </div>
@@ -379,33 +420,22 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Mascota</label>
-            <input
-              type="text"
-              name="mascota"
-              defaultValue={propiedad.mascota ?? ''}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Acceso</label>
-            <select
-              name="acceso"
-              defaultValue={propiedad.acceso ?? ''}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">Selecciona</option>
-              <option value="Carlos Monterroso">Carlos Monterroso</option>
-              <option value="Laura Ceballos">Laura Ceballos</option>
-              <option value="Lucy Aguilar">Lucy Aguilar</option>
-              <option value="Vivi Gonzalez">Vivi Gonzalez</option>
-              <option value="Adan Suret">Adan Suret</option>
-              <option value="Yenni Ceballos">Yenni Ceballos</option>
-              <option value="Pamela Aguilar">Pamela Aguilar</option>
-            </select>
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Acceso coordinar con:</label>
+          <select
+            name="acceso"
+            defaultValue={propiedad.acceso ?? ''}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona</option>
+            <option value="Carlos Monterroso">Carlos Monterroso</option>
+            <option value="Laura Ceballos">Laura Ceballos</option>
+            <option value="Lucy Aguilar">Lucy Aguilar</option>
+            <option value="Vivi Gonzalez">Vivi Gonzalez</option>
+            <option value="Adan Suret">Adan Suret</option>
+            <option value="Yenni Ceballos">Yenni Ceballos</option>
+            <option value="Pamela Aguilar">Pamela Aguilar</option>
+          </select>
         </div>
 
         <div>
@@ -444,28 +474,19 @@ export default async function EditarPropiedad({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Descripción</label>
-          <textarea
-            name="descripcion"
-            rows={4}
-            defaultValue={propiedad.descripcion ?? ''}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">No Publicar</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Otra información</label>
           <textarea
             name="comentarios"
-            rows={3}
+            rows={4}
             defaultValue={propiedad.comentarios ?? ''}
+            placeholder="Notas internas adicionales sobre la propiedad"
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
 
-        <div>
+        <div className="mt-8">
           <label className="mb-1 block text-sm font-medium text-gray-700">
-            Agregar más fotos (se añaden al final)
+            Agregar mas fotos (se anaden al final)
           </label>
           <input
             type="file"
