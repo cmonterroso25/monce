@@ -27,10 +27,10 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const rutasPublicas = ['/login', '/registro', '/auth']
-  const esRutaPublica = rutasPublicas.some((ruta) =>
-    request.nextUrl.pathname.startsWith(ruta)
-  )
+  const rutasPublicas = ['/login', '/registro', '/auth', '/propiedades', '/api/webhooks']
+  const esRutaPublica =
+    request.nextUrl.pathname === '/' ||
+    rutasPublicas.some((ruta) => request.nextUrl.pathname.startsWith(ruta))
 
   if (!user && !esRutaPublica) {
     const url = request.nextUrl.clone()
