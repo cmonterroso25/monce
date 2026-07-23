@@ -3,12 +3,17 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Search } from 'lucide-react'
-import { ESTADOS_CONTACTO } from './constantes'
+import { ESTADOS_CONTACTO, TIPOS_CONTACTO, ORIGENES } from './constantes'
 
-const TIPOS = ['comprador', 'vendedor', 'inquilino', 'arrendador']
-const ORIGENES = ['facebook', 'instagram', 'whatsapp', 'referido', 'walk-in', 'sitio_web', 'otro']
-
-export default function FiltrosContactos({ agentes }: { agentes: { id: string; nombre: string }[] }) {
+export default function FiltrosContactos({
+  agentes,
+  esAdmin,
+  idPropio,
+}: {
+  agentes: { id: string; nombre: string }[]
+  esAdmin: boolean
+  idPropio: string
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [telefono, setTelefono] = useState(searchParams.get('telefono') ?? '')
@@ -50,7 +55,7 @@ export default function FiltrosContactos({ agentes }: { agentes: { id: string; n
 
       <select className={base} defaultValue={searchParams.get('tipo') ?? ''} onChange={(e) => actualizarFiltro('tipo', e.target.value)}>
         <option value="">Todos los tipos</option>
-        {TIPOS.map((t) => (
+        {TIPOS_CONTACTO.map((t) => (
           <option key={t} value={t}>{t}</option>
         ))}
       </select>
@@ -62,12 +67,18 @@ export default function FiltrosContactos({ agentes }: { agentes: { id: string; n
         ))}
       </select>
 
-      <select className={base} defaultValue={searchParams.get('agente_asignado') ?? ''} onChange={(e) => actualizarFiltro('agente_asignado', e.target.value)}>
-        <option value="">Todos los agentes</option>
-        {agentes.map((a) => (
-          <option key={a.id} value={a.id}>{a.nombre}</option>
-        ))}
-      </select>
+      {esAdmin ? (
+        <select className={base} defaultValue={searchParams.get('agente_asignado') ?? ''} onChange={(e) => actualizarFiltro('agente_asignado', e.target.value)}>
+          <option value="">Todos los agentes</option>
+          {agentes.map((a) => (
+            <option key={a.id} value={a.id}>{a.nombre}</option>
+          ))}
+        </select>
+      ) : (
+        <span className={`${base} bg-slate-50 text-slate-400`} title="Solo ves tus propios contactos">
+          Mis contactos
+        </span>
+      )}
     </div>
   )
 }

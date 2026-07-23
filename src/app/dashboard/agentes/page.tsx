@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Phone, Building2, Target, TrendingUp } from 'lucide-react'
 
 const GRID_COLS = 'grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px]'
-const ETAPAS_ABIERTAS = ['nuevo', 'contactado', 'interesado', 'visita', 'negociacion']
+const ETAPAS_ABIERTAS = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada']
 
 function inicioDeMes() {
   const d = new Date()
@@ -47,7 +47,7 @@ export default async function ListadoAgentes() {
     const leadsAgente = (leads ?? []).filter((l) => l.agente_id === p.id)
     const leadsAbiertos = leadsAgente.filter((l) => ETAPAS_ABIERTAS.includes(l.etapa)).length
     const leadsCerradosMes = leadsAgente.filter(
-      (l) => l.etapa === 'cerrado' && l.actualizado_en && l.actualizado_en >= inicioMes
+      (l) => l.etapa === 'ganada' && l.actualizado_en && l.actualizado_en >= inicioMes
     ).length
     const valorEnNegociacion = leadsAgente
       .filter((l) => ETAPAS_ABIERTAS.includes(l.etapa))

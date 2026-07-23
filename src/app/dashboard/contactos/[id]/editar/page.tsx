@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { actualizarContacto } from '../../acciones'
 import { TIPOS_CONTACTO, ORIGENES } from '../../constantes'
+import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 
 export default async function EditarContacto({
   params,
@@ -76,6 +77,16 @@ export default async function EditarContacto({
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Zonas de interés</label>
           <input name="zonas_interes" defaultValue={contacto.zonas_interes?.join(', ') ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de propiedad de interés</label>
+          <select name="tipo_propiedad_interes" defaultValue={contacto.tipo_propiedad_interes ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+            <option value="">Sin especificar</option>
+            {TIPOS_PROPIEDAD.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
         </div>
 
         <div>

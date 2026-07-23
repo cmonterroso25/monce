@@ -1,3 +1,3 @@
-export const TIPOS_CONTACTO = ['comprador', 'vendedor', 'inquilino', 'arrendador']
+export const TIPOS_CONTACTO = ['lead', 'comprador', 'vendedor', 'inquilino', 'propietario']
 export const ORIGENES = ['facebook', 'instagram', 'whatsapp', 'referido', 'walk-in', 'sitio_web', 'otro']
-export const ESTADOS_CONTACTO = ['nuevo', 'en_seguimiento', 'calificado', 'descartado']
+export const ESTADOS_CONTACTO = ['nuevo', 'contactado', 'calificado', 'negociando', 'ganado', 'perdido']

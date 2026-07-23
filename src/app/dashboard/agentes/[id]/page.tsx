@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil, Phone, Building2, Target } from 'lucide-react'
 import { ETAPAS, ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
 
-const ETAPAS_ABIERTAS = ['nuevo', 'contactado', 'interesado', 'visita', 'negociacion']
+const ETAPAS_ABIERTAS = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada']
 
 const ETIQUETAS_ESTADO_PROPIEDAD: Record<string, string> = {
   disponible: 'Disponible',
@@ -60,10 +60,10 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
     .filter((l) => ETAPAS_ABIERTAS.includes(l.etapa))
     .reduce((sum, l) => sum + Number(l.valor_negocio ?? 0), 0)
   const valorCerradoTotal = (leads ?? [])
-    .filter((l) => l.etapa === 'cerrado')
+    .filter((l) => l.etapa === 'ganada')
     .reduce((sum, l) => sum + Number(l.valor_negocio ?? 0), 0)
   const leadsCerradosMes = (leads ?? []).filter(
-    (l) => l.etapa === 'cerrado' && l.actualizado_en && l.actualizado_en >= inicioMes
+    (l) => l.etapa === 'ganada' && l.actualizado_en && l.actualizado_en >= inicioMes
   ).length
 
   return (

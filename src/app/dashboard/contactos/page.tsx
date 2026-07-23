@@ -5,9 +5,11 @@ import FiltrosContactos from './filtros-contactos'
 
 const coloresEstado: Record<string, string> = {
   nuevo: 'bg-blue-100 text-blue-700',
-  en_seguimiento: 'bg-yellow-100 text-yellow-700',
-  calificado: 'bg-green-100 text-green-700',
-  descartado: 'bg-slate-200 text-slate-600',
+  contactado: 'bg-indigo-100 text-indigo-700',
+  calificado: 'bg-purple-100 text-purple-700',
+  negociando: 'bg-orange-100 text-orange-700',
+  ganado: 'bg-green-100 text-green-700',
+  perdido: 'bg-red-100 text-red-700',
 }
 
 const GRID_COLS = 'grid-cols-[2fr_1.4fr_1fr_1.2fr_1fr_120px]'
@@ -20,10 +22,18 @@ export default async function ListadoContactos({
   const params = await searchParams
   const supabase = await createClient()
 
-  const [{ data: perfiles }] = await Promise.all([
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const [{ data: perfiles }, { data: miPerfil }] = await Promise.all([
     supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo'),
+    user
+      ? supabase.from('perfiles').select('rol').eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
   ])
 
+  const esAdmin = miPerfil?.rol === 'administrador'
   const agentes = (perfiles ?? []).map((p) => ({ id: p.id, nombre: p.nombre_completo }))
 
   let query = supabase
@@ -53,7 +63,7 @@ export default async function ListadoContactos({
         </Link>
       </div>
 
-      <FiltrosContactos agentes={agentes} />
+      <FiltrosContactos agentes={agentes} esAdmin={esAdmin} idPropio={user?.id ?? ''} />
 
       {(!contactos || contactos.length === 0) && (
         <p className="mt-6 text-sm text-slate-500">No se encontraron contactos con esos filtros.</p>

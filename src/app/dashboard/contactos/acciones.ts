@@ -66,6 +66,7 @@ export async function crearContacto(formData: FormData) {
       presupuesto_min: numeroOpcional(formData.get('presupuesto_min')),
       presupuesto_max: numeroOpcional(formData.get('presupuesto_max')),
       zonas_interes: zonasInteres,
+      tipo_propiedad_interes: textoOpcional(formData.get('tipo_propiedad_interes')),
       agente_asignado: textoOpcional(formData.get('agente_asignado')) || user.id,
       organization_id: organizationId,
     })
@@ -134,6 +135,7 @@ export async function actualizarContacto(formData: FormData) {
       presupuesto_min: numeroOpcional(formData.get('presupuesto_min')),
       presupuesto_max: numeroOpcional(formData.get('presupuesto_max')),
       zonas_interes: zonasInteres,
+      tipo_propiedad_interes: textoOpcional(formData.get('tipo_propiedad_interes')),
       agente_asignado: textoOpcional(formData.get('agente_asignado')),
       actualizado_en: new Date().toISOString(),
     })

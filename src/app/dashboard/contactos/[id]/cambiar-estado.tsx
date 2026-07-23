@@ -6,9 +6,11 @@ import { ESTADOS_CONTACTO } from '../constantes'
 
 const ETIQUETAS: Record<string, string> = {
   nuevo: 'Nuevo',
-  en_seguimiento: 'En seguimiento',
+  contactado: 'Contactado',
   calificado: 'Calificado',
-  descartado: 'Descartado',
+  negociando: 'Negociando',
+  ganado: 'Ganado',
+  perdido: 'Perdido',
 }
 
 export default function CambiarEstadoContacto({
