@@ -77,22 +77,6 @@ export default async function NuevoLead({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Valor estimado (Q)</label>
-            <input name="valor_negocio" type="number" className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Probabilidad (%)</label>
-            <input name="probabilidad" type="number" min="0" max="100" className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de cierre esperada</label>
-          <input name="fecha_cierre_esperada" type="date" className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-        </div>
-
         <button type="submit" className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]">
           Crear lead
         </button>

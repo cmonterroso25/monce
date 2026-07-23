@@ -89,7 +89,7 @@ export default function KanbanLeads({ leadsIniciales }: { leadsIniciales: Lead[]
   }
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
+    <DndContext id="kanban-leads" onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4">
         {ETAPAS.map((etapa) => (
           <Columna key={etapa} etapa={etapa} leads={leads.filter((l) => l.etapa === etapa)} />

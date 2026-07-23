@@ -14,6 +14,16 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
+// Los inputs datetime-local no incluyen zona horaria (ej. "2025-01-15T14:00").
+// Guatemala es siempre UTC-6 (sin horario de verano), así que fijamos ese
+// offset explícitamente para que Postgres no lo interprete como UTC.
+function aTimestampGuatemala(valor: FormDataEntryValue | null): string | null {
+  if (!valor || valor === '') return null
+  const texto = valor as string
+  if (/[+-]\d{2}:\d{2}$/.test(texto) || texto.endsWith('Z')) return texto
+  return `${texto}:00-06:00`
+}
+
 export async function crearLead(formData: FormData) {
   const supabase = await createClient()
   const {
@@ -38,7 +48,7 @@ export async function crearLead(formData: FormData) {
       contacto_id: contactoId,
       propiedad_id: textoOpcional(formData.get('propiedad_id')),
       agente_id: textoOpcional(formData.get('agente_id')) || user.id,
-      etapa: (formData.get('etapa') as string) || 'nuevo',
+      etapa: (formData.get('etapa') as string) || 'contacto_inicial',
       valor_negocio: numeroOpcional(formData.get('valor_negocio')),
       probabilidad: numeroOpcional(formData.get('probabilidad')),
       fecha_cierre_esperada: textoOpcional(formData.get('fecha_cierre_esperada')),
@@ -118,13 +128,16 @@ export async function crearActividad(formData: FormData) {
   const leadId = formData.get('lead_id') as string
   const contactoId = formData.get('contacto_id') as string
 
+  const tipoActividad = formData.get('tipo_actividad') as string
+  const programadaEn = aTimestampGuatemala(formData.get('programada_en'))
+
   const { error } = await supabase.from('actividades').insert({
     contacto_id: contactoId,
     lead_id: leadId,
     agente_id: user.id,
-    tipo_actividad: formData.get('tipo_actividad') as string,
+    tipo_actividad: tipoActividad,
     notas: textoOpcional(formData.get('notas')),
-    programada_en: textoOpcional(formData.get('programada_en')),
+    programada_en: programadaEn,
     organization_id: perfil?.organization_id,
   })
 
@@ -133,9 +146,58 @@ export async function crearActividad(formData: FormData) {
     redirect(`/dashboard/leads/${leadId}?error=${encodeURIComponent(error.message)}`)
   }
 
+  if ((tipoActividad === 'cita' || tipoActividad === 'reunion') && programadaEn) {
+    const { data: contacto } = await supabase
+      .from('contactos')
+      .select('nombre_completo, telefono')
+      .eq('id', contactoId)
+      .single()
+
+    const fechaVisita = new Date(programadaEn)
+    const recordatorio = new Date(fechaVisita.getTime() - 60 * 60 * 1000)
+
+    if (contacto?.telefono) {
+      await supabase.from('notificaciones_whatsapp').insert({
+        contacto_id: contactoId,
+        telefono: contacto.telefono,
+        mensaje: `Hola ${contacto.nombre_completo}, te recordamos tu cita hoy a las ${fechaVisita.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })}.`,
+        programado_para: recordatorio.toISOString(),
+        organization_id: perfil?.organization_id,
+      })
+    }
+  }
+
   revalidatePath(`/dashboard/leads/${leadId}`)
   revalidatePath('/dashboard/actividades')
   redirect(`/dashboard/leads/${leadId}`)
+}
+
+export async function actualizarActividad(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const actividadId = formData.get('actividad_id') as string
+  const leadId = textoOpcional(formData.get('lead_id'))
+
+  const { error } = await supabase
+    .from('actividades')
+    .update({
+      tipo_actividad: formData.get('tipo_actividad') as string,
+      programada_en: aTimestampGuatemala(formData.get('programada_en')),
+      notas: textoOpcional(formData.get('notas')),
+    })
+    .eq('id', actividadId)
+
+  if (error) {
+    console.error('--- ERROR AL ACTUALIZAR ACTIVIDAD ---', error)
+    redirect(`/dashboard/actividades/${actividadId}/editar?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/dashboard/actividades')
+  revalidatePath('/dashboard/calendario')
+  if (leadId) revalidatePath(`/dashboard/leads/${leadId}`)
+  redirect('/dashboard/actividades')
 }
 
 export async function marcarActividadCompletada(actividadId: string, leadId?: string | null) {

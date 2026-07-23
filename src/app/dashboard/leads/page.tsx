@@ -14,7 +14,18 @@ export default async function ListadoLeads({
   const vista = params.vista === 'tabla' ? 'tabla' : 'kanban'
   const supabase = await createClient()
 
-  const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo')
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const [{ data: perfiles }, { data: miPerfil }] = await Promise.all([
+    supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo'),
+    user
+      ? supabase.from('perfiles').select('rol').eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const esAdmin = miPerfil?.rol === 'administrador'
   const agentes = (perfiles ?? []).map((p) => ({ id: p.id, nombre: p.nombre_completo }))
 
   let query = supabase
@@ -62,7 +73,7 @@ export default async function ListadoLeads({
         </div>
       </div>
 
-      <FiltrosLeads agentes={agentes} />
+      <FiltrosLeads agentes={agentes} esAdmin={esAdmin} />
 
       {(!leads || leads.length === 0) && vista === 'tabla' && (
         <p className="mt-6 text-sm text-slate-500">No se encontraron leads con esos filtros.</p>
