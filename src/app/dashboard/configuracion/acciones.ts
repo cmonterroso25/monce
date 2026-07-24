@@ -20,9 +20,6 @@ export async function invitarUsuario(formData: FormData) {
   const esPropietario = miPerfil?.es_propietario_plataforma === true
   const esAdmin = miPerfil?.rol === 'administrador'
 
-  // El bloqueo real está aquí: inviteUserByEmail corre con service role,
-  // que bypasea RLS por completo. RLS no protege esta operación, así que
-  // el permiso se verifica explícitamente en código antes de llamarla.
   if (!esPropietario && !esAdmin) {
     redirect(
       `/dashboard/configuracion?error=${encodeURIComponent('No tienes permiso para invitar usuarios.')}`
@@ -43,8 +40,6 @@ export async function invitarUsuario(formData: FormData) {
     }
     organizationId = organizationIdForm as string
   } else {
-    // Administrador normal: siempre su propia organización, sin importar
-    // lo que venga en el formulario (evita manipular el campo vía DevTools).
     organizationId = miPerfil!.organization_id
   }
 
@@ -53,7 +48,7 @@ export async function invitarUsuario(formData: FormData) {
       nombre_completo: nombreCompleto,
       organization_id: organizationId,
     },
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirmar`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/invitacion`,
   })
 
   if (error) {
@@ -86,9 +81,6 @@ export async function crearOrganizacion(formData: FormData) {
 
   const nombre = formData.get('nombre') as string
 
-  // Usa el cliente normal (sesión del usuario), no supabaseAdmin: la
-  // política RLS "Propietario crea organizaciones" ya permite este INSERT
-  // exactamente para este caso, sin necesidad de bypasear RLS.
   const { error } = await supabase.from('organizaciones').insert({ nombre })
 
   if (error) {
