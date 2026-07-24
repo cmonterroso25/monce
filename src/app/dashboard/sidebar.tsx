@@ -36,7 +36,7 @@ const modulos: Modulo[] = [
   { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarClock, construido: true },
   { nombre: 'Agentes', href: '/dashboard/agentes', icono: Users, construido: true },
   { nombre: 'Tareas', href: '/dashboard/tareas', icono: CheckSquare, construido: true },
-  { nombre: 'Configuración', href: '/dashboard/configuracion', icono: Settings, construido: false },
+  { nombre: 'Configuración', href: '/dashboard/configuracion', icono: Settings, construido: true },
 ]
 
 type SidebarProps = {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { clienteR2 } from '@/lib/r2/cliente'
@@ -7,12 +7,7 @@ import { etiquetaCriterio } from '@/lib/informes/etiquetas-criterios'
 import fs from 'fs'
 import path from 'path'
 
-// Cliente admin: SOLO se usa aquí, dentro de este endpoint protegido por
-// secreto compartido. Nunca se expone al cliente ni a n8n.
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+
 
 const NAVY = rgb(0.1725, 0.2431, 0.3137) // #2C3E50
 const BLUE = rgb(0.2196, 0.7137, 1.0) // #38B6FF
