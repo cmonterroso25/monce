@@ -2,6 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, Phone, Building2, Target } from 'lucide-react'
 import { ETAPAS, ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
+import {
+  RANGOS,
+  esRangoValido,
+  inicioDeRango,
+  calcularMetricasDesempeno,
+  type RangoTiempo,
+} from '@/lib/metricas/desempeno-agente'
 
 const ETAPAS_ABIERTAS = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada']
 
@@ -13,13 +20,18 @@ const ETIQUETAS_ESTADO_PROPIEDAD: Record<string, string> = {
   inactiva: 'Inactiva',
 }
 
-function inicioDeMes() {
-  const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
-}
-
-export default async function DetalleAgente({ params }: { params: Promise<{ id: string }> }) {
+export default async function DetalleAgente({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ rango?: string }>
+}) {
   const { id } = await params
+  const { rango: rangoParam } = await searchParams
+  const rango: RangoTiempo = esRangoValido(rangoParam) ? rangoParam : 'mes'
+  const desde = inicioDeRango(rango)
+
   const supabase = await createClient()
 
   const {
@@ -40,7 +52,10 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
       .select('id, codigo, titulo, estado, precio, moneda')
       .eq('captado_por', id)
       .order('creado_en', { ascending: false }),
-    supabase.from('leads').select('id, etapa, valor_negocio, actualizado_en').eq('agente_id', id),
+    supabase
+      .from('leads')
+      .select('id, etapa, valor_negocio, creado_en, actualizado_en')
+      .eq('agente_id', id),
     supabase
       .from('actividades')
       .select('id, tipo_actividad, notas, creado_en, completada_en')
@@ -49,7 +64,6 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
       .limit(10),
   ])
 
-  const inicioMes = inicioDeMes()
   const leadsPorEtapa = ETAPAS.reduce<Record<string, number>>((acc, etapa) => {
     acc[etapa] = (leads ?? []).filter((l) => l.etapa === etapa).length
     return acc
@@ -62,9 +76,8 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
   const valorCerradoTotal = (leads ?? [])
     .filter((l) => l.etapa === 'ganada')
     .reduce((sum, l) => sum + Number(l.valor_negocio ?? 0), 0)
-  const leadsCerradosMes = (leads ?? []).filter(
-    (l) => l.etapa === 'ganada' && l.actualizado_en && l.actualizado_en >= inicioMes
-  ).length
+
+  const metricas = calcularMetricasDesempeno(leads ?? [], desde)
 
   return (
     <div className="mx-auto max-w-4xl p-8">
@@ -72,7 +85,7 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
         <ArrowLeft size={16} /> Volver a agentes
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#2C3E50]">{agente.nombre_completo}</h1>
           <p className="flex items-center gap-2 text-sm text-slate-500">
@@ -101,7 +114,23 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-4 gap-3">
+      <div className="mb-6 flex flex-wrap gap-2">
+        {RANGOS.map((r) => (
+          <Link
+            key={r.valor}
+            href={`/dashboard/agentes/${id}?rango=${r.valor}`}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              rango === r.valor
+                ? 'bg-[#2C3E50] text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {r.etiqueta}
+          </Link>
+        ))}
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <p className="flex items-center gap-1 text-xs text-slate-400">
             <Building2 size={12} /> Propiedades activas
@@ -119,8 +148,23 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs text-slate-400">Cerrados este mes</p>
-          <p className="mt-1 text-xl font-bold text-[#2C3E50]">{leadsCerradosMes}</p>
+          <p className="text-xs text-slate-400">Cerrados (rango)</p>
+          <p className="mt-1 text-xl font-bold text-[#2C3E50]">{metricas.ganados}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-slate-400">Conversión</p>
+          <p className="mt-1 text-xl font-bold text-[#2C3E50]">
+            {metricas.conversion !== null ? `${Math.round(metricas.conversion)}%` : '-'}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-400">
+            {metricas.ganados} ganados / {metricas.perdidos} perdidos
+          </p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs text-slate-400">Tiempo de cierre</p>
+          <p className="mt-1 text-xl font-bold text-[#2C3E50]">
+            {metricas.tiempoCierrePromedio !== null ? `${Math.round(metricas.tiempoCierrePromedio)} d` : '-'}
+          </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs text-slate-400">En negociación</p>
@@ -129,7 +173,7 @@ export default async function DetalleAgente({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-[#2C3E50]">Leads por etapa</h2>
+        <h2 className="mb-3 text-sm font-semibold text-[#2C3E50]">Leads por etapa (snapshot actual)</h2>
         <div className="space-y-2">
           {ETAPAS.map((etapa) => (
             <div key={etapa} className="flex items-center gap-3">

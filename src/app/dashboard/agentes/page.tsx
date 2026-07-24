@@ -2,16 +2,26 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Phone, Building2, Target, TrendingUp } from 'lucide-react'
+import {
+  RANGOS,
+  esRangoValido,
+  inicioDeRango,
+  calcularMetricasDesempeno,
+  type RangoTiempo,
+} from '@/lib/metricas/desempeno-agente'
 
-const GRID_COLS = 'grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_100px]'
+const GRID_COLS = 'grid-cols-[2fr_0.8fr_1fr_1fr_1fr_1fr_1fr_1fr_100px]'
 const ETAPAS_ABIERTAS = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada']
 
-function inicioDeMes() {
-  const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
-}
+export default async function ListadoAgentes({
+  searchParams,
+}: {
+  searchParams: Promise<{ rango?: string }>
+}) {
+  const { rango: rangoParam } = await searchParams
+  const rango: RangoTiempo = esRangoValido(rangoParam) ? rangoParam : 'mes'
+  const desde = inicioDeRango(rango)
 
-export default async function ListadoAgentes() {
   const supabase = await createClient()
 
   const {
@@ -30,13 +40,11 @@ export default async function ListadoAgentes() {
   const [{ data: perfilesRaw }, { data: propiedades }, { data: leads }] = await Promise.all([
     supabase.from('perfiles').select('*').order('nombre_completo'),
     supabase.from('propiedades').select('id, captado_por, estado'),
-    supabase.from('leads').select('id, agente_id, etapa, valor_negocio, actualizado_en'),
+    supabase.from('leads').select('id, agente_id, etapa, valor_negocio, creado_en, actualizado_en'),
   ])
 
   // Un agente/invitado solo se ve a sí mismo; solo el admin ve a todos
   const perfiles = esAdmin ? perfilesRaw : (perfilesRaw ?? []).filter((p) => p.id === user.id)
-
-  const inicioMes = inicioDeMes()
 
   const agentes = (perfiles ?? []).map((p) => {
     const propiedadesAgente = (propiedades ?? []).filter((pr) => pr.captado_por === p.id)
@@ -46,14 +54,13 @@ export default async function ListadoAgentes() {
 
     const leadsAgente = (leads ?? []).filter((l) => l.agente_id === p.id)
     const leadsAbiertos = leadsAgente.filter((l) => ETAPAS_ABIERTAS.includes(l.etapa)).length
-    const leadsCerradosMes = leadsAgente.filter(
-      (l) => l.etapa === 'ganada' && l.actualizado_en && l.actualizado_en >= inicioMes
-    ).length
     const valorEnNegociacion = leadsAgente
       .filter((l) => ETAPAS_ABIERTAS.includes(l.etapa))
       .reduce((sum, l) => sum + Number(l.valor_negocio ?? 0), 0)
 
-    return { ...p, propiedadesActivas, leadsAbiertos, leadsCerradosMes, valorEnNegociacion }
+    const metricas = calcularMetricasDesempeno(leadsAgente, desde)
+
+    return { ...p, propiedadesActivas, leadsAbiertos, valorEnNegociacion, metricas }
   })
 
   return (
@@ -62,11 +69,27 @@ export default async function ListadoAgentes() {
         <h1 className="text-2xl font-bold text-[#2C3E50]">{esAdmin ? 'Agentes' : 'Mi actividad'}</h1>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {RANGOS.map((r) => (
+          <Link
+            key={r.valor}
+            href={`/dashboard/agentes?rango=${r.valor}`}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              rango === r.valor
+                ? 'bg-[#2C3E50] text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {r.etiqueta}
+          </Link>
+        ))}
+      </div>
+
       {agentes.length === 0 && <p className="mt-6 text-sm text-slate-500">No hay agentes registrados.</p>}
 
       {agentes.length > 0 && (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="min-w-[900px]">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="min-w-[1200px]">
             <div
               className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
             >
@@ -74,7 +97,9 @@ export default async function ListadoAgentes() {
               <div>Rol</div>
               <div>Propiedades activas</div>
               <div>Leads abiertos</div>
-              <div>Cerrados este mes</div>
+              <div>Cerrados (rango)</div>
+              <div>Conversión</div>
+              <div>Tiempo cierre</div>
               <div>En negociación</div>
               <div>Estado</div>
             </div>
@@ -82,7 +107,7 @@ export default async function ListadoAgentes() {
             {agentes.map((a) => (
               <Link
                 key={a.id}
-                href={`/dashboard/agentes/${a.id}`}
+                href={`/dashboard/agentes/${a.id}?rango=${rango}`}
                 className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 last:border-b-0`}
               >
                 <div className="min-w-0">
@@ -100,7 +125,15 @@ export default async function ListadoAgentes() {
                 <div className="flex items-center gap-1 text-sm text-slate-600">
                   <Target size={14} className="text-slate-400" /> {a.leadsAbiertos}
                 </div>
-                <div className="text-sm text-slate-600">{a.leadsCerradosMes}</div>
+                <div className="text-sm text-slate-600">{a.metricas.ganados}</div>
+                <div className="text-sm text-slate-600">
+                  {a.metricas.conversion !== null ? `${Math.round(a.metricas.conversion)}%` : '-'}
+                </div>
+                <div className="text-sm text-slate-600">
+                  {a.metricas.tiempoCierrePromedio !== null
+                    ? `${Math.round(a.metricas.tiempoCierrePromedio)} d`
+                    : '-'}
+                </div>
                 <div className="flex items-center gap-1 text-sm text-slate-600">
                   <TrendingUp size={14} className="text-slate-400" /> Q{a.valorEnNegociacion.toLocaleString()}
                 </div>
