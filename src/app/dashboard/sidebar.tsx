@@ -27,15 +27,18 @@ type Modulo = {
   construido: boolean
 }
 
-const modulos: Modulo[] = [
+const MODULOS_BASE: Modulo[] = [
   { nombre: 'Dashboard', href: '/dashboard', icono: LayoutDashboard, construido: true },
   { nombre: 'Propiedades', href: '/dashboard/propiedades', icono: Building2, construido: true },
   { nombre: 'Contactos', href: '/dashboard/contactos', icono: UserCircle, construido: true },
   { nombre: 'Leads', href: '/dashboard/leads', icono: ClipboardList, construido: true },
   { nombre: 'Calendario', href: '/dashboard/calendario', icono: CalendarDays, construido: true },
   { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarClock, construido: true },
-  { nombre: 'Agentes', href: '/dashboard/agentes', icono: Users, construido: true },
   { nombre: 'Tareas', href: '/dashboard/tareas', icono: CheckSquare, construido: true },
+]
+
+const MODULOS_SOLO_ADMIN: Modulo[] = [
+  { nombre: 'Agentes', href: '/dashboard/agentes', icono: Users, construido: true },
   { nombre: 'Configuración', href: '/dashboard/configuracion', icono: Settings, construido: true },
 ]
 
@@ -49,6 +52,8 @@ type SidebarProps = {
 export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: SidebarProps) {
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
+  const esAdmin = rol === 'administrador'
+  const modulos: Modulo[] = esAdmin ? [...MODULOS_BASE, ...MODULOS_SOLO_ADMIN] : MODULOS_BASE
 
   const esActivo = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'

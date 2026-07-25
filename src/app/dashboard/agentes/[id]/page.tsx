@@ -46,6 +46,16 @@ export default async function DetalleAgente({
   const { data: agente } = await supabase.from('perfiles').select('*').eq('id', id).single()
   if (!agente) return <div className="p-8">Agente no encontrado.</div>
 
+  if (!esAdmin && user?.id !== id) {
+    return (
+      <div className="p-8">
+        <p className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          No tienes permiso para ver la información de este agente.
+        </p>
+      </div>
+    )
+  }
+
   const [{ data: propiedades }, { data: leads }, { data: actividades }] = await Promise.all([
     supabase
       .from('propiedades')
