@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { crearContacto } from '../acciones'
-import { TIPOS_CONTACTO, ORIGENES } from '../constantes'
+import { TIPOS_CONTACTO, ETIQUETAS_TIPO_CONTACTO, ORIGENES } from '../constantes'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 
 export default async function NuevoContacto({
@@ -39,7 +39,7 @@ export default async function NuevoContacto({
             <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de contacto</label>
             <select name="tipo_contacto" className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
               <option value="">Selecciona...</option>
-              {TIPOS_CONTACTO.map((t) => <option key={t} value={t}>{t}</option>)}
+              {TIPOS_CONTACTO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO_CONTACTO[t]}</option>)}
             </select>
           </div>
           <div>

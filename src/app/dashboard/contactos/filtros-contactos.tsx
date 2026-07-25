@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Search } from 'lucide-react'
-import { ESTADOS_CONTACTO, TIPOS_CONTACTO, ORIGENES } from './constantes'
+import { ESTADOS_CONTACTO, TIPOS_CONTACTO, ETIQUETAS_TIPO_CONTACTO, ORIGENES } from './constantes'
 
 export default function FiltrosContactos({
   agentes,
@@ -56,7 +56,7 @@ export default function FiltrosContactos({
       <select className={base} defaultValue={searchParams.get('tipo') ?? ''} onChange={(e) => actualizarFiltro('tipo', e.target.value)}>
         <option value="">Todos los tipos</option>
         {TIPOS_CONTACTO.map((t) => (
-          <option key={t} value={t}>{t}</option>
+          <option key={t} value={t}>{ETIQUETAS_TIPO_CONTACTO[t]}</option>
         ))}
       </select>
 

@@ -24,6 +24,26 @@ function aTimestampGuatemala(valor: FormDataEntryValue | null): string | null {
   return `${texto}:00-06:00`
 }
 
+async function resolverPropiedadPorCodigo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  codigo: string | null,
+  organizationId: string | undefined
+) {
+  if (!codigo) return { id: null, error: null as string | null }
+
+  const { data: propiedad } = await supabase
+    .from('propiedades')
+    .select('id')
+    .eq('codigo', codigo)
+    .eq('organization_id', organizationId)
+    .maybeSingle()
+
+  if (!propiedad) {
+    return { id: null, error: `No se encontró ninguna propiedad con el código "${codigo}".` }
+  }
+  return { id: propiedad.id, error: null }
+}
+
 export async function crearLead(formData: FormData) {
   const supabase = await createClient()
   const {
@@ -42,24 +62,14 @@ export async function crearLead(formData: FormData) {
     redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent('Debes seleccionar un contacto.')}`)
   }
 
-  let propiedadId: string | null = null
   const propiedadCodigo = textoOpcional(formData.get('propiedad_codigo'))
-  if (propiedadCodigo) {
-    const { data: propiedad } = await supabase
-      .from('propiedades')
-      .select('id')
-      .eq('codigo', propiedadCodigo)
-      .eq('organization_id', perfil?.organization_id)
-      .maybeSingle()
-
-    if (!propiedad) {
-      redirect(
-        `/dashboard/leads/nuevo?error=${encodeURIComponent(
-          `No se encontró ninguna propiedad con el código "${propiedadCodigo}".`
-        )}`
-      )
-    }
-    propiedadId = propiedad.id
+  const { id: propiedadId, error: errorPropiedad } = await resolverPropiedadPorCodigo(
+    supabase,
+    propiedadCodigo,
+    perfil?.organization_id
+  )
+  if (errorPropiedad) {
+    redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent(errorPropiedad)}`)
   }
 
   const { data: lead, error } = await supabase
@@ -95,10 +105,26 @@ export async function actualizarLead(formData: FormData) {
 
   const leadId = formData.get('lead_id') as string
 
+  const { data: perfil } = await supabase
+    .from('perfiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const propiedadCodigo = textoOpcional(formData.get('propiedad_codigo'))
+  const { id: propiedadId, error: errorPropiedad } = await resolverPropiedadPorCodigo(
+    supabase,
+    propiedadCodigo,
+    perfil?.organization_id
+  )
+  if (errorPropiedad) {
+    redirect(`/dashboard/leads/${leadId}/editar?error=${encodeURIComponent(errorPropiedad)}`)
+  }
+
   const { error } = await supabase
     .from('leads')
     .update({
-      propiedad_id: textoOpcional(formData.get('propiedad_id')),
+      propiedad_id: propiedadId,
       agente_id: textoOpcional(formData.get('agente_id')),
       valor_negocio: numeroOpcional(formData.get('valor_negocio')),
       probabilidad: numeroOpcional(formData.get('probabilidad')),

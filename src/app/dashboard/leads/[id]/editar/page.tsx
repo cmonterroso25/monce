@@ -12,11 +12,12 @@ export default async function EditarLead({
   const { error } = await searchParams
   const supabase = await createClient()
 
-  const { data: lead } = await supabase.from('leads').select('*').eq('id', id).single()
-  const [{ data: propiedades }, { data: perfiles }] = await Promise.all([
-    supabase.from('propiedades').select('id, titulo, codigo').order('titulo'),
-    supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo'),
-  ])
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('*, propiedad:propiedades(codigo)')
+    .eq('id', id)
+    .single()
+  const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo')
 
   if (!lead) return <div className="p-8">Lead no encontrado.</div>
 
@@ -32,13 +33,13 @@ export default async function EditarLead({
         <input type="hidden" name="lead_id" value={lead.id} />
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Propiedad de interés</label>
-          <select name="propiedad_id" defaultValue={lead.propiedad_id ?? ''} className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-            <option value="">Sin propiedad específica</option>
-            {(propiedades ?? []).map((p) => (
-              <option key={p.id} value={p.id}>{p.codigo ? `[${p.codigo}] ` : ''}{p.titulo}</option>
-            ))}
-          </select>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Código de propiedad de interés (opcional)</label>
+          <input
+            name="propiedad_codigo"
+            defaultValue={lead.propiedad?.codigo ?? ''}
+            placeholder="Ej. PROP-0123"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
         </div>
 
         <div>
