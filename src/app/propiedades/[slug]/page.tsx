@@ -97,8 +97,19 @@ export default async function PropiedadPublica({
 
   const numero = numeroWhatsapp(propiedad.capturador?.telefono)
   const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
+  const ubicacionPropiedad = [propiedad.zona, propiedad.municipio?.nombre, propiedad.ciudad]
+    .filter(Boolean)
+    .join(', ')
+  const bloquesWhatsapp = [
+    'Hola, me interesa esta propiedad:',
+    `*${propiedad.titulo}*`,
+    `${propiedad.moneda} ${Number(propiedad.precio).toLocaleString()}`,
+    ubicacionPropiedad && `📍 ${ubicacionPropiedad}`,
+    (propiedad.dormitorios || propiedad.banos) &&
+      `🛏️ ${propiedad.dormitorios ?? '—'} hab  🛁 ${propiedad.banos ?? '—'} baños`,
+  ].filter(Boolean)
   const mensajeWhatsapp = encodeURIComponent(
-    `Hola, me interesa esta propiedad:\n*${propiedad.titulo}*\n\n${enlacePropiedad}`
+    `${bloquesWhatsapp.join('\n\n')}\n\n${enlacePropiedad}`
   )
 
   return (

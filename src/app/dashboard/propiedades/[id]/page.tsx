@@ -260,6 +260,7 @@ export default async function DetallePropiedad({
               precio={propiedad.precio}
               moneda={propiedad.moneda}
               zona={propiedad.zona}
+              municipio={propiedad.municipio?.nombre ?? null}
               ciudad={propiedad.ciudad}
               dormitorios={propiedad.dormitorios}
               banos={propiedad.banos}

@@ -7,6 +7,7 @@ export default function CompartirWhatsapp({
   precio,
   moneda,
   zona,
+  municipio,
   ciudad,
   dormitorios,
   banos,
@@ -16,16 +17,17 @@ export default function CompartirWhatsapp({
   precio: number
   moneda: string
   zona: string | null
+  municipio: string | null
   ciudad: string | null
   dormitorios: number | null
   banos: number | null
   slug: string | null
 }) {
   function generarMensaje() {
-    const ubicacion = [zona, ciudad].filter(Boolean).join(', ')
+    const ubicacion = [zona, municipio, ciudad].filter(Boolean).join(', ')
     const enlace = slug ? urlSitio(`/propiedades/${slug}`) : ''
 
-    const lineas = [
+    const bloques = [
       `*${titulo}*`,
       `${moneda} ${Number(precio).toLocaleString()}`,
       ubicacion && `📍 ${ubicacion}`,
@@ -33,7 +35,7 @@ export default function CompartirWhatsapp({
         `🛏️ ${dormitorios ?? '—'} hab  🛁 ${banos ?? '—'} baños`,
     ].filter(Boolean)
 
-    let mensaje = lineas.join('\n')
+    let mensaje = bloques.join('\n\n')
     if (enlace) {
       mensaje += `\n\n${enlace}`
     }

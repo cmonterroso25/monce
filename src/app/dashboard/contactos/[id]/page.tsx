@@ -33,7 +33,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
   const { data: coincidenciasData } = await supabase
     .from('coincidencias_propiedad')
     .select(
-      'id, puntaje_coincidencia, notificado, propiedad:propiedades(id, titulo, slug, precio, moneda, imagenes_propiedad(ruta_almacenamiento, es_portada))'
+      'id, puntaje_coincidencia, notificado, propiedad:propiedades(id, titulo, slug, precio, moneda, zona, ciudad, dormitorios, banos, municipio:municipios(nombre), imagenes_propiedad(ruta_almacenamiento, es_portada))'
     )
     .eq('contacto_id', id)
     .order('puntaje_coincidencia', { ascending: false })
@@ -178,6 +178,13 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
                     <CompartirPropiedad
                       slug={propiedad.slug}
                       titulo={propiedad.titulo}
+                      precio={propiedad.precio}
+                      moneda={propiedad.moneda}
+                      zona={propiedad.zona}
+                      municipio={propiedad.municipio?.nombre ?? null}
+                      ciudad={propiedad.ciudad}
+                      dormitorios={propiedad.dormitorios}
+                      banos={propiedad.banos}
                       telefonoContacto={contacto.telefono}
                     />
                   )}
