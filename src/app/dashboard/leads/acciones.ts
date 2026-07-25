@@ -126,9 +126,6 @@ export async function actualizarLead(formData: FormData) {
     .update({
       propiedad_id: propiedadId,
       agente_id: textoOpcional(formData.get('agente_id')),
-      valor_negocio: numeroOpcional(formData.get('valor_negocio')),
-      probabilidad: numeroOpcional(formData.get('probabilidad')),
-      fecha_cierre_esperada: textoOpcional(formData.get('fecha_cierre_esperada')),
       motivo_perdida: textoOpcional(formData.get('motivo_perdida')),
       actualizado_en: new Date().toISOString(),
     })

@@ -104,12 +104,6 @@ export default async function DetalleLead({
             ) : '—'}
           </p>
           <p className="text-slate-600"><span className="font-medium">Agente:</span> {lead.agente?.nombre_completo ?? '—'}</p>
-          <p className="text-slate-600">
-            <span className="font-medium">Valor negocio:</span>{' '}
-            {lead.valor_negocio ? `Q${Number(lead.valor_negocio).toLocaleString()}` : '—'}
-          </p>
-          <p className="text-slate-600"><span className="font-medium">Probabilidad:</span> {lead.probabilidad ? `${lead.probabilidad}%` : '—'}</p>
-          <p className="text-slate-600"><span className="font-medium">Cierre esperado:</span> {lead.fecha_cierre_esperada ?? '—'}</p>
           {lead.etapa === 'perdida' && (
             <p className="sm:col-span-2 text-slate-600"><span className="font-medium">Motivo de pérdida:</span> {lead.motivo_perdida ?? '—'}</p>
           )}
