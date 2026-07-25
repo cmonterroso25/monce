@@ -29,15 +29,9 @@ export default async function NuevoContacto({
           <input name="nombre_completo" required className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Teléfono</label>
-            <input name="telefono" required className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Correo</label>
-            <input name="correo" type="email" className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Teléfono</label>
+          <input name="telefono" required className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -18,11 +18,11 @@ export const COLORES_ETAPA: Record<string, string> = {
   perdida: 'bg-red-100 text-red-700',
 }
 
-export const TIPOS_ACTIVIDAD = ['llamada', 'cita', 'video_llamada', 'reunion']
+export const TIPOS_ACTIVIDAD = ['cita', 'video_llamada', 'reunion', 'firma_contrato']
 
 export const ETIQUETAS_ACTIVIDAD: Record<string, string> = {
-  llamada: 'Llamada',
   cita: 'Cita',
   video_llamada: 'Video llamada',
   reunion: 'Reunión',
+  firma_contrato: 'Firma de contrato',
 }

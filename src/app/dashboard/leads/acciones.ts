@@ -42,11 +42,31 @@ export async function crearLead(formData: FormData) {
     redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent('Debes seleccionar un contacto.')}`)
   }
 
+  let propiedadId: string | null = null
+  const propiedadCodigo = textoOpcional(formData.get('propiedad_codigo'))
+  if (propiedadCodigo) {
+    const { data: propiedad } = await supabase
+      .from('propiedades')
+      .select('id')
+      .eq('codigo', propiedadCodigo)
+      .eq('organization_id', perfil?.organization_id)
+      .maybeSingle()
+
+    if (!propiedad) {
+      redirect(
+        `/dashboard/leads/nuevo?error=${encodeURIComponent(
+          `No se encontró ninguna propiedad con el código "${propiedadCodigo}".`
+        )}`
+      )
+    }
+    propiedadId = propiedad.id
+  }
+
   const { data: lead, error } = await supabase
     .from('leads')
     .insert({
       contacto_id: contactoId,
-      propiedad_id: textoOpcional(formData.get('propiedad_id')),
+      propiedad_id: propiedadId,
       agente_id: textoOpcional(formData.get('agente_id')) || user.id,
       etapa: (formData.get('etapa') as string) || 'contacto_inicial',
       valor_negocio: numeroOpcional(formData.get('valor_negocio')),

@@ -11,9 +11,8 @@ export default async function NuevoLead({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: contactos }, { data: propiedades }, { data: perfiles }] = await Promise.all([
+  const [{ data: contactos }, { data: perfiles }] = await Promise.all([
     supabase.from('contactos').select('id, nombre_completo, telefono').order('nombre_completo'),
-    supabase.from('propiedades').select('id, titulo, codigo').order('titulo'),
     supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo'),
   ])
 
@@ -57,15 +56,12 @@ export default async function NuevoLead({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Propiedad de interés (opcional)</label>
-          <select name="propiedad_id" className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-            <option value="">Sin propiedad específica</option>
-            {(propiedades ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.codigo ? `[${p.codigo}] ` : ''}{p.titulo}
-              </option>
-            ))}
-          </select>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Código de propiedad de interés (opcional)</label>
+          <input
+            name="propiedad_codigo"
+            placeholder="Ej. PROP-0123"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
         </div>
 
         <div>

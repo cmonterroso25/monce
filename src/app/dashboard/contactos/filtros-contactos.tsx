@@ -32,8 +32,8 @@ export default function FiltrosContactos({
   const base = 'rounded border border-slate-300 px-3 py-2 text-sm text-[#2C3E50]'
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <div className="relative">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+      <div className="relative col-span-2 sm:col-auto">
         <input
           type="text"
           value={telefono}
@@ -41,7 +41,7 @@ export default function FiltrosContactos({
           onKeyDown={(e) => e.key === 'Enter' && buscarTelefono()}
           onBlur={buscarTelefono}
           placeholder="Buscar por teléfono"
-          className={`${base} pr-8`}
+          className={`${base} w-full pr-8`}
         />
         <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
       </div>
@@ -75,7 +75,7 @@ export default function FiltrosContactos({
           ))}
         </select>
       ) : (
-        <span className={`${base} bg-slate-50 text-slate-400`} title="Solo ves tus propios contactos">
+        <span className={`${base} col-span-2 bg-slate-50 text-center text-slate-400 sm:col-auto`} title="Solo ves tus propios contactos">
           Mis contactos
         </span>
       )}

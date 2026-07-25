@@ -21,7 +21,7 @@ export function BuscarCoincidencias({ contactoId }: { contactoId: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
       <button
         type="button"
         onClick={buscar}

@@ -104,7 +104,7 @@ export default function FiltrosPropiedades({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {/* Selects rápidos */}
         <select
           defaultValue={searchParams.get('estado') || ''}
@@ -184,14 +184,14 @@ export default function FiltrosPropiedades({
           ))}
         </select>
 
-        <div className="mx-1 h-6 w-px bg-slate-200" />
+        <div className="col-span-2 hidden h-6 w-px bg-slate-200 sm:mx-1 sm:block" />
 
         {/* Panel de rangos (precio / m2) */}
-        <div className="relative" ref={panelRef}>
+        <div className="relative col-span-2 sm:col-auto" ref={panelRef}>
           <button
             type="button"
             onClick={() => setPanelAbierto((v) => !v)}
-            className={`flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors ${
+            className={`flex h-9 w-full items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors sm:w-auto sm:justify-start ${
               rangosActivos
                 ? 'border-[#38B6FF] bg-[#38B6FF]/10 text-[#2C3E50]'
                 : 'border-slate-300 text-slate-600 hover:border-slate-400'
@@ -261,7 +261,7 @@ export default function FiltrosPropiedades({
           <button
             type="button"
             onClick={limpiarFiltros}
-            className="ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-slate-500 transition-colors hover:bg-slate-50 hover:text-[#38B6FF]"
+            className="col-span-2 ml-auto flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-slate-500 transition-colors hover:bg-slate-50 hover:text-[#38B6FF] sm:col-auto"
           >
             <X size={14} />
             Limpiar filtros ({totalFiltrosActivos})
