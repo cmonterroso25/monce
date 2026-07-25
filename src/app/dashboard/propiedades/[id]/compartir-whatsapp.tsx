@@ -1,5 +1,7 @@
 'use client'
 
+import { urlSitio } from '@/lib/url'
+
 export default function CompartirWhatsapp({
   titulo,
   precio,
@@ -21,20 +23,21 @@ export default function CompartirWhatsapp({
 }) {
   function generarMensaje() {
     const ubicacion = [zona, ciudad].filter(Boolean).join(', ')
-    const enlace = slug
-      ? `${process.env.NEXT_PUBLIC_SITE_URL || ''}/propiedades/${slug}`
-      : ''
+    const enlace = slug ? urlSitio(`/propiedades/${slug}`) : ''
 
     const lineas = [
       `*${titulo}*`,
       `${moneda} ${Number(precio).toLocaleString()}`,
       ubicacion && `📍 ${ubicacion}`,
       (dormitorios || banos) &&
-        `🛏️ ${dormitorios ?? '—'} hab · 🛁 ${banos ?? '—'} baños`,
-      enlace && `🔗 ${enlace}`,
+        `🛏️ ${dormitorios ?? '—'} hab  🛁 ${banos ?? '—'} baños`,
     ].filter(Boolean)
 
-    return lineas.join('\n')
+    let mensaje = lineas.join('\n')
+    if (enlace) {
+      mensaje += `\n\n${enlace}`
+    }
+    return mensaje
   }
 
   function compartir() {

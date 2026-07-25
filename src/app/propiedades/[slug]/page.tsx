@@ -6,6 +6,7 @@ import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import Galeria from '@/app/dashboard/propiedades/[id]/galeria'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
+import { urlSitio } from '@/lib/url'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -95,9 +96,9 @@ export default async function PropiedadPublica({
     : null
 
   const numero = numeroWhatsapp(propiedad.capturador?.telefono)
-  const enlacePropiedad = `${process.env.NEXT_PUBLIC_SITE_URL || ''}/propiedades/${propiedad.slug}`
+  const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
   const mensajeWhatsapp = encodeURIComponent(
-    `Hola, me interesa la propiedad "${propiedad.titulo}" (${enlacePropiedad})`
+    `Hola, me interesa esta propiedad:\n*${propiedad.titulo}*\n\n${enlacePropiedad}`
   )
 
   return (
@@ -165,7 +166,7 @@ export default async function PropiedadPublica({
           )}
 
           {numero && (
-            <a
+              <a
               href={`https://wa.me/${numero}?text=${mensajeWhatsapp}`}
               target="_blank"
               rel="noopener noreferrer"

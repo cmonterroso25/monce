@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { MessageCircle, Send, AtSign, Music2 } from 'lucide-react'
+import { urlSitio } from '@/lib/url'
 
 type Plataforma = 'messenger' | 'instagram' | 'tiktok'
 
@@ -29,8 +30,8 @@ export function CompartirPropiedad({
 }) {
   const [copiado, setCopiado] = useState<Plataforma | 'error' | null>(null)
 
-  const enlace = `${process.env.NEXT_PUBLIC_SITE_URL || ''}/propiedades/${slug}`
-  const mensaje = encodeURIComponent(`Mira esta propiedad: ${titulo} ${enlace}`)
+  const enlace = urlSitio(`/propiedades/${slug}`)
+  const mensaje = encodeURIComponent(`🏠 *${titulo}*\n\n${enlace}`)
   const numero = numeroWhatsapp(telefonoContacto)
 
   function compartirWhatsapp() {
