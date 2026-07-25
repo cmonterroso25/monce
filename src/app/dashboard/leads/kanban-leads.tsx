@@ -1,11 +1,9 @@
 'use client'
-
 import { useState, useTransition } from 'react'
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import Link from 'next/link'
 import { cambiarEtapaLead } from './acciones'
 import { ETAPAS, ETIQUETAS_ETAPA } from './constantes'
-
 type Lead = {
   id: string
   etapa: string
@@ -14,13 +12,11 @@ type Lead = {
   propiedad: { titulo: string } | null
   agente: { nombre_completo: string } | null
 }
-
 function TarjetaLead({ lead }: { lead: Lead }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id })
   const style = transform
     ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: isDragging ? 50 : undefined }
     : undefined
-
   return (
     <div
       ref={setNodeRef}
@@ -43,13 +39,14 @@ function TarjetaLead({ lead }: { lead: Lead }) {
     </div>
   )
 }
-
 function Columna({ etapa, leads }: { etapa: string; leads: Lead[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: etapa })
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 flex-shrink-0 flex-col rounded-lg bg-slate-100 p-3 ${isOver ? 'ring-2 ring-[#38B6FF]' : ''}`}
+      className={`flex w-64 flex-shrink-0 snap-start flex-col rounded-lg bg-slate-100 p-3 sm:w-72 ${
+        isOver ? 'ring-2 ring-[#38B6FF]' : ''
+      }`}
     >
       <div className="mb-2 flex items-center justify-between px-1">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{ETIQUETAS_ETAPA[etapa]}</h3>
@@ -63,23 +60,18 @@ function Columna({ etapa, leads }: { etapa: string; leads: Lead[] }) {
     </div>
   )
 }
-
 export default function KanbanLeads({ leadsIniciales }: { leadsIniciales: Lead[] }) {
   const [leads, setLeads] = useState(leadsIniciales)
   const [, startTransition] = useTransition()
-
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over) return
     const leadId = active.id as string
     const nuevaEtapa = over.id as string
-
     const leadActual = leads.find((l) => l.id === leadId)
     if (!leadActual || leadActual.etapa === nuevaEtapa) return
     const etapaAnterior = leadActual.etapa
-
     setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, etapa: nuevaEtapa } : l)))
-
     startTransition(async () => {
       const resultado = await cambiarEtapaLead(leadId, nuevaEtapa)
       if (!resultado.ok) {
@@ -87,10 +79,9 @@ export default function KanbanLeads({ leadsIniciales }: { leadsIniciales: Lead[]
       }
     })
   }
-
   return (
     <DndContext id="kanban-leads" onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 sm:gap-4">
         {ETAPAS.map((etapa) => (
           <Columna key={etapa} etapa={etapa} leads={leads.filter((l) => l.etapa === etapa)} />
         ))}

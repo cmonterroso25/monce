@@ -59,7 +59,7 @@ export default async function EditarPropiedad({
       ?.nombre_completo
 
     return (
-      <div className="mx-auto max-w-2xl p-8">
+      <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
           <h1 className="mb-2 text-lg font-semibold text-amber-800">
             No tienes permiso para editar esta propiedad
@@ -81,8 +81,8 @@ export default async function EditarPropiedad({
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold">
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold sm:text-2xl">
         Editar propiedad {propiedad.codigo ? `- ${propiedad.codigo}` : ''}
       </h1>
 
@@ -114,7 +114,7 @@ export default async function EditarPropiedad({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectConNuevo
             name="municipio_id"
             label="Municipio"
@@ -154,7 +154,7 @@ export default async function EditarPropiedad({
         </div>
         <input type="hidden" name="ciudad" value={propiedad.ciudad ?? 'Guatemala'} />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Inmueble</label>
             <select
@@ -183,7 +183,7 @@ export default async function EditarPropiedad({
         </div>
 
         <SelectorRequisitosRenta defaultValue={propiedad.requisitos_renta ?? ''} />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
             <input
@@ -215,7 +215,7 @@ export default async function EditarPropiedad({
         </div>
 
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {[
             ['sala', 'Sala'],
             ['comedor', 'Comedor'],
@@ -239,7 +239,7 @@ export default async function EditarPropiedad({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Parqueos</label>
             <input
@@ -260,7 +260,7 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">M2 construccion</label>
             <input
@@ -292,7 +292,7 @@ export default async function EditarPropiedad({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Precio</label>
             <input
@@ -317,7 +317,7 @@ export default async function EditarPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Mantenimiento</label>
             <input
@@ -395,7 +395,7 @@ export default async function EditarPropiedad({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Hipoteca</label>
             <select

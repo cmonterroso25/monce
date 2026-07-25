@@ -22,8 +22,8 @@ export default async function NuevoLead({
     : null
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold text-[#2C3E50]">Nuevo lead</h1>
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold text-[#2C3E50] sm:text-2xl">Nuevo lead</h1>
 
       {params.error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -77,7 +77,7 @@ export default async function NuevoLead({
           </select>
         </div>
 
-        <button type="submit" className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]">
+        <button type="submit" className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Crear lead
         </button>
       </form>

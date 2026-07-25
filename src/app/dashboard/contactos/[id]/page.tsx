@@ -41,7 +41,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
   const coincidencias = (coincidenciasData ?? []) as any[]
 
   return (
-    <div className="mx-auto max-w-3xl p-8">
+    <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
       <Link
         href="/dashboard/contactos"
         className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-[#38B6FF]"
@@ -49,12 +49,12 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
         <ArrowLeft size={16} /> Volver a contactos
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2C3E50]">{contacto.nombre_completo}</h1>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{contacto.nombre_completo}</h1>
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/leads/nuevo?contacto_id=${id}`}
-            className="rounded bg-[#2C3E50] px-3 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]"
+            className="flex-1 rounded bg-[#2C3E50] px-3 py-2 text-center text-sm font-medium text-white hover:bg-[#38B6FF] sm:flex-none"
           >
             + Nuevo lead
           </Link>
@@ -72,9 +72,9 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
           <CambiarEstadoContacto contactoId={id} estadoActual={contacto.estado ?? 'nuevo'} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <p className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400" /> {contacto.telefono ?? '—'}</p>
-          <p className="flex items-center gap-2 text-slate-600"><Mail size={14} className="text-slate-400" /> {contacto.correo ?? '—'}</p>
+        <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+          <p className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400 flex-shrink-0" /> {contacto.telefono ?? '—'}</p>
+          <p className="flex items-center gap-2 text-slate-600"><Mail size={14} className="text-slate-400 flex-shrink-0" /> <span className="truncate">{contacto.correo ?? '—'}</span></p>
           <p className="text-slate-600"><span className="font-medium">Tipo:</span> {contacto.tipo_contacto ?? '—'}</p>
           <p className="text-slate-600"><span className="font-medium">Origen:</span> {contacto.origen ?? '—'}</p>
           <p className="text-slate-600">
@@ -85,7 +85,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
           </p>
           <p className="text-slate-600"><span className="font-medium">Agente:</span> {agente?.nombre_completo ?? '—'}</p>
           {contacto.zonas_interes?.length > 0 && (
-            <p className="col-span-2 text-slate-600"><span className="font-medium">Zonas de interés:</span> {contacto.zonas_interes.join(', ')}</p>
+            <p className="sm:col-span-2 text-slate-600"><span className="font-medium">Zonas de interés:</span> {contacto.zonas_interes.join(', ')}</p>
           )}
           {contacto.tipo_propiedad_interes && (
             <p className="text-slate-600"><span className="font-medium">Busca:</span> {contacto.tipo_propiedad_interes}</p>
@@ -125,7 +125,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Propiedades sugeridas</h2>
           <BuscarCoincidencias contactoId={id} />
         </div>
@@ -146,7 +146,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
             return (
               <div
                 key={c.id}
-                className="flex items-center justify-between gap-3 rounded border border-slate-100 px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-100 px-3 py-2 text-sm"
               >
                 <Link
                   href={`/dashboard/propiedades/${propiedad.id}`}

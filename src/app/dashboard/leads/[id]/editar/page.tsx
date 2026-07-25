@@ -21,8 +21,8 @@ export default async function EditarLead({
   if (!lead) return <div className="p-8">Lead no encontrado.</div>
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold text-[#2C3E50]">Editar lead</h1>
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold text-[#2C3E50] sm:text-2xl">Editar lead</h1>
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>
@@ -57,7 +57,7 @@ export default async function EditarLead({
           </div>
         )}
 
-        <button type="submit" className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]">
+        <button type="submit" className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Guardar cambios
         </button>
       </form>

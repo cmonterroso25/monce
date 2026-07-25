@@ -92,12 +92,12 @@ export default async function ListadoPropiedades({
   const { data: propiedades } = await query
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2C3E50]">Propiedades</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Propiedades</h1>
         <Link
           href="/dashboard/propiedades/nueva"
-          className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#38B6FF]"
+          className="rounded bg-[#2C3E50] px-4 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-[#38B6FF] sm:w-auto"
         >
           + Nueva propiedad
         </Link>

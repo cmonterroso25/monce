@@ -88,7 +88,7 @@ export default async function DetallePropiedad({
     propiedad.colega
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <Link
         href="/dashboard/propiedades"
         className="mb-4 inline-block text-sm text-slate-500 hover:text-[#38B6FF]"
@@ -106,7 +106,7 @@ export default async function DetallePropiedad({
         />
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${
                 coloresEstado[propiedad.estado] || 'bg-slate-100 text-slate-700'
@@ -120,7 +120,7 @@ export default async function DetallePropiedad({
             </div>
           </div>
 
-          <h1 className="text-2xl font-bold text-[#2C3E50]">{propiedad.titulo}</h1>
+          <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{propiedad.titulo}</h1>
           <p className="text-sm text-slate-500">
             {propiedad.direccion ? `${propiedad.direccion}, ` : ''}
             {propiedad.condominio ? `${propiedad.condominio}, ` : ''}
@@ -142,11 +142,11 @@ export default async function DetallePropiedad({
             </a>
           )}
 
-          <p className="mt-3 text-3xl font-bold text-[#2C3E50]">
+          <p className="mt-3 text-2xl font-bold text-[#2C3E50] sm:text-3xl">
             {propiedad.moneda} {Number(propiedad.precio).toLocaleString()}
           </p>
 
-          <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:gap-3">
             <div className="rounded-lg border border-slate-200 py-3">
               <p className="text-lg font-semibold text-[#2C3E50]">
                 {propiedad.dormitorios ?? '—'}

@@ -80,15 +80,15 @@ export default async function DetalleAgente({
   const metricas = calcularMetricasDesempeno(leads ?? [], desde)
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
       <Link href="/dashboard/agentes" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-[#38B6FF]">
         <ArrowLeft size={16} /> Volver a agentes
       </Link>
 
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#2C3E50]">{agente.nombre_completo}</h1>
-          <p className="flex items-center gap-2 text-sm text-slate-500">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-bold text-[#2C3E50] sm:text-2xl">{agente.nombre_completo}</h1>
+          <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <span className="capitalize">{agente.rol}</span>
             {agente.telefono && (
               <span className="flex items-center gap-1">
@@ -107,7 +107,7 @@ export default async function DetalleAgente({
         {esAdmin && (
           <Link
             href={`/dashboard/agentes/${id}/editar`}
-            className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]"
+            className="flex flex-shrink-0 items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]"
           >
             <Pencil size={16} /> Editar
           </Link>
@@ -177,7 +177,7 @@ export default async function DetalleAgente({
         <div className="space-y-2">
           {ETAPAS.map((etapa) => (
             <div key={etapa} className="flex items-center gap-3">
-              <span className="w-24 shrink-0 text-xs text-slate-500">{ETIQUETAS_ETAPA[etapa]}</span>
+              <span className="w-20 shrink-0 truncate text-xs text-slate-500 sm:w-24">{ETIQUETAS_ETAPA[etapa]}</span>
               <div className="h-4 flex-1 overflow-hidden rounded bg-slate-100">
                 <div
                   className={`h-full rounded ${COLORES_ETAPA[etapa]?.split(' ')[0] ?? 'bg-slate-300'}`}
@@ -200,13 +200,13 @@ export default async function DetalleAgente({
               <Link
                 key={p.id}
                 href={`/dashboard/propiedades/${p.id}`}
-                className="flex items-center justify-between rounded border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50"
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="font-medium text-[#2C3E50]">{p.titulo}</span>
                   <span className="ml-2 text-xs text-slate-400">{p.codigo}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-shrink-0 items-center gap-3">
                   <span className="text-slate-500">
                     {p.moneda ?? 'Q'} {Number(p.precio ?? 0).toLocaleString()}
                   </span>
@@ -226,12 +226,12 @@ export default async function DetalleAgente({
         {actividades && actividades.length > 0 && (
           <div className="space-y-2">
             {actividades.map((a) => (
-              <div key={a.id} className="flex items-start justify-between border-b border-slate-100 pb-2 text-sm last:border-b-0">
-                <div>
+              <div key={a.id} className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-2 text-sm last:border-b-0">
+                <div className="min-w-0">
                   <span className="font-medium capitalize text-[#2C3E50]">{a.tipo_actividad}</span>
                   {a.notas && <span className="ml-2 text-slate-500">{a.notas}</span>}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex flex-shrink-0 items-center gap-2 text-xs text-slate-400">
                   {a.creado_en && new Date(a.creado_en).toLocaleDateString('es-GT')}
                   {a.completada_en && (
                     <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-700">Completada</span>

@@ -28,7 +28,7 @@ export default async function NuevaPropiedad({
   ])
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
       <Link
         href="/dashboard/propiedades"
         className="mb-4 inline-block text-sm text-slate-500 hover:text-[#38B6FF]"
@@ -36,7 +36,7 @@ export default async function NuevaPropiedad({
         ← Volver a propiedades
       </Link>
 
-      <h1 className="mb-6 text-2xl font-bold">Nueva propiedad</h1>
+      <h1 className="mb-6 text-xl font-bold sm:text-2xl">Nueva propiedad</h1>
 
       {params.error && (
         <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-600">{params.error}</p>
@@ -60,7 +60,7 @@ export default async function NuevaPropiedad({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SelectConNuevo
             name="municipio_id"
             label="Municipio"
@@ -96,7 +96,7 @@ export default async function NuevaPropiedad({
         </div>
         <input type="hidden" name="ciudad" value="Guatemala" />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Inmueble</label>
             <select
@@ -124,7 +124,7 @@ export default async function NuevaPropiedad({
         </div>
 
         <SelectorRequisitosRenta />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
             <input
@@ -153,7 +153,7 @@ export default async function NuevaPropiedad({
         </div>
 
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {[
             ['sala', 'Sala'],
             ['comedor', 'Comedor'],
@@ -176,7 +176,7 @@ export default async function NuevaPropiedad({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Parqueos</label>
             <input
@@ -195,7 +195,7 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">M² construcción</label>
             <input
@@ -224,7 +224,7 @@ export default async function NuevaPropiedad({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Precio</label>
             <input
@@ -247,7 +247,7 @@ export default async function NuevaPropiedad({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Mantenimiento</label>
             <input
@@ -319,7 +319,7 @@ export default async function NuevaPropiedad({
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Hipoteca</label>
             <select

@@ -53,14 +53,14 @@ export default async function DetalleLead({
 
   return (
     <ProveedorInforme informeInicial={informeInicial}>
-    <div className="mx-auto max-w-3xl p-8">
+    <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
       <Link href="/dashboard/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-[#38B6FF]">
         <ArrowLeft size={16} /> Volver a leads
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2C3E50]">{lead.contacto?.nombre_completo ?? 'Lead'}</h1>
-        <div className="flex items-center gap-2">
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{lead.contacto?.nombre_completo ?? 'Lead'}</h1>
+        <div className="flex flex-wrap items-center gap-2">
           <GenerarRecibo
             leadId={id}
             contactoId={lead.contacto_id}
@@ -88,12 +88,12 @@ export default async function DetalleLead({
           <CambiarEtapaLead leadId={id} etapaActual={lead.etapa ?? 'contacto_inicial'} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <p className="flex items-center gap-2 text-slate-600">
-            <Phone size={14} className="text-slate-400" /> {lead.contacto?.telefono ?? '—'}
+            <Phone size={14} className="text-slate-400 flex-shrink-0" /> {lead.contacto?.telefono ?? '—'}
           </p>
           <p className="flex items-center gap-2 text-slate-600">
-            <Mail size={14} className="text-slate-400" /> {lead.contacto?.correo ?? '—'}
+            <Mail size={14} className="text-slate-400 flex-shrink-0" /> <span className="truncate">{lead.contacto?.correo ?? '—'}</span>
           </p>
           <p className="text-slate-600">
             <span className="font-medium">Propiedad:</span>{' '}
@@ -111,7 +111,7 @@ export default async function DetalleLead({
           <p className="text-slate-600"><span className="font-medium">Probabilidad:</span> {lead.probabilidad ? `${lead.probabilidad}%` : '—'}</p>
           <p className="text-slate-600"><span className="font-medium">Cierre esperado:</span> {lead.fecha_cierre_esperada ?? '—'}</p>
           {lead.etapa === 'perdida' && (
-            <p className="col-span-2 text-slate-600"><span className="font-medium">Motivo de pérdida:</span> {lead.motivo_perdida ?? '—'}</p>
+            <p className="sm:col-span-2 text-slate-600"><span className="font-medium">Motivo de pérdida:</span> {lead.motivo_perdida ?? '—'}</p>
           )}
         </div>
       </div>
@@ -124,7 +124,7 @@ export default async function DetalleLead({
         <form action={crearActividad} className="mb-5 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
           <input type="hidden" name="lead_id" value={id} />
           <input type="hidden" name="contacto_id" value={lead.contacto_id} />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <select name="tipo_actividad" required className="rounded border border-gray-300 px-3 py-2 text-sm">
               {TIPOS_ACTIVIDAD.map((t) => (
                 <option key={t} value={t}>{ETIQUETAS_ACTIVIDAD[t]}</option>

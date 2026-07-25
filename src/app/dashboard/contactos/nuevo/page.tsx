@@ -14,8 +14,8 @@ export default async function NuevoContacto({
   const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo')
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
-      <h1 className="mb-6 text-2xl font-bold text-[#2C3E50]">Nuevo contacto</h1>
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+      <h1 className="mb-6 text-xl font-bold text-[#2C3E50] sm:text-2xl">Nuevo contacto</h1>
 
       {params.error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -29,7 +29,7 @@ export default async function NuevoContacto({
           <input name="nombre_completo" required className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Teléfono</label>
             <input name="telefono" required className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
@@ -40,7 +40,7 @@ export default async function NuevoContacto({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de contacto</label>
             <select name="tipo_contacto" className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
@@ -57,7 +57,7 @@ export default async function NuevoContacto({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Presupuesto mín. (Q)</label>
             <input name="presupuesto_min" type="number" className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
@@ -92,7 +92,7 @@ export default async function NuevoContacto({
           </select>
         </div>
 
-        <button type="submit" className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]">
+        <button type="submit" className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Guardar contacto
         </button>
       </form>

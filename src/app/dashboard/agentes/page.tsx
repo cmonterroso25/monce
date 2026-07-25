@@ -64,9 +64,9 @@ export default async function ListadoAgentes({
   })
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#2C3E50]">{esAdmin ? 'Agentes' : 'Mi actividad'}</h1>
+        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{esAdmin ? 'Agentes' : 'Mi actividad'}</h1>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">

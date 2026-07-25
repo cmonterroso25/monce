@@ -57,20 +57,28 @@ export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: Si
 
   return (
     <>
-      <button
-        onClick={() => setAbierto(true)}
-        className="fixed left-4 top-4 z-40 rounded-md bg-[#2C3E50] p-2 text-white lg:hidden"
-        aria-label="Abrir menú"
-      >
-        <Menu size={20} />
-      </button>
+      {/* Barra superior móvil: vive en el flujo normal del documento (sticky, no fixed),
+          así empuja el contenido hacia abajo en vez de flotar encima de títulos/botones. */}
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-[#2C3E50] px-4 py-3 text-white lg:hidden">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <Image src="/logo-monce.png" alt="Monce Inmobiliaria" width={28} height={28} className="rounded" />
+          <span className="text-sm font-semibold leading-tight">Monce Inmobiliaria</span>
+        </Link>
+        <button
+          onClick={() => setAbierto(true)}
+          className="rounded-md p-2 text-white hover:bg-white/10"
+          aria-label="Abrir menú"
+        >
+          <Menu size={22} />
+        </button>
+      </div>
 
       {abierto && (
         <div onClick={() => setAbierto(false)} className="fixed inset-0 z-40 bg-black/40 lg:hidden" />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#2C3E50] text-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[80vw] flex-col bg-[#2C3E50] text-white transition-transform duration-200 lg:static lg:w-64 lg:max-w-none lg:translate-x-0 ${
           abierto ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

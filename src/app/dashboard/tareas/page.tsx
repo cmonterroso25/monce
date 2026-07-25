@@ -64,17 +64,17 @@ export default async function ListadoTareas() {
   const pendientes = tareas.filter((t) => t.estado !== 'completada' && t.estado !== 'cancelada').length
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#2C3E50]">Tareas</h1>
+          <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Tareas</h1>
           <p className="text-sm text-slate-500">
             {pendientes === 0 ? 'No tienes tareas pendientes.' : `${pendientes} tarea(s) pendiente(s).`}
           </p>
         </div>
         <Link
           href="/dashboard/tareas/nuevo"
-          className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#38B6FF]"
+          className="rounded bg-[#2C3E50] px-4 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-[#38B6FF]"
         >
           + Nueva tarea
         </Link>
