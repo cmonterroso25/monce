@@ -1,7 +1,5 @@
 'use client'
-
 import { urlSitio } from '@/lib/url'
-
 export default function CompartirWhatsapp({
   titulo,
   precio,
@@ -12,6 +10,7 @@ export default function CompartirWhatsapp({
   dormitorios,
   banos,
   slug,
+  agenteId,
 }: {
   titulo: string
   precio: number
@@ -22,11 +21,12 @@ export default function CompartirWhatsapp({
   dormitorios: string | null
   banos: string | null
   slug: string | null
+  agenteId: string | null
 }) {
   function generarMensaje() {
     const ubicacion = [zona, municipio, ciudad].filter(Boolean).join(', ')
-    const enlace = slug ? urlSitio(`/propiedades/${slug}`) : ''
-
+    const ruta = slug ? `/propiedades/${slug}${agenteId ? `?agente=${agenteId}` : ''}` : ''
+    const enlace = ruta ? urlSitio(ruta) : ''
     const bloques = [
       `*${titulo}*`,
       `${moneda} ${Number(precio).toLocaleString()}`,
@@ -34,19 +34,16 @@ export default function CompartirWhatsapp({
       (dormitorios || banos) &&
         `🛏️ ${dormitorios ?? '—'} hab  🛁 ${banos ?? '—'} baños`,
     ].filter(Boolean)
-
     let mensaje = bloques.join('\n\n')
     if (enlace) {
       mensaje += `\n\n${enlace}`
     }
     return mensaje
   }
-
   function compartir() {
     const mensaje = encodeURIComponent(generarMensaje())
     window.open(`https://wa.me/?text=${mensaje}`, '_blank')
   }
-
   return (
     <button
       onClick={compartir}

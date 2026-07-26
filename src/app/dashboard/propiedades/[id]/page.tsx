@@ -46,6 +46,10 @@ export default async function DetallePropiedad({
   const { id } = await params
   const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const { data: propiedad, error } = await supabase
     .from('propiedades')
     .select(
@@ -132,7 +136,7 @@ export default async function DetallePropiedad({
           </p>
 
           {visibleEnPortal && (
-            <a
+              <a
               href={`/propiedades/${propiedad.slug}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -266,6 +270,7 @@ export default async function DetallePropiedad({
               dormitorios={propiedad.dormitorios}
               banos={propiedad.banos}
               slug={propiedad.slug}
+              agenteId={user?.id ?? null}
             />
             <CompartirMarketplace
               titulo={propiedad.titulo}

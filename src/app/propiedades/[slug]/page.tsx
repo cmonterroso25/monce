@@ -22,7 +22,7 @@ function numeroWhatsapp(telefono: string | null | undefined) {
   return soloDigitos
 }
 
-async function obtenerPropiedad(slug: string) {
+async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
   const supabase = await createClient()
   const { data } = await supabase
     .from('propiedades')
@@ -30,7 +30,7 @@ async function obtenerPropiedad(slug: string) {
       `
       id, titulo, descripcion, tipo_operacion, tipo_propiedad, precio, moneda,
       zona, ciudad, dormitorios, banos, area_construccion_m2, area_terreno_m2, parqueos, slug, estado,
-      requisitos_renta,
+      requisitos_renta, organization_id,
       niveles, numero_casa, medidas_terreno, extras, mantenimiento, iusi, mascota,
       sala, comedor, cocina, estudio, sala_familiar, habitacion_servicio, lavanderia, jardin,
       imagenes_propiedad (id, ruta_almacenamiento, es_portada, orden),
@@ -41,7 +41,26 @@ async function obtenerPropiedad(slug: string) {
     .eq('slug', slug)
     .in('estado', ['disponible', 'reservada'])
     .maybeSingle()
-  return data as any
+
+  if (!data) return null
+
+  const propiedadData = data as any
+  let telefonoContacto: string | null = propiedadData.capturador?.telefono ?? null
+
+  if (agenteCompartioId) {
+    const { data: agenteCompartio } = await supabase
+      .from('perfiles')
+      .select('telefono')
+      .eq('id', agenteCompartioId)
+      .eq('organization_id', data.organization_id)
+      .eq('activo', true)
+      .maybeSingle()
+    if (agenteCompartio?.telefono) {
+      telefonoContacto = agenteCompartio.telefono
+    }
+  }
+
+  return { ...propiedadData, telefonoContacto } as any
 }
 
 export async function generateMetadata({
@@ -78,11 +97,14 @@ export async function generateMetadata({
 
 export default async function PropiedadPublica({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ agente?: string }>
 }) {
   const { slug } = await params
-  const propiedad = await obtenerPropiedad(slug)
+  const { agente } = await searchParams
+  const propiedad = await obtenerPropiedad(slug, agente)
   if (!propiedad) notFound()
 
   const imagenes = [...(propiedad.imagenes_propiedad ?? [])].sort((a: any, b: any) => {
@@ -95,7 +117,7 @@ export default async function PropiedadPublica({
     ? REQUISITOS_RENTA[propiedad.requisitos_renta as CodigoRequisitosRenta]
     : null
 
-  const numero = numeroWhatsapp(propiedad.capturador?.telefono)
+  const numero = numeroWhatsapp(propiedad.telefonoContacto)
   const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
   const ubicacionPropiedad = [propiedad.zona, propiedad.municipio?.nombre, propiedad.ciudad]
     .filter(Boolean)
