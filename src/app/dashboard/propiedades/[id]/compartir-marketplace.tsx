@@ -26,8 +26,8 @@ type PropiedadMarketplace = {
   municipioNombre: string | null
   area_construccion_m2: number | null
   area_terreno_m2: number | null
-  dormitorios: number | null
-  banos: number | null
+  dormitorios: string | null
+  banos: string | null
   sala_familiar: string | null
   habitacion_servicio: string | null
   lavanderia: string | null

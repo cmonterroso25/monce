@@ -33,8 +33,8 @@ export function CompartirPropiedad({
   zona?: string | null
   municipio?: string | null
   ciudad?: string | null
-  dormitorios?: number | null
-  banos?: number | null
+  dormitorios?: string | null
+  banos?: string | null
   telefonoContacto?: string | null
 }) {
   const [copiado, setCopiado] = useState<Plataforma | 'error' | null>(null)

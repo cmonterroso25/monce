@@ -188,7 +188,7 @@ export default async function EditarPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
             <input
-              type="number"
+              type="text"
               name="niveles"
               defaultValue={propiedad.niveles ?? ''}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
@@ -197,7 +197,7 @@ export default async function EditarPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Habitaciones</label>
             <input
-              type="number"
+              type="text"
               name="dormitorios"
               defaultValue={propiedad.dormitorios ?? ''}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
@@ -206,8 +206,7 @@ export default async function EditarPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Banos</label>
             <input
-              type="number"
-              step="0.5"
+              type="text"
               name="banos"
               defaultValue={propiedad.banos ?? ''}
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"

@@ -19,8 +19,8 @@ export default function CompartirWhatsapp({
   zona: string | null
   municipio: string | null
   ciudad: string | null
-  dormitorios: number | null
-  banos: number | null
+  dormitorios: string | null
+  banos: string | null
   slug: string | null
 }) {
   function generarMensaje() {

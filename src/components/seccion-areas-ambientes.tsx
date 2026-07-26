@@ -1,5 +1,5 @@
 type PropiedadAreasYAmbientes = {
-  niveles?: number | null
+  niveles?: string | null
   parqueos?: number | null
   numero_casa?: string | null
   area_construccion_m2?: number | null

@@ -130,7 +130,7 @@ export default async function NuevaPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Niveles</label>
             <input
-              type="number"
+              type="text"
               name="niveles"
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
@@ -138,7 +138,7 @@ export default async function NuevaPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Habitaciones</label>
             <input
-              type="number"
+              type="text"
               name="dormitorios"
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
@@ -146,8 +146,7 @@ export default async function NuevaPropiedad({
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Baños</label>
             <input
-              type="number"
-              step="0.5"
+              type="text"
               name="banos"
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
