@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Store, X, Copy, Check } from 'lucide-react'
+import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 
 const EMOJI_TIPO: Record<string, string> = {
   casa: '🛏️',
@@ -37,6 +38,8 @@ type PropiedadMarketplace = {
   moneda: string | null
   iusi: number | null
   mantenimiento: number | null
+  mascota: string | null
+  requisitos_renta: string | null
 }
 
 function generarTextoMarketplace(p: PropiedadMarketplace) {
@@ -64,14 +67,37 @@ function generarTextoMarketplace(p: PropiedadMarketplace) {
     p.parqueos && `• Parqueo para ${p.parqueos} vehículo${p.parqueos > 1 ? 's' : ''} 🚗`,
   ].filter(Boolean)
 
+  const textoMantenimiento =
+    !p.mantenimiento || Number(p.mantenimiento) === 0
+      ? '🛠️ Mantenimiento incluido'
+      : `🛠️ Mantenimiento: ${p.moneda ?? 'Q'} ${Number(p.mantenimiento).toLocaleString()}`
+
+  const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
+
+  const requisitos =
+    p.tipo_operacion === 'renta' && p.requisitos_renta
+      ? REQUISITOS_RENTA[p.requisitos_renta as CodigoRequisitosRenta]
+      : null
+
+  const lineasRequisitos = requisitos
+    ? [
+        '📋 Requisitos para aplicar:',
+        ...requisitos.titular.map((r) => `• ${r}`),
+        `• Contrato mínimo: ${requisitos.contratoMinimo}`,
+        `• Depósito: ${requisitos.deposito}`,
+      ]
+    : []
+
   const bloques = [
     `${negocio} DE ${tipoLabel}${ubicacion ? ` - ${ubicacion}` : ''}`,
     lineasDetalle.length > 0 && `📐 Detalles de la propiedad:\n${lineasDetalle.join('\n')}`,
     lineasDistribucion.length > 0 && `${emojiTipo} Distribución:\n${lineasDistribucion.join('\n')}`,
     p.extras && `✨ Extras:\n${p.extras}`,
+    textoMascota,
+    lineasRequisitos.length > 0 && lineasRequisitos.join('\n'),
     p.precio && `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'} ${Number(p.precio).toLocaleString()}`,
     p.iusi && `📑 IUSI: ${p.moneda ?? 'Q'} ${Number(p.iusi).toLocaleString()}`,
-    p.mantenimiento && `🛠️ Mantenimiento: ${p.moneda ?? 'Q'} ${Number(p.mantenimiento).toLocaleString()}`,
+    textoMantenimiento,
   ].filter(Boolean)
 
   return bloques.join('\n\n')

@@ -17,13 +17,14 @@ export default function Galeria({
     setDescargando(true)
     try {
       for (let i = 0; i < imagenes.length; i++) {
-        const respuesta = await fetch(imagenes[i].url)
+        const nombreBase = titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+        const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(imagenes[i].url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
+        const respuesta = await fetch(rutaProxy)
         const blob = await respuesta.blob()
         const urlBlob = URL.createObjectURL(blob)
-        const extension = blob.type.split('/')[1] ?? 'jpg'
         const enlace = document.createElement('a')
         enlace.href = urlBlob
-        enlace.download = `${titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${i + 1}.${extension}`
+        enlace.download = `${nombreBase}-${i + 1}.webp`
         document.body.appendChild(enlace)
         enlace.click()
         document.body.removeChild(enlace)

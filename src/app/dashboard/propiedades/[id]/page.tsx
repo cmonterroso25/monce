@@ -290,6 +290,8 @@ export default async function DetallePropiedad({
               moneda={propiedad.moneda}
               iusi={propiedad.iusi}
               mantenimiento={propiedad.mantenimiento}
+              mascota={propiedad.mascota}
+              requisitos_renta={propiedad.requisitos_renta}
             />
             <CambiarEstado
               propiedadId={propiedad.id}
