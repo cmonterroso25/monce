@@ -7,7 +7,6 @@ type Cita = {
 }
 
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const DIAS_LARGO = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
 
 export default function CalendarioMensual({ mes, anio, citas }: { mes: number; anio: number; citas: Cita[] }) {
   const primerDia = new Date(anio, mes - 1, 1)
@@ -32,14 +31,9 @@ export default function CalendarioMensual({ mes, anio, citas }: { mes: number; a
   const esHoy = (dia: number) =>
     hoy.getDate() === dia && hoy.getMonth() + 1 === mes && hoy.getFullYear() === anio
 
-  const diasConCitas = Object.keys(citasPorDia)
-    .map(Number)
-    .sort((a, b) => a - b)
-
   return (
-    <>
-      {/* Cuadrícula de mes — solo escritorio */}
-      <div className="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:block">
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="min-w-[640px]">
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
           {DIAS.map((d) => (
             <div key={d} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -84,61 +78,6 @@ export default function CalendarioMensual({ mes, anio, citas }: { mes: number; a
           ))}
         </div>
       </div>
-
-      {/* Agenda por día — solo móvil/tablet */}
-      <div className="lg:hidden">
-        {diasConCitas.length === 0 ? (
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
-            <p className="text-sm text-slate-500">No hay citas programadas este mes.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {diasConCitas.map((dia) => {
-              const fechaDia = new Date(anio, mes - 1, dia)
-              const nombreDia = DIAS_LARGO[(fechaDia.getDay() + 6) % 7]
-              const esHoyDia = esHoy(dia)
-
-              return (
-                <div key={dia} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div
-                    className={`flex items-center gap-2 border-b border-slate-100 px-3 py-2 ${
-                      esHoyDia ? 'bg-[#38B6FF]/10' : 'bg-slate-50'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                        esHoyDia ? 'bg-[#38B6FF] text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'
-                      }`}
-                    >
-                      {dia}
-                    </span>
-                    <p className="text-sm font-semibold capitalize text-[#2C3E50]">
-                      {nombreDia}
-                      {esHoyDia && <span className="ml-1 text-xs font-normal text-[#38B6FF]">(hoy)</span>}
-                    </p>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    {citasPorDia[dia].map((c) => (
-                      <Link
-                        key={c.id}
-                        href={`/dashboard/actividades/${c.id}/editar`}
-                        className="flex items-center justify-between gap-3 px-3 py-2.5 transition hover:bg-slate-50"
-                      >
-                        <span className="truncate text-sm text-[#2C3E50]">
-                          {c.contacto?.nombre_completo ?? 'Sin contacto'}
-                        </span>
-                        <span className="flex-shrink-0 text-xs font-medium text-slate-500">
-                          {new Date(c.programada_en).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   )
 }
