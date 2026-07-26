@@ -133,15 +133,18 @@ export async function crearPropiedad(formData: FormData) {
 
   const archivos = formData.getAll('imagenes') as File[]
   const archivosValidos = archivos.filter((archivo) => archivo.size > 0)
-  for (let i = 0; i < archivosValidos.length; i++) {
-    const archivo = archivosValidos[i]
-    const url = await subirImagen(archivo, `propiedades/${propiedad.id}`)
-    await supabase.from('imagenes_propiedad').insert({
-      propiedad_id: propiedad.id,
-      ruta_almacenamiento: url,
-      es_portada: i === 0,
-      orden: i,
-    })
+  const urls = await Promise.all(
+    archivosValidos.map((archivo) => subirImagen(archivo, `propiedades/${propiedad.id}`))
+  )
+  if (urls.length > 0) {
+    await supabase.from('imagenes_propiedad').insert(
+      urls.map((url, i) => ({
+        propiedad_id: propiedad.id,
+        ruta_almacenamiento: url,
+        es_portada: i === 0,
+        orden: i,
+      }))
+    )
   }
 
   revalidatePath('/dashboard/propiedades')
@@ -261,16 +264,18 @@ export async function actualizarPropiedad(formData: FormData) {
 
     const yaHayPortada = (count ?? 0) > 0
 
-    for (let i = 0; i < archivosValidos.length; i++) {
-      const archivo = archivosValidos[i]
-      const url = await subirImagen(archivo, `propiedades/${propiedadId}`)
-      await supabase.from('imagenes_propiedad').insert({
+    const urls = await Promise.all(
+      archivosValidos.map((archivo) => subirImagen(archivo, `propiedades/${propiedadId}`))
+    )
+
+    await supabase.from('imagenes_propiedad').insert(
+      urls.map((url, i) => ({
         propiedad_id: propiedadId,
         ruta_almacenamiento: url,
         es_portada: !yaHayPortada && i === 0,
         orden: (count ?? 0) + i,
-      })
-    }
+      }))
+    )
   }
 
   revalidatePath('/dashboard/propiedades')
