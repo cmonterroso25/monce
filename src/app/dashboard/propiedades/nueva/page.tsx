@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { crearPropiedad } from '../acciones'
+import { crearPropiedadDatos } from '../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../selector-requisitos-renta'
-import BotonEnviar from '@/components/boton-enviar'
 import SelectorFotos from '@/components/selector-fotos'
+import BotonGuardarPropiedad from '@/components/boton-guardar-propiedad'
+import FormularioSinEnvioNativo from '@/components/formulario-sin-envio-nativo'
 
 export default async function NuevaPropiedad({
   searchParams,
@@ -44,7 +45,7 @@ export default async function NuevaPropiedad({
         <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-600">{params.error}</p>
       )}
 
-      <form action={crearPropiedad} className="space-y-4">
+      <FormularioSinEnvioNativo className="space-y-4">
 
         <div className="mb-2 border-b border-gray-200 pb-2">
           <h2 className="text-base font-semibold text-[#2C3E50]">Información pública</h2>
@@ -407,10 +408,14 @@ export default async function NuevaPropiedad({
           <SelectorFotos label="Fotos (la primera será la portada)" />
         </div>
 
-        <BotonEnviar className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800">
+        <BotonGuardarPropiedad
+          accion={crearPropiedadDatos}
+          redirectTo="/dashboard/propiedades"
+          className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800"
+        >
           Guardar propiedad
-        </BotonEnviar>
-      </form>
+        </BotonGuardarPropiedad>
+      </FormularioSinEnvioNativo>
     </div>
   )
 }

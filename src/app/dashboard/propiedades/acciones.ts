@@ -27,13 +27,17 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
-export async function crearPropiedad(formData: FormData) {
+export async function crearPropiedadDatos(formData: FormData): Promise<{
+  ok: boolean
+  mensaje?: string
+  propiedadId?: string
+}> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    redirect('/login')
+    return { ok: false, mensaje: 'No autenticado.' }
   }
 
   const { data: perfil } = await supabase
@@ -53,7 +57,7 @@ export async function crearPropiedad(formData: FormData) {
       .select()
       .single()
     if (errorMunicipio) {
-      redirect(`/dashboard/propiedades/nueva?error=${encodeURIComponent(errorMunicipio.message)}`)
+      return { ok: false, mensaje: errorMunicipio.message }
     }
     municipioId = nuevoMunicipio.id
   }
@@ -67,7 +71,7 @@ export async function crearPropiedad(formData: FormData) {
       .select()
       .single()
     if (errorColega) {
-      redirect(`/dashboard/propiedades/nueva?error=${encodeURIComponent(errorColega.message)}`)
+      return { ok: false, mensaje: errorColega.message }
     }
     colegaId = nuevoColega.id
   }
@@ -128,36 +132,24 @@ export async function crearPropiedad(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL CREAR PROPIEDAD ---')
     console.error(error)
-    redirect(`/dashboard/propiedades/nueva?error=${encodeURIComponent(error.message)}`)
-  }
-
-  const archivos = formData.getAll('imagenes') as File[]
-  const archivosValidos = archivos.filter((archivo) => archivo.size > 0)
-  const urls = await Promise.all(
-    archivosValidos.map((archivo) => subirImagen(archivo, `propiedades/${propiedad.id}`))
-  )
-  if (urls.length > 0) {
-    await supabase.from('imagenes_propiedad').insert(
-      urls.map((url, i) => ({
-        propiedad_id: propiedad.id,
-        ruta_almacenamiento: url,
-        es_portada: i === 0,
-        orden: i,
-      }))
-    )
+    return { ok: false, mensaje: error.message }
   }
 
   revalidatePath('/dashboard/propiedades')
-  redirect('/dashboard/propiedades')
+  return { ok: true, propiedadId: propiedad.id as string }
 }
 
-export async function actualizarPropiedad(formData: FormData) {
+export async function actualizarPropiedadDatos(formData: FormData): Promise<{
+  ok: boolean
+  mensaje?: string
+  propiedadId?: string
+}> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    redirect('/login')
+    return { ok: false, mensaje: 'No autenticado.' }
   }
 
   const propiedadId = formData.get('propiedad_id') as string
@@ -179,7 +171,7 @@ export async function actualizarPropiedad(formData: FormData) {
       .select()
       .single()
     if (errorMunicipio) {
-      redirect(`/dashboard/propiedades/${propiedadId}/editar?error=${encodeURIComponent(errorMunicipio.message)}`)
+      return { ok: false, mensaje: errorMunicipio.message }
     }
     municipioId = nuevoMunicipio.id
   }
@@ -193,7 +185,7 @@ export async function actualizarPropiedad(formData: FormData) {
       .select()
       .single()
     if (errorColega) {
-      redirect(`/dashboard/propiedades/${propiedadId}/editar?error=${encodeURIComponent(errorColega.message)}`)
+      return { ok: false, mensaje: errorColega.message }
     }
     colegaId = nuevoColega.id
   }
@@ -251,37 +243,13 @@ export async function actualizarPropiedad(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL ACTUALIZAR PROPIEDAD ---')
     console.error(error)
-    redirect(`/dashboard/propiedades/${propiedadId}/editar?error=${encodeURIComponent(error.message)}`)
-  }
-
-  const archivos = formData.getAll('imagenes') as File[]
-  const archivosValidos = archivos.filter((archivo) => archivo.size > 0)
-  if (archivosValidos.length > 0) {
-    const { count } = await supabase
-      .from('imagenes_propiedad')
-      .select('*', { count: 'exact', head: true })
-      .eq('propiedad_id', propiedadId)
-
-    const yaHayPortada = (count ?? 0) > 0
-
-    const urls = await Promise.all(
-      archivosValidos.map((archivo) => subirImagen(archivo, `propiedades/${propiedadId}`))
-    )
-
-    await supabase.from('imagenes_propiedad').insert(
-      urls.map((url, i) => ({
-        propiedad_id: propiedadId,
-        ruta_almacenamiento: url,
-        es_portada: !yaHayPortada && i === 0,
-        orden: (count ?? 0) + i,
-      }))
-    )
+    return { ok: false, mensaje: error.message }
   }
 
   revalidatePath('/dashboard/propiedades')
   revalidatePath(`/dashboard/propiedades/${propiedadId}`)
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
-  redirect(`/dashboard/propiedades/${propiedadId}`)
+  return { ok: true, propiedadId }
 }
 
 export async function cambiarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {

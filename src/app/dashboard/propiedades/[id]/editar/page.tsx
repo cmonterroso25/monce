@@ -1,12 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
-import { actualizarPropiedad } from '../../acciones'
+import { actualizarPropiedadDatos } from '../../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
 import GestorFotos from './gestor-fotos'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../../selector-requisitos-renta'
 import SelectorFotos from '@/components/selector-fotos'
+import BotonGuardarPropiedad from '@/components/boton-guardar-propiedad'
+import FormularioSinEnvioNativo from '@/components/formulario-sin-envio-nativo'
 
 export default async function EditarPropiedad({
   params,
@@ -96,7 +98,7 @@ export default async function EditarPropiedad({
         <GestorFotos propiedadId={propiedad.id} imagenesIniciales={imagenes ?? []} />
       </div>
 
-      <form action={actualizarPropiedad} className="space-y-4">
+      <FormularioSinEnvioNativo className="space-y-4">
         <input type="hidden" name="propiedad_id" value={propiedad.id} />
 
         <div className="mb-2 border-b border-gray-200 pb-2">
@@ -488,13 +490,15 @@ export default async function EditarPropiedad({
           <SelectorFotos label="Agregar mas fotos (se anaden al final)" />
         </div>
 
-        <button
-          type="submit"
+        <BotonGuardarPropiedad
+          accion={actualizarPropiedadDatos}
+          conteoFotosExistentes={(imagenes ?? []).length}
+          redirectTo={`/dashboard/propiedades/${propiedad.id}`}
           className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800"
         >
           Guardar cambios
-        </button>
-      </form>
+        </BotonGuardarPropiedad>
+      </FormularioSinEnvioNativo>
     </div>
   )
 }
