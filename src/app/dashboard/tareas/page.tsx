@@ -45,7 +45,7 @@ export default async function ListadoTareas() {
   const finHoy = new Date(inicioHoy.getTime() + 24 * 60 * 60 * 1000)
 
   function estadoFecha(t: Tarea) {
-    if (t.estado === 'completada' || t.estado === 'cancelada') return 4
+    if (t.estado === 'completada' || t.estado === 'vencida') return 4
     if (!t.fecha_limite) return 3
     const f = new Date(t.fecha_limite)
     if (f < inicioHoy) return 0
@@ -61,7 +61,7 @@ export default async function ListadoTareas() {
     return fa.localeCompare(fb)
   })
 
-  const pendientes = tareas.filter((t) => t.estado !== 'completada' && t.estado !== 'cancelada').length
+  const pendientes = tareas.filter((t) => t.estado !== 'completada' && t.estado !== 'vencida').length
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
