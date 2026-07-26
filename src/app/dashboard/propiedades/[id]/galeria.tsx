@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 
 export default function Galeria({
   imagenes,
@@ -11,6 +11,29 @@ export default function Galeria({
 }) {
   const [activa, setActiva] = useState(0)
   const [abierta, setAbierta] = useState(false)
+  const [descargando, setDescargando] = useState(false)
+
+  async function descargarTodas() {
+    setDescargando(true)
+    try {
+      for (let i = 0; i < imagenes.length; i++) {
+        const respuesta = await fetch(imagenes[i].url)
+        const blob = await respuesta.blob()
+        const urlBlob = URL.createObjectURL(blob)
+        const extension = blob.type.split('/')[1] ?? 'jpg'
+        const enlace = document.createElement('a')
+        enlace.href = urlBlob
+        enlace.download = `${titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${i + 1}.${extension}`
+        document.body.appendChild(enlace)
+        enlace.click()
+        document.body.removeChild(enlace)
+        URL.revokeObjectURL(urlBlob)
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      }
+    } finally {
+      setDescargando(false)
+    }
+  }
 
   useEffect(() => {
     if (!abierta) return
@@ -62,6 +85,16 @@ export default function Galeria({
           ))}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={descargarTodas}
+        disabled={descargando}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <Download size={16} />
+        {descargando ? 'Descargando...' : `Descargar ${imagenes.length > 1 ? 'todas las fotos' : 'foto'}`}
+      </button>
 
       {abierta && (
         <div

@@ -4,6 +4,7 @@ import { crearPropiedad } from '../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../selector-requisitos-renta'
+import BotonEnviar from '@/components/boton-enviar'
 
 export default async function NuevaPropiedad({
   searchParams,
@@ -415,12 +416,9 @@ export default async function NuevaPropiedad({
           />
         </div>
 
-        <button
-          type="submit"
-          className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800"
-        >
+        <BotonEnviar className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800">
           Guardar propiedad
-        </button>
+        </BotonEnviar>
       </form>
     </div>
   )

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Lock, ExternalLink } from 'lucide-react'
 import Galeria from './galeria'
 import CompartirWhatsapp from './compartir-whatsapp'
+import CompartirMarketplace from './compartir-marketplace'
 import CambiarEstado from './cambiar-estado'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
@@ -265,6 +266,30 @@ export default async function DetallePropiedad({
               dormitorios={propiedad.dormitorios}
               banos={propiedad.banos}
               slug={propiedad.slug}
+            />
+            <CompartirMarketplace
+              titulo={propiedad.titulo}
+              tipo_operacion={propiedad.tipo_operacion}
+              tipo_propiedad={propiedad.tipo_propiedad}
+              condominio={propiedad.condominio}
+              sector={propiedad.sector}
+              zona={propiedad.zona}
+              ciudad={propiedad.ciudad}
+              municipioNombre={propiedad.municipio?.nombre ?? null}
+              area_construccion_m2={propiedad.area_construccion_m2}
+              area_terreno_m2={propiedad.area_terreno_m2}
+              dormitorios={propiedad.dormitorios}
+              banos={propiedad.banos}
+              sala_familiar={propiedad.sala_familiar}
+              habitacion_servicio={propiedad.habitacion_servicio}
+              lavanderia={propiedad.lavanderia}
+              jardin={propiedad.jardin}
+              parqueos={propiedad.parqueos}
+              extras={propiedad.extras}
+              precio={propiedad.precio}
+              moneda={propiedad.moneda}
+              iusi={propiedad.iusi}
+              mantenimiento={propiedad.mantenimiento}
             />
             <CambiarEstado
               propiedadId={propiedad.id}
