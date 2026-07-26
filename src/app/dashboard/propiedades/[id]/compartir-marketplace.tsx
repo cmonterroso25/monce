@@ -19,15 +19,20 @@ type PropiedadMarketplace = {
   titulo: string
   tipo_operacion: string | null
   tipo_propiedad: string | null
+  direccion: string | null
   condominio: string | null
+  numero_casa: string | null
   sector: string | null
   zona: string | null
   ciudad: string | null
   municipioNombre: string | null
+  niveles: string | null
   area_construccion_m2: number | null
   area_terreno_m2: number | null
+  medidas_terreno: string | null
   dormitorios: string | null
   banos: string | null
+  estudio: string | null
   sala_familiar: string | null
   habitacion_servicio: string | null
   lavanderia: string | null
@@ -47,19 +52,22 @@ function generarTextoMarketplace(p: PropiedadMarketplace) {
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const tipoLabel = (p.tipo_propiedad ?? 'PROPIEDAD').toUpperCase()
 
-  const ubicacion = [p.condominio, p.sector, p.zona, p.municipioNombre, p.ciudad]
+  const ubicacion = [p.direccion, p.condominio, p.numero_casa && `Casa ${p.numero_casa}`, p.sector, p.zona, p.municipioNombre, p.ciudad]
     .filter(Boolean)
     .join(', ')
 
   const lineasDetalle = [
+    p.niveles && `▪️ Niveles: ${p.niveles}`,
     p.area_construccion_m2 && `▪️ Construcción: ${p.area_construccion_m2} m²`,
     p.area_terreno_m2 && `▪️ Terreno: ${p.area_terreno_m2} m²`,
+    p.medidas_terreno && `▪️ Medidas del terreno: ${p.medidas_terreno}`,
   ].filter(Boolean)
 
   const lineasDistribucion = [
     p.dormitorios && `• ${p.dormitorios} Dormitorios`,
     p.banos && `• ${p.banos} Baños`,
     '• Sala | Comedor | Cocina',
+    p.estudio && '• Estudio',
     p.sala_familiar && '• Sala familiar',
     p.habitacion_servicio && '• Cuarto de servicio',
     p.lavanderia && '• Área de lavandería',
