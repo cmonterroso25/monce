@@ -91,7 +91,7 @@ export default function Galeria({
         type="button"
         onClick={descargarTodas}
         disabled={descargando}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded bg-[#2C3E50] py-2 text-sm font-medium text-white transition-colors hover:bg-[#1c2833] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Download size={16} />
         {descargando ? 'Descargando...' : `Descargar ${imagenes.length > 1 ? 'todas las fotos' : 'foto'}`}
