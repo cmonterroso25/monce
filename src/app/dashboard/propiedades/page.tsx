@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { BedDouble, Bath, Ruler, MapPin, Pencil } from 'lucide-react'
 import FiltrosPropiedades from './filtros-propiedades'
+import BotonEliminarPropiedad from './boton-eliminar'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -22,7 +23,7 @@ function urlImagen(ruta: string) {
 }
 
 // Columnas de la "tabla": ancho de imagen, código+estado, propiedad, ubicación, hab/baños/m2, precio, acción
-const GRID_COLS = 'grid-cols-[64px_90px_2.6fr_0.9fr_1.1fr_130px_40px]'
+const GRID_COLS = 'grid-cols-[64px_90px_2.6fr_0.9fr_1.1fr_130px_72px]'
 
 export default async function ListadoPropiedades({
   searchParams,
@@ -221,18 +222,21 @@ export default async function ListadoPropiedades({
                     </div>
                   </Link>
 
-                  {/* Editar: solo visible para quien capturó la propiedad o un admin */}
-                  {puedeEditar ? (
-                    <Link
-                      href={`/dashboard/propiedades/${propiedad.id}/editar`}
-                      className="flex items-center justify-center rounded p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-[#38B6FF]"
-                      title="Editar propiedad"
-                    >
-                      <Pencil size={16} />
-                    </Link>
-                  ) : (
-                    <div />
-                  )}
+                  {/* Editar: quien capturo la propiedad o un admin. Eliminar: solo admin. */}
+                  <div className="flex items-center justify-center gap-1">
+                    {puedeEditar && (
+                      <Link
+                        href={`/dashboard/propiedades/${propiedad.id}/editar`}
+                        className="flex items-center justify-center rounded p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-[#38B6FF]"
+                        title="Editar propiedad"
+                      >
+                        <Pencil size={16} />
+                      </Link>
+                    )}
+                    {esAdmin && (
+                      <BotonEliminarPropiedad propiedadId={propiedad.id} titulo={propiedad.titulo} />
+                    )}
+                  </div>
                 </div>
               )
             })}

@@ -376,3 +376,72 @@ export async function moverImagen(
 
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
 }
+
+export async function eliminarPropiedad(propiedadId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+
+  if (miPerfil?.rol !== 'administrador') {
+    throw new Error('Solo un administrador puede eliminar propiedades.')
+  }
+
+  // 1. Leads asociados: borrar primero sus dependientes (actividades, tareas,
+  //    recibos, informes de evaluacion), luego los leads.
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('id')
+    .eq('propiedad_id', propiedadId)
+
+  const leadIds = (leads ?? []).map((l) => l.id)
+
+  if (leadIds.length > 0) {
+    await supabase.from('documentos').delete().eq('tipo_relacionado', 'lead').in('id_relacionado', leadIds)
+    await supabase.from('actividades').delete().in('lead_id', leadIds)
+    await supabase.from('tareas').delete().in('lead_id', leadIds)
+    await supabase.from('recibos').delete().in('lead_id', leadIds)
+    await supabase.from('informes_evaluacion').delete().in('lead_id', leadIds)
+    await supabase.from('leads').delete().in('id', leadIds)
+  }
+
+  // 2. Imagenes: borrar archivo fisico en R2 primero, luego el registro.
+  const { data: imagenes } = await supabase
+    .from('imagenes_propiedad')
+    .select('id, ruta_almacenamiento')
+    .eq('propiedad_id', propiedadId)
+
+  for (const imagen of imagenes ?? []) {
+    try {
+      await eliminarImagenR2(imagen.ruta_almacenamiento)
+    } catch (err) {
+      console.error('No se pudo eliminar imagen de R2 (se continua con el borrado):', err)
+    }
+  }
+  await supabase.from('imagenes_propiedad').delete().eq('propiedad_id', propiedadId)
+
+  // 3. Coincidencias con contactos.
+  await supabase.from('coincidencias_propiedad').delete().eq('propiedad_id', propiedadId)
+
+  // 4. Documentos asociados directamente a la propiedad (tabla polimorfica sin FK real).
+  await supabase.from('documentos').delete().eq('tipo_relacionado', 'propiedad').eq('id_relacionado', propiedadId)
+
+  // 5. Finalmente, la propiedad.
+  const { error } = await supabase.from('propiedades').delete().eq('id', propiedadId)
+
+  if (error) {
+    console.error('--- ERROR AL ELIMINAR PROPIEDAD ---', error)
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard/propiedades')
+}
