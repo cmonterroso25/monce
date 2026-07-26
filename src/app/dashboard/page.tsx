@@ -28,6 +28,7 @@ export default async function Dashboard() {
   inicioHoy.setHours(0, 0, 0, 0)
   const finHoy = new Date(inicioHoy.getTime() + 24 * 60 * 60 * 1000)
   const en48h = new Date(ahora.getTime() + 48 * 60 * 60 * 1000)
+  const en7dias = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000)
   const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
   const inicioSemana = new Date(ahora)
   inicioSemana.setDate(ahora.getDate() - 7)
@@ -59,7 +60,7 @@ export default async function Dashboard() {
       .eq('tipo_actividad', 'visita')
       .is('completada_en', null)
       .gte('programada_en', finHoy.toISOString())
-      .lte('programada_en', en48h.toISOString()),
+      .lte('programada_en', en7dias.toISOString()),
     supabase
       .from('propiedades')
       .select('id', { count: 'exact', head: true })
@@ -140,7 +141,7 @@ export default async function Dashboard() {
           </div>
           <p className="text-sm font-medium text-gray-700">Citas de hoy</p>
           <p className="mt-1 text-xs text-gray-500">
-            {citasProximas ?? 0} mas en las proximas 48h
+            {citasProximas ?? 0} mas en los proximos 7 dias
           </p>
         </Link>
 
