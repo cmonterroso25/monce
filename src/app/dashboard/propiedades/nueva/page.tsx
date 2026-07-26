@@ -5,6 +5,7 @@ import SelectConNuevo from '@/components/select-con-nuevo'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../selector-requisitos-renta'
 import BotonEnviar from '@/components/boton-enviar'
+import SelectorFotos from '@/components/selector-fotos'
 
 export default async function NuevaPropiedad({
   searchParams,
@@ -404,16 +405,7 @@ export default async function NuevaPropiedad({
         </div>
 
         <div className="mt-8">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Fotos (la primera será la portada)
-          </label>
-          <input
-            type="file"
-            name="imagenes"
-            accept="image/*"
-            multiple
-            className="w-full text-sm text-slate-500 file:mr-4 file:rounded file:border-0 file:bg-[#2C3E50] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-[#38B6FF]"
-          />
+          <SelectorFotos label="Fotos (la primera será la portada)" />
         </div>
 
         <BotonEnviar className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-800">

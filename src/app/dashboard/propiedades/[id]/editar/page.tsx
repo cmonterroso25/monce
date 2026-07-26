@@ -6,6 +6,7 @@ import SelectConNuevo from '@/components/select-con-nuevo'
 import GestorFotos from './gestor-fotos'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../../selector-requisitos-renta'
+import SelectorFotos from '@/components/selector-fotos'
 
 export default async function EditarPropiedad({
   params,
@@ -485,16 +486,7 @@ export default async function EditarPropiedad({
         </div>
 
         <div className="mt-8">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Agregar mas fotos (se anaden al final)
-          </label>
-          <input
-            type="file"
-            name="imagenes"
-            accept="image/*"
-            multiple
-            className="w-full text-sm text-slate-500 file:mr-4 file:rounded file:border-0 file:bg-[#2C3E50] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-[#38B6FF]"
-          />
+          <SelectorFotos label="Agregar mas fotos (se anaden al final)" />
         </div>
 
         <button
