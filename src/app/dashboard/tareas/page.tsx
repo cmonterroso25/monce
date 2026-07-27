@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import CambiarEstadoTarea from './[id]/cambiar-estado'
+import BotonEliminarTarea from './boton-eliminar-tarea'
 import {
   ETIQUETAS_ESTADO_TAREA,
   COLORES_ESTADO_TAREA,
@@ -15,12 +16,13 @@ type Tarea = {
   fecha_limite: string | null
   estado: string
   prioridad: string
+  asignado_a: string | null
   contacto: { nombre_completo: string } | null
   lead: { id: string } | null
   agente: { nombre_completo: string } | null
 }
 
-const GRID_COLS = 'grid-cols-[110px_120px_90px_1.8fr_1fr_130px]'
+const GRID_COLS = 'grid-cols-[110px_120px_90px_1.8fr_1fr_130px_40px]'
 
 export default async function ListadoTareas() {
   const supabase = await createClient()
@@ -86,7 +88,7 @@ export default async function ListadoTareas() {
 
       {ordenadas.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="min-w-[900px]">
+          <div className="min-w-[940px]">
             <div
               className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
             >
@@ -96,40 +98,47 @@ export default async function ListadoTareas() {
               <div>Título</div>
               <div>{esAdmin ? 'Agente' : 'Relacionado'}</div>
               <div className="text-right">Estado</div>
+              <div />
             </div>
 
-            {ordenadas.map((t) => (
-              <div
-                key={t.id}
-                className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 last:border-b-0`}
-              >
-                <div className="text-sm text-slate-600">
-                  {t.fecha_limite
-                    ? new Date(t.fecha_limite).toLocaleDateString('es-GT', { dateStyle: 'medium' })
-                    : '—'}
+            {ordenadas.map((t) => {
+              const puedeEliminar = esAdmin || t.asignado_a === user.id
+              return (
+                <div
+                  key={t.id}
+                  className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 last:border-b-0`}
+                >
+                  <div className="text-sm text-slate-600">
+                    {t.fecha_limite
+                      ? new Date(t.fecha_limite).toLocaleDateString('es-GT', { dateStyle: 'medium' })
+                      : '—'}
+                  </div>
+                  <div>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${COLORES_PRIORIDAD[t.prioridad]}`}>
+                      {ETIQUETAS_PRIORIDAD[t.prioridad] ?? t.prioridad}
+                    </span>
+                  </div>
+                  <div />
+                  <div className="min-w-0">
+                    <Link href={`/dashboard/tareas/${t.id}/editar`} className="truncate text-sm font-semibold text-[#2C3E50] hover:text-[#38B6FF]">
+                      {t.titulo}
+                    </Link>
+                    {t.contacto?.nombre_completo && (
+                      <p className="truncate text-xs text-slate-400">{t.contacto.nombre_completo}</p>
+                    )}
+                  </div>
+                  <div className="truncate text-sm text-slate-600">
+                    {esAdmin ? (t.agente?.nombre_completo ?? '—') : (t.lead ? 'Lead vinculado' : '—')}
+                  </div>
+                  <div className="flex justify-end">
+                    <CambiarEstadoTarea tareaId={t.id} estadoActual={t.estado} />
+                  </div>
+                  <div className="flex justify-center">
+                    {puedeEliminar && <BotonEliminarTarea tareaId={t.id} tituloTarea={t.titulo} />}
+                  </div>
                 </div>
-                <div>
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${COLORES_PRIORIDAD[t.prioridad]}`}>
-                    {ETIQUETAS_PRIORIDAD[t.prioridad] ?? t.prioridad}
-                  </span>
-                </div>
-                <div />
-                <div className="min-w-0">
-                  <Link href={`/dashboard/tareas/${t.id}/editar`} className="truncate text-sm font-semibold text-[#2C3E50] hover:text-[#38B6FF]">
-                    {t.titulo}
-                  </Link>
-                  {t.contacto?.nombre_completo && (
-                    <p className="truncate text-xs text-slate-400">{t.contacto.nombre_completo}</p>
-                  )}
-                </div>
-                <div className="truncate text-sm text-slate-600">
-                  {esAdmin ? (t.agente?.nombre_completo ?? '—') : (t.lead ? 'Lead vinculado' : '—')}
-                </div>
-                <div className="flex justify-end">
-                  <CambiarEstadoTarea tareaId={t.id} estadoActual={t.estado} />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

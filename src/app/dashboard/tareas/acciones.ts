@@ -80,3 +80,36 @@ export async function cambiarEstadoTarea(tareaId: string, nuevoEstado: string) {
   if (error) return { ok: false, mensaje: error.message }
   return { ok: true, mensaje: null }
 }
+
+export async function eliminarTarea(tareaId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'No autenticado' }
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', user.id)
+    .maybeSingle()
+  const esAdmin = miPerfil?.rol === 'administrador'
+
+  const { data: tarea } = await supabase
+    .from('tareas')
+    .select('asignado_a')
+    .eq('id', tareaId)
+    .maybeSingle()
+
+  if (!tarea) return { ok: false, mensaje: 'Tarea no encontrada.' }
+
+  // Verificación explícita en código, no depender solo de RLS.
+  if (!esAdmin && tarea.asignado_a !== user.id) {
+    return { ok: false, mensaje: 'No tienes permiso para eliminar esta tarea.' }
+  }
+
+  const { error } = await supabase.from('tareas').delete().eq('id', tareaId)
+
+  revalidatePath('/dashboard/tareas')
+
+  if (error) return { ok: false, mensaje: error.message }
+  return { ok: true, mensaje: null }
+}
