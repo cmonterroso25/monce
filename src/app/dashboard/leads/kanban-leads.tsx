@@ -18,10 +18,12 @@ function TarjetaLead({
   lead,
   puedeEliminar,
   onCambiarEtapa,
+  onEliminado,
 }: {
   lead: Lead
   puedeEliminar: boolean
   onCambiarEtapa: (leadId: string, nuevaEtapa: string) => void
+  onEliminado: (leadId: string) => void
 }) {
   return (
     <div className="mb-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -49,6 +51,7 @@ function TarjetaLead({
             leadId={lead.id}
             nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'}
             className="rounded p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-600"
+            onEliminado={() => onEliminado(lead.id)}
           />
         )}
       </div>
@@ -62,12 +65,14 @@ function Columna({
   userId,
   esAdmin,
   onCambiarEtapa,
+  onEliminado,
 }: {
   etapa: string
   leads: Lead[]
   userId: string
   esAdmin: boolean
   onCambiarEtapa: (leadId: string, nuevaEtapa: string) => void
+  onEliminado: (leadId: string) => void
 }) {
   return (
     <div className="flex w-64 flex-shrink-0 snap-start flex-col rounded-lg bg-slate-100 p-3 sm:w-72">
@@ -82,6 +87,7 @@ function Columna({
             lead={lead}
             puedeEliminar={esAdmin || lead.agente?.id === userId}
             onCambiarEtapa={onCambiarEtapa}
+            onEliminado={onEliminado}
           />
         ))}
       </div>
@@ -122,6 +128,7 @@ export default function KanbanLeads({
           userId={userId}
           esAdmin={esAdmin}
           onCambiarEtapa={handleCambiarEtapa}
+          onEliminado={(leadId) => setLeads((prev) => prev.filter((l) => l.id !== leadId))}
         />
       ))}
     </div>

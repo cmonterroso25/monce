@@ -8,10 +8,12 @@ export default function BotonEliminarLead({
   leadId,
   nombreContacto,
   className,
+  onEliminado,
 }: {
   leadId: string
   nombreContacto: string
   className?: string
+  onEliminado?: () => void
 }) {
   const [pending, startTransition] = useTransition()
 
@@ -27,6 +29,7 @@ export default function BotonEliminarLead({
     startTransition(async () => {
       try {
         await eliminarLead(leadId)
+        onEliminado?.()
       } catch (err) {
         window.alert(err instanceof Error ? err.message : 'Ocurrió un error al eliminar el lead.')
       }
