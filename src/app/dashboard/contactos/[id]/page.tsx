@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Pencil, Mail, Phone, ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { Pencil, Phone, ArrowLeft, ArrowUpRight } from 'lucide-react'
 import CambiarEstadoContacto from './cambiar-estado'
 import { BuscarCoincidencias, MarcarNotificada } from '../buscar-coincidencias'
 import { CompartirPropiedad } from '../compartir-propiedad'
@@ -74,7 +74,6 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
 
         <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <p className="flex items-center gap-2 text-slate-600"><Phone size={14} className="text-slate-400 flex-shrink-0" /> {contacto.telefono ?? '—'}</p>
-          <p className="flex items-center gap-2 text-slate-600"><Mail size={14} className="text-slate-400 flex-shrink-0" /> <span className="truncate">{contacto.correo ?? '—'}</span></p>
           <p className="text-slate-600"><span className="font-medium">Tipo:</span> {contacto.tipo_contacto ?? '—'}</p>
           <p className="text-slate-600"><span className="font-medium">Origen:</span> {contacto.origen ?? '—'}</p>
           <p className="text-slate-600">
