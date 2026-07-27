@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Phone, Building2, Target } from 'lucide-react'
+import { ArrowLeft, Pencil, Phone, Mail, Building2, Target } from 'lucide-react'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { ETAPAS, ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
 import {
   RANGOS,
@@ -56,6 +57,9 @@ export default async function DetalleAgente({
     )
   }
 
+  const { data: usuarioAuth } = await supabaseAdmin.auth.admin.getUserById(id)
+  const correo = usuarioAuth?.user?.email ?? null
+
   const [{ data: propiedades }, { data: leads }, { data: actividades }] = await Promise.all([
     supabase
       .from('propiedades')
@@ -103,6 +107,11 @@ export default async function DetalleAgente({
             {agente.telefono && (
               <span className="flex items-center gap-1">
                 <Phone size={12} /> {agente.telefono}
+              </span>
+            )}
+            {correo && (
+              <span className="flex items-center gap-1">
+                <Mail size={12} /> {correo}
               </span>
             )}
             <span

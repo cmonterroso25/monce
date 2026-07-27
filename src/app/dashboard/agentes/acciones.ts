@@ -1,5 +1,6 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
@@ -16,6 +17,34 @@ export async function actualizarAgente(formData: FormData) {
   if (!user) redirect('/login')
 
   const agenteId = formData.get('agente_id') as string
+
+  // Verificación explícita de rol: no depender solo de RLS, ya que el
+  // cambio de correo más abajo usa supabaseAdmin (service_role), que
+  // bypasea RLS por completo.
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+
+  if (miPerfil?.rol !== 'administrador') {
+    redirect(`/dashboard/agentes/${agenteId}/editar?error=${encodeURIComponent('Solo un administrador puede editar agentes.')}`)
+  }
+
+  const nuevoCorreo = textoOpcional(formData.get('correo'))
+
+  if (nuevoCorreo) {
+    const { data: usuarioActual } = await supabaseAdmin.auth.admin.getUserById(agenteId)
+    if (usuarioActual?.user?.email !== nuevoCorreo) {
+      const { error: errorCorreo } = await supabaseAdmin.auth.admin.updateUserById(agenteId, {
+        email: nuevoCorreo,
+      })
+      if (errorCorreo) {
+        console.error('--- ERROR AL ACTUALIZAR CORREO ---', errorCorreo)
+        redirect(`/dashboard/agentes/${agenteId}/editar?error=${encodeURIComponent(errorCorreo.message)}`)
+      }
+    }
+  }
 
   const { error } = await supabase
     .from('perfiles')

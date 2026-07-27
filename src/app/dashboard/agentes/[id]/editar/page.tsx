@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { actualizarAgente } from '../../acciones'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 export default async function EditarAgente({
   params,
@@ -32,6 +33,9 @@ export default async function EditarAgente({
   const { data: agente } = await supabase.from('perfiles').select('*').eq('id', id).single()
   if (!agente) return <div className="p-8">Agente no encontrado.</div>
 
+  const { data: usuarioAuth } = await supabaseAdmin.auth.admin.getUserById(id)
+  const correoActual = usuarioAuth?.user?.email ?? ''
+
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
       <h1 className="mb-6 text-xl font-bold text-[#2C3E50] sm:text-2xl">Editar agente</h1>
@@ -48,6 +52,17 @@ export default async function EditarAgente({
           <input
             name="nombre_completo"
             defaultValue={agente.nombre_completo}
+            required
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Correo</label>
+          <input
+            name="correo"
+            type="email"
+            defaultValue={correoActual}
             required
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
