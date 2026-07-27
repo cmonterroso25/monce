@@ -256,3 +256,51 @@ export async function marcarActividadCompletada(actividadId: string, leadId?: st
   if (error) return { ok: false, mensaje: error.message }
   return { ok: true, mensaje: null }
 }
+
+export async function eliminarLead(leadId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('agente_id')
+    .eq('id', leadId)
+    .single()
+
+  if (!lead) {
+    throw new Error('Lead no encontrado.')
+  }
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+
+  const esAdmin = miPerfil?.rol === 'administrador'
+  const puedeEliminar = esAdmin || lead.agente_id === user.id
+
+  if (!puedeEliminar) {
+    throw new Error('Solo el agente asignado o un administrador pueden eliminar este lead.')
+  }
+
+  await supabase.from('documentos').delete().eq('tipo_relacionado', 'lead').eq('id_relacionado', leadId)
+  await supabase.from('actividades').delete().eq('lead_id', leadId)
+  await supabase.from('tareas').delete().eq('lead_id', leadId)
+  await supabase.from('recibos').delete().eq('lead_id', leadId)
+  await supabase.from('informes_evaluacion').delete().eq('lead_id', leadId)
+
+  const { error } = await supabase.from('leads').delete().eq('id', leadId)
+
+  if (error) {
+    console.error('--- ERROR AL ELIMINAR LEAD ---', error)
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard/leads')
+}

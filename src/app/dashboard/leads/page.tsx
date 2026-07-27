@@ -69,10 +69,10 @@ export default async function ListadoLeads({
       )}
       {vista === 'kanban' ? (
         <div className="mt-6">
-          <KanbanLeads leadsIniciales={leads ?? []} />
+          <KanbanLeads leadsIniciales={leads ?? []} esAdmin={esAdmin} userId={user?.id ?? ''} />
         </div>
       ) : (
-        <TablaLeads leads={leads ?? []} />
+        <TablaLeads leads={leads ?? []} esAdmin={esAdmin} userId={user?.id ?? ''} />
       )}
     </div>
   )

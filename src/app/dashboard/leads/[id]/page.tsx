@@ -10,6 +10,7 @@ import { obtenerUltimoInforme } from './informes'
 import MarcarCompletada from '../../actividades/marcar-completada'
 import { crearActividad } from '../acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
+import BotonEliminarLeadConRedireccion from '../boton-eliminar-lead-con-redireccion'
 
 export default async function DetalleLead({
   params,
@@ -35,6 +36,12 @@ export default async function DetalleLead({
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  const { data: miPerfil } = user
+    ? await supabase.from('perfiles').select('rol').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const esAdmin = miPerfil?.rol === 'administrador'
+  const puedeEliminar = esAdmin || lead.agente_id === user?.id
 
   const { data: agentes } = await supabase
     .from('perfiles')
@@ -76,6 +83,9 @@ export default async function DetalleLead({
           <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
             <Pencil size={16} /> Editar
           </Link>
+          {puedeEliminar && (
+            <BotonEliminarLeadConRedireccion leadId={id} nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'} />
+          )}
         </div>
       </div>
 

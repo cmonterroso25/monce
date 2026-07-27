@@ -3,19 +3,24 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { cambiarEtapaLead } from './acciones'
 import { ETAPAS, ETIQUETAS_ETAPA } from './constantes'
+import BotonEliminarLead from './boton-eliminar-lead'
+
 type Lead = {
   id: string
   etapa: string
   valor_negocio: number | null
   contacto: { nombre_completo: string } | null
   propiedad: { titulo: string } | null
-  agente: { nombre_completo: string } | null
+  agente: { id: string; nombre_completo: string } | null
 }
+
 function TarjetaLead({
   lead,
+  puedeEliminar,
   onCambiarEtapa,
 }: {
   lead: Lead
+  puedeEliminar: boolean
   onCambiarEtapa: (leadId: string, nuevaEtapa: string) => void
 }) {
   return (
@@ -35,19 +40,33 @@ function TarjetaLead({
           <option key={e} value={e}>{ETIQUETAS_ETAPA[e]}</option>
         ))}
       </select>
-      <Link href={`/dashboard/leads/${lead.id}`} className="mt-2 inline-block text-[11px] text-[#38B6FF] hover:underline">
-        Ver detalle
-      </Link>
+      <div className="mt-2 flex items-center justify-between">
+        <Link href={`/dashboard/leads/${lead.id}`} className="text-[11px] text-[#38B6FF] hover:underline">
+          Ver detalle
+        </Link>
+        {puedeEliminar && (
+          <BotonEliminarLead
+            leadId={lead.id}
+            nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'}
+            className="rounded p-1 text-slate-300 transition hover:bg-red-50 hover:text-red-600"
+          />
+        )}
+      </div>
     </div>
   )
 }
+
 function Columna({
   etapa,
   leads,
+  userId,
+  esAdmin,
   onCambiarEtapa,
 }: {
   etapa: string
   leads: Lead[]
+  userId: string
+  esAdmin: boolean
   onCambiarEtapa: (leadId: string, nuevaEtapa: string) => void
 }) {
   return (
@@ -58,13 +77,27 @@ function Columna({
       </div>
       <div className="min-h-[60px] flex-1">
         {leads.map((lead) => (
-          <TarjetaLead key={lead.id} lead={lead} onCambiarEtapa={onCambiarEtapa} />
+          <TarjetaLead
+            key={lead.id}
+            lead={lead}
+            puedeEliminar={esAdmin || lead.agente?.id === userId}
+            onCambiarEtapa={onCambiarEtapa}
+          />
         ))}
       </div>
     </div>
   )
 }
-export default function KanbanLeads({ leadsIniciales }: { leadsIniciales: Lead[] }) {
+
+export default function KanbanLeads({
+  leadsIniciales,
+  esAdmin,
+  userId,
+}: {
+  leadsIniciales: Lead[]
+  esAdmin: boolean
+  userId: string
+}) {
   const [leads, setLeads] = useState(leadsIniciales)
   const [, startTransition] = useTransition()
   function handleCambiarEtapa(leadId: string, nuevaEtapa: string) {
@@ -82,7 +115,14 @@ export default function KanbanLeads({ leadsIniciales }: { leadsIniciales: Lead[]
   return (
     <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-4 sm:gap-4">
       {ETAPAS.map((etapa) => (
-        <Columna key={etapa} etapa={etapa} leads={leads.filter((l) => l.etapa === etapa)} onCambiarEtapa={handleCambiarEtapa} />
+        <Columna
+          key={etapa}
+          etapa={etapa}
+          leads={leads.filter((l) => l.etapa === etapa)}
+          userId={userId}
+          esAdmin={esAdmin}
+          onCambiarEtapa={handleCambiarEtapa}
+        />
       ))}
     </div>
   )
