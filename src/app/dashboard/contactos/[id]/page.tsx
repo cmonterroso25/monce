@@ -170,7 +170,7 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
                   </div>
                 </Link>
 
-                <div className="flex flex-shrink-0 items-center gap-2">
+                <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:w-auto">
                   <span className="rounded-full bg-[#38B6FF]/10 px-2 py-0.5 text-[10px] font-medium text-[#38B6FF]">
                     {c.puntaje_coincidencia}%
                   </span>

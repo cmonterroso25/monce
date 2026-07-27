@@ -64,11 +64,62 @@ export async function buscarCoincidencias(contactoId: string) {
     .sort((a, b) => b.puntaje_coincidencia - a.puntaje_coincidencia)
     .slice(0, 8)
 
-  await supabase.from('coincidencias_propiedad').delete().eq('contacto_id', contactoId)
+  // Antes de tocar nada, traemos lo que ya existía para este contacto,
+  // así podemos preservar el estado `notificado` ("completada") de las
+  // coincidencias que se siguen calificando, en vez de borrar todo y
+  // volver a insertar desde cero.
+  const { data: existentes, error: errorExistentes } = await supabase
+    .from('coincidencias_propiedad')
+    .select('id, propiedad_id, notificado')
+    .eq('contacto_id', contactoId)
 
-  if (top.length > 0) {
-    await supabase.from('coincidencias_propiedad').insert(
-      top.map((t) => ({
+  if (errorExistentes) {
+    console.error('--- ERROR AL LEER COINCIDENCIAS EXISTENTES ---', errorExistentes)
+    return { ok: false, mensaje: errorExistentes.message, total: 0 }
+  }
+
+  const existentesPorPropiedad = new Map(
+    (existentes ?? []).map((e) => [e.propiedad_id, e])
+  )
+  const idsTop = new Set(top.map((t) => t.propiedad_id))
+
+  // 1) Borrar solo las coincidencias viejas que ya no califican.
+  const idsABorrar = (existentes ?? [])
+    .filter((e) => !idsTop.has(e.propiedad_id))
+    .map((e) => e.id)
+
+  if (idsABorrar.length > 0) {
+    const { error: errorBorrar } = await supabase
+      .from('coincidencias_propiedad')
+      .delete()
+      .in('id', idsABorrar)
+
+    if (errorBorrar) {
+      console.error('--- ERROR AL BORRAR COINCIDENCIAS OBSOLETAS ---', errorBorrar)
+      return { ok: false, mensaje: errorBorrar.message, total: 0 }
+    }
+  }
+
+  // 2) Actualizar el puntaje de las que ya existían y se mantienen top,
+  //    sin tocar su `notificado`.
+  const aActualizar = top.filter((t) => existentesPorPropiedad.has(t.propiedad_id))
+  for (const t of aActualizar) {
+    const existente = existentesPorPropiedad.get(t.propiedad_id)!
+    const { error: errorActualizar } = await supabase
+      .from('coincidencias_propiedad')
+      .update({ puntaje_coincidencia: t.puntaje_coincidencia })
+      .eq('id', existente.id)
+
+    if (errorActualizar) {
+      console.error('--- ERROR AL ACTUALIZAR PUNTAJE DE COINCIDENCIA ---', errorActualizar)
+    }
+  }
+
+  // 3) Insertar las nuevas que no existían todavía.
+  const aInsertar = top.filter((t) => !existentesPorPropiedad.has(t.propiedad_id))
+  if (aInsertar.length > 0) {
+    const { error: errorInsertar } = await supabase.from('coincidencias_propiedad').insert(
+      aInsertar.map((t) => ({
         contacto_id: contactoId,
         propiedad_id: t.propiedad_id,
         puntaje_coincidencia: t.puntaje_coincidencia,
@@ -76,6 +127,11 @@ export async function buscarCoincidencias(contactoId: string) {
         organization_id: perfil?.organization_id,
       }))
     )
+
+    if (errorInsertar) {
+      console.error('--- ERROR AL INSERTAR NUEVAS COINCIDENCIAS ---', errorInsertar)
+      return { ok: false, mensaje: errorInsertar.message, total: 0 }
+    }
   }
 
   revalidatePath(`/dashboard/contactos/${contactoId}`)
