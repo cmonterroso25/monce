@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { subirImagen, eliminarImagenR2 } from '@/lib/r2/subir-imagen'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { notificarWhatsapp, obtenerChatIdGrupo, mensajePropiedad, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
 
 function generarSlug(titulo: string) {
   const base = titulo
@@ -25,6 +26,12 @@ function numeroOpcional(valor: FormDataEntryValue | null) {
 function textoOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
   return valor as string
+}
+
+function grupoParaOperacion(tipoOperacion: string | null): GrupoWhatsapp | null {
+  if (tipoOperacion === 'venta') return 'ventas'
+  if (tipoOperacion === 'renta') return 'rentas'
+  return null
 }
 
 export async function crearPropiedadDatos(formData: FormData): Promise<{
@@ -135,6 +142,36 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
     return { ok: false, mensaje: error.message }
   }
 
+  const grupo = grupoParaOperacion(propiedad.tipo_operacion)
+  if (grupo && organizationId) {
+    const chatId = await obtenerChatIdGrupo(supabase, organizationId, grupo)
+    if (chatId) {
+      const mensaje = mensajePropiedad({
+        titulo: propiedad.titulo,
+        precio: propiedad.precio,
+        moneda: propiedad.moneda,
+        zona: propiedad.zona,
+        ciudad: propiedad.ciudad,
+        dormitorios: propiedad.dormitorios,
+        banos: propiedad.banos,
+        slug: propiedad.slug,
+        codigo: propiedad.codigo,
+        encabezado: '🆕 Nueva propiedad',
+      })
+      await notificarWhatsapp({
+        chatId,
+        mensaje,
+        organizationId,
+        tipoNotificacion: 'nueva_propiedad',
+        agenteId: user.id,
+      })
+    } else {
+      console.error(`Propiedad ${propiedad.id}: grupo "${grupo}" no configurado en organizaciones.`)
+    }
+  } else {
+    console.error(`Propiedad ${propiedad.id} sin tipo_operacion definido; no se notificó a ningún grupo.`)
+  }
+
   revalidatePath('/dashboard/propiedades')
   return { ok: true, propiedadId: propiedad.id as string }
 }
@@ -161,6 +198,12 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     .single()
 
   const organizationId = perfil?.organization_id
+
+  const { data: antes } = await supabase
+    .from('propiedades')
+    .select('titulo, precio, moneda, zona, ciudad, dormitorios, banos, tipo_operacion, slug, codigo')
+    .eq('id', propiedadId)
+    .single()
 
   let municipioId = textoOpcional(formData.get('municipio_id'))
   if (municipioId === '__nuevo__') {
@@ -246,12 +289,52 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     return { ok: false, mensaje: error.message }
   }
 
+  if (antes && organizationId) {
+    const despues = {
+      titulo,
+      precio: Number(formData.get('precio')),
+      moneda: formData.get('moneda') as string,
+      zona: textoOpcional(formData.get('zona')),
+      ciudad: textoOpcional(formData.get('ciudad')),
+      dormitorios: textoOpcional(formData.get('dormitorios')),
+      banos: textoOpcional(formData.get('banos')),
+    }
+    const cambios: string[] = []
+    if (antes.titulo !== despues.titulo) cambios.push(`Título: "${antes.titulo}" → "${despues.titulo}"`)
+    if (Number(antes.precio) !== despues.precio) {
+      cambios.push(`Precio: ${antes.moneda} ${Number(antes.precio ?? 0).toLocaleString()} → ${despues.moneda} ${despues.precio.toLocaleString()}`)
+    }
+    if (antes.zona !== despues.zona) cambios.push(`Zona: ${antes.zona ?? '—'} → ${despues.zona ?? '—'}`)
+    if (antes.ciudad !== despues.ciudad) cambios.push(`Ciudad: ${antes.ciudad ?? '—'} → ${despues.ciudad ?? '—'}`)
+    if (antes.dormitorios !== despues.dormitorios) cambios.push(`Dormitorios: ${antes.dormitorios ?? '—'} → ${despues.dormitorios ?? '—'}`)
+    if (antes.banos !== despues.banos) cambios.push(`Baños: ${antes.banos ?? '—'} → ${despues.banos ?? '—'}`)
+
+    const grupo = grupoParaOperacion(antes.tipo_operacion)
+    if (cambios.length > 0 && grupo) {
+      const chatId = await obtenerChatIdGrupo(supabase, organizationId, grupo)
+      if (chatId) {
+        const enlace = antes.slug ? `\n\n${(await import('@/lib/url')).urlSitio(`/propiedades/${antes.slug}`)}` : ''
+        const mensaje = `✏️ *Cambio en propiedad* (${antes.codigo ?? propiedadId})\n\n${cambios.join('\n')}${enlace}`
+        await notificarWhatsapp({
+          chatId,
+          mensaje,
+          organizationId,
+          tipoNotificacion: 'cambio_propiedad',
+          agenteId: user.id,
+        })
+      }
+    }
+  }
+
   revalidatePath('/dashboard/propiedades')
   revalidatePath(`/dashboard/propiedades/${propiedadId}`)
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
   return { ok: true, propiedadId }
 }
 
+// cambiarEstadoPropiedad: sin uso confirmado en src/ (solo su propia
+// definición). Se deja intacta, sin notificación, hasta que confirmes si
+// se elimina o se retoma en algún flujo.
 export async function cambiarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {
   const supabase = await createClient()
   await supabase
@@ -289,12 +372,10 @@ export async function eliminarImagenPropiedad(
 ) {
   const supabase = await createClient()
 
-  // Borrar el archivo físico en R2 primero; si falla, no borramos el registro
   await eliminarImagenR2(rutaAlmacenamiento)
 
   await supabase.from('imagenes_propiedad').delete().eq('id', imagenId)
 
-  // Si la eliminada era portada, asignar portada a la primera foto restante
   const { data: quedaPortada } = await supabase
     .from('imagenes_propiedad')
     .select('id')
@@ -369,8 +450,6 @@ export async function eliminarPropiedad(propiedadId: string) {
     throw new Error('Solo un administrador puede eliminar propiedades.')
   }
 
-  // 1. Leads asociados: borrar primero sus dependientes (actividades, tareas,
-  //    recibos, informes de evaluacion), luego los leads.
   const { data: leads } = await supabase
     .from('leads')
     .select('id')
@@ -387,7 +466,6 @@ export async function eliminarPropiedad(propiedadId: string) {
     await supabase.from('leads').delete().in('id', leadIds)
   }
 
-  // 2. Imagenes: borrar archivo fisico en R2 primero, luego el registro.
   const { data: imagenes } = await supabase
     .from('imagenes_propiedad')
     .select('id, ruta_almacenamiento')
@@ -402,13 +480,10 @@ export async function eliminarPropiedad(propiedadId: string) {
   }
   await supabase.from('imagenes_propiedad').delete().eq('propiedad_id', propiedadId)
 
-  // 3. Coincidencias con contactos.
   await supabase.from('coincidencias_propiedad').delete().eq('propiedad_id', propiedadId)
 
-  // 4. Documentos asociados directamente a la propiedad (tabla polimorfica sin FK real).
   await supabase.from('documentos').delete().eq('tipo_relacionado', 'propiedad').eq('id_relacionado', propiedadId)
 
-  // 5. Finalmente, la propiedad.
   const { error } = await supabase.from('propiedades').delete().eq('id', propiedadId)
 
   if (error) {

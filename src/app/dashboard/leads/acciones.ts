@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
 
 function numeroOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
@@ -14,9 +15,6 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
-// Los inputs datetime-local no incluyen zona horaria (ej. "2025-01-15T14:00").
-// Guatemala es siempre UTC-6 (sin horario de verano), así que fijamos ese
-// offset explícitamente para que Postgres no lo interprete como UTC.
 function aTimestampGuatemala(valor: FormDataEntryValue | null): string | null {
   if (!valor || valor === '') return null
   const texto = valor as string
@@ -207,6 +205,44 @@ export async function crearActividad(formData: FormData) {
         programado_para: recordatorio.toISOString(),
         organization_id: perfil?.organization_id,
       })
+      // Nota: esta fila queda en cola pero el cron de envío NO está
+      // activado todavía (ver explicación de cuota de Green API). No se
+      // pierde, simplemente no se envía hasta que subas de plan.
+    }
+
+    if (perfil?.organization_id) {
+      const { data: leadConPropiedad } = await supabase
+        .from('leads')
+        .select('propiedades(titulo, codigo)')
+        .eq('id', leadId)
+        .maybeSingle()
+
+      const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
+      if (chatIdCitas) {
+        const fechaTexto = fechaVisita.toLocaleString('es-GT', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+          timeZone: 'America/Guatemala',
+        })
+        const propiedadRel = (leadConPropiedad as { propiedades: { titulo: string; codigo: string | null } | null } | null)?.propiedades
+        const propiedadInfo = propiedadRel ? `\n🏠 ${propiedadRel.titulo} (${propiedadRel.codigo ?? ''})` : ''
+        const notas = textoOpcional(formData.get('notas'))
+        const mensaje = [
+          `📅 *Nueva cita agendada*`,
+          `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}${propiedadInfo}`,
+          `🕐 ${fechaTexto}`,
+          notas ? `📝 ${notas}` : null,
+        ].filter(Boolean).join('\n')
+
+        await notificarWhatsapp({
+          chatId: chatIdCitas,
+          mensaje,
+          organizationId: perfil.organization_id,
+          tipoNotificacion: 'nueva_cita',
+          agenteId: user.id,
+          contactoId,
+        })
+      }
     }
   }
 
@@ -223,11 +259,20 @@ export async function actualizarActividad(formData: FormData) {
   const actividadId = formData.get('actividad_id') as string
   const leadId = textoOpcional(formData.get('lead_id'))
 
+  const { data: antes } = await supabase
+    .from('actividades')
+    .select('tipo_actividad, programada_en, contacto_id, organization_id')
+    .eq('id', actividadId)
+    .single()
+
+  const nuevoTipo = formData.get('tipo_actividad') as string
+  const nuevaProgramadaEn = aTimestampGuatemala(formData.get('programada_en'))
+
   const { error } = await supabase
     .from('actividades')
     .update({
-      tipo_actividad: formData.get('tipo_actividad') as string,
-      programada_en: aTimestampGuatemala(formData.get('programada_en')),
+      tipo_actividad: nuevoTipo,
+      programada_en: nuevaProgramadaEn,
       notas: textoOpcional(formData.get('notas')),
     })
     .eq('id', actividadId)
@@ -235,6 +280,41 @@ export async function actualizarActividad(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL ACTUALIZAR ACTIVIDAD ---', error)
     redirect(`/dashboard/actividades/${actividadId}/editar?error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (
+    antes &&
+    (nuevoTipo === 'cita' || nuevoTipo === 'reunion') &&
+    nuevaProgramadaEn &&
+    antes.programada_en !== nuevaProgramadaEn
+  ) {
+    const { data: contacto } = await supabase
+      .from('contactos')
+      .select('nombre_completo')
+      .eq('id', antes.contacto_id)
+      .single()
+
+    const chatIdCitas = await obtenerChatIdGrupo(supabase, antes.organization_id, 'citas')
+    if (chatIdCitas) {
+      const fechaTexto = new Date(nuevaProgramadaEn).toLocaleString('es-GT', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'America/Guatemala',
+      })
+      const mensaje = [
+        `🔄 *Cita reprogramada*`,
+        `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+        `🕐 Nueva fecha: ${fechaTexto}`,
+      ].join('\n')
+      await notificarWhatsapp({
+        chatId: chatIdCitas,
+        mensaje,
+        organizationId: antes.organization_id,
+        tipoNotificacion: 'cambio_cita',
+        agenteId: user.id,
+        contactoId: antes.contacto_id,
+      })
+    }
   }
 
   revalidatePath('/dashboard/actividades')
