@@ -2,11 +2,10 @@ import { urlSitio } from '@/lib/url'
 
 const FUNCTIONS_URL = 'https://ymvrddvckmwiajcqaled.supabase.co/functions/v1/whatsapp-enviar'
 const WHATSAPP_FUNCTION_SECRET = process.env.WHATSAPP_FUNCTION_SECRET!
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export type GrupoWhatsapp = 'ventas' | 'rentas' | 'citas'
 
-// Firma mínima: solo lo que necesitamos de un cliente Supabase server-side,
-// para no acoplar este módulo al tipo exacto de @/lib/supabase/server.
 interface ClienteConsulta {
   from: (tabla: string) => any
 }
@@ -48,6 +47,7 @@ export async function notificarWhatsapp(params: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET,
       },
       body: JSON.stringify({
@@ -66,7 +66,6 @@ export async function notificarWhatsapp(params: {
       console.error('Error notificando WhatsApp:', await res.text())
     }
   } catch (err) {
-    // Nunca debe tumbar la acción principal (crear/editar propiedad, cita, etc.)
     console.error('Error de red notificando WhatsApp:', err)
   }
 }
