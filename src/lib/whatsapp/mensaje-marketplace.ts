@@ -97,7 +97,7 @@ function generarBloquesPropiedad(p: PropiedadMarketplace & { codigo?: string | n
     : []
 
   return [
-    `${negocio} DE ${tipoLabel}${ubicacion ? ` - ${ubicacion}` : ''}`,
+    `${tipoLabel} EN ${negocio}${ubicacion ? ` - ${ubicacion}` : ''}`,
     p.codigo ? `📌 Código: ${p.codigo}` : null,
     lineasDetalle.length > 0 && `📐 Detalles de la propiedad:\n${lineasDetalle.join('\n')}`,
     lineasDistribucion.length > 0 && `${emojiTipo} Distribución:\n${lineasDistribucion.join('\n')}`,
