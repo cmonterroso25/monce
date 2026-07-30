@@ -1,10 +1,21 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
-import { subirDocumento } from '@/lib/r2/subir-documento'
 import { obtenerUrlFirmada } from '@/lib/r2/url-firmada'
+import { obtenerUrlSubida } from '@/lib/r2/url-subida'
 import { CAMPOS_DOCUMENTOS_INFORME } from './campos-informe'
 
-export async function dispararInforme(formData: FormData): Promise<{
+const EDGE_FUNCTION_URL = 'https://ymvrddvckmwiajcqaled.supabase.co/functions/v1/generar-informe'
+
+function obtenerExtension(nombreArchivo: string): string {
+  const partes = nombreArchivo.split('.')
+  return partes.length > 1 ? partes[partes.length - 1].toLowerCase() : 'bin'
+}
+
+// Paso 1: crea la fila del informe (misma validación de precio/propiedad
+// que antes) pero YA NO recibe archivos. Los archivos se suben directo
+// del navegador a R2 en un paso aparte (ver obtenerUrlSubidaDocumento),
+// para no chocar con el límite de 4.5MB por request de Vercel.
+export async function crearInforme(leadId: string, contactoId: string): Promise<{
   ok: boolean
   mensaje?: string
   informeId?: string
@@ -15,9 +26,6 @@ export async function dispararInforme(formData: FormData): Promise<{
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, mensaje: 'No autenticado.' }
 
-  const leadId = formData.get('lead_id') as string
-  const contactoId = formData.get('contacto_id') as string
-
   const { data: perfil } = await supabase
     .from('perfiles')
     .select('organization_id')
@@ -27,11 +35,6 @@ export async function dispararInforme(formData: FormData): Promise<{
   const organizationId = perfil?.organization_id
   if (!organizationId) return { ok: false, mensaje: 'No se encontró la organización del usuario.' }
 
-  // El monto de referencia para evaluar capacidad de pago (regla: ingreso
-  // mensual >= 3x este monto) sale de propiedades.precio. Si el lead no
-  // tiene propiedad asociada, o la propiedad no tiene precio cargado, se
-  // bloquea la generación del informe: sin este dato el criterio de
-  // capacidad de pago no se puede aplicar.
   const { data: leadInfo, error: errorLead } = await supabase
     .from('leads')
     .select('propiedad_id, propiedades(precio, moneda, tipo_operacion)')
@@ -54,12 +57,6 @@ export async function dispararInforme(formData: FormData): Promise<{
     }
   }
 
-  const contextoFinanciero = {
-    monto_referencia: propiedad.precio,
-    moneda: propiedad.moneda ?? null,
-    tipo_operacion: propiedad.tipo_operacion ?? null,
-  }
-
   const { data: informe, error: errorInforme } = await supabase
     .from('informes_evaluacion')
     .insert({
@@ -77,58 +74,130 @@ export async function dispararInforme(formData: FormData): Promise<{
     return { ok: false, mensaje: 'No se pudo iniciar el informe.' }
   }
 
-  const documentosParaN8n: { tipo: string; label: string; url: string }[] = []
+  return { ok: true, informeId: informe.id as string }
+}
 
-  for (const campo of CAMPOS_DOCUMENTOS_INFORME) {
-    const archivos = formData.getAll(campo.key) as File[]
-    for (const archivo of archivos) {
-      if (!archivo || archivo.size === 0) continue
-      const key = await subirDocumento(archivo, `informes/${informe.id}`)
-      // URL firmada de corta duración solo para que n8n pueda descargarlo
-      // durante el análisis. El objeto en R2 sigue siendo privado.
-      const urlFirmada = await obtenerUrlFirmada(key, 3600)
-      documentosParaN8n.push({ tipo: campo.key, label: campo.label, url: urlFirmada })
+// Paso 2: se llama una vez por cada archivo, desde el navegador, antes de
+// subirlo. Verifica (vía RLS del SELECT) que el informe le pertenezca al
+// usuario, y devuelve una URL firmada de PUT + la key resultante en R2.
+export async function obtenerUrlSubidaDocumento(
+  informeId: string,
+  nombreArchivo: string,
+  contentType: string
+): Promise<{ ok: boolean; mensaje?: string; url?: string; key?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'No autenticado.' }
 
-      await supabase.from('documentos').insert({
-        organization_id: organizationId,
-        tipo_relacionado: 'lead',
-        id_relacionado: leadId,
-        ruta_almacenamiento: key,
-        tipo_documento: `informe_${campo.key}`,
-      })
-    }
+  const { data: informe } = await supabase
+    .from('informes_evaluacion')
+    .select('id')
+    .eq('id', informeId)
+    .single()
+
+  if (!informe) return { ok: false, mensaje: 'Informe no encontrado o sin permiso.' }
+
+  const extension = obtenerExtension(nombreArchivo)
+  const key = `informes/${informeId}/${crypto.randomUUID()}.${extension}`
+
+  try {
+    const url = await obtenerUrlSubida(key, contentType || 'application/octet-stream')
+    return { ok: true, url, key }
+  } catch (err) {
+    console.error('--- ERROR AL GENERAR URL DE SUBIDA ---', err)
+    return { ok: false, mensaje: 'No se pudo preparar la subida del archivo.' }
+  }
+}
+
+// Paso 3: una vez que TODOS los archivos ya están en R2 (subidos directo
+// desde el navegador), registra los documentos y dispara la Edge Function
+// de análisis — mismo comportamiento de "ack + background" que antes.
+export async function finalizarInforme(
+  informeId: string,
+  documentos: { tipo: string; label: string; key: string }[]
+): Promise<{ ok: boolean; mensaje?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'No autenticado.' }
+
+  const { data: informe, error: errorInforme } = await supabase
+    .from('informes_evaluacion')
+    .select('id, organization_id, lead_id, contacto_id')
+    .eq('id', informeId)
+    .single()
+
+  if (errorInforme || !informe) {
+    console.error('--- ERROR AL CONSULTAR INFORME ---', errorInforme)
+    return { ok: false, mensaje: 'Informe no encontrado o sin permiso.' }
   }
 
-  // Disparo a n8n. Se espera (await) solo el "ack" inmediato del webhook
-  // (nodo configurado en modo "Respond Immediately"), no el análisis
-  // completo. n8n analiza los documentos y al terminar llama de vuelta a
-  // /api/webhooks/informe-resultado (con secreto compartido) — n8n NUNCA
-  // escribe directo a Supabase.
+  const { data: leadInfo, error: errorLead } = await supabase
+    .from('leads')
+    .select('propiedades(precio, moneda, tipo_operacion)')
+    .eq('id', informe.lead_id)
+    .single()
+
+  if (errorLead || !leadInfo) {
+    console.error('--- ERROR AL CONSULTAR LEAD (finalizar) ---', errorLead)
+    return { ok: false, mensaje: 'No se encontró el lead asociado al informe.' }
+  }
+
+  const propiedad = Array.isArray(leadInfo.propiedades) ? leadInfo.propiedades[0] : leadInfo.propiedades
+
+  const contextoFinanciero = {
+    monto_referencia: propiedad?.precio ?? null,
+    moneda: propiedad?.moneda ?? null,
+    tipo_operacion: propiedad?.tipo_operacion ?? null,
+  }
+
+  const documentosParaAnalisis: { tipo: string; label: string; url: string }[] = []
+
+  for (const doc of documentos) {
+    const urlFirmada = await obtenerUrlFirmada(doc.key, 3600)
+    documentosParaAnalisis.push({ tipo: doc.tipo, label: doc.label, url: urlFirmada })
+
+    await supabase.from('documentos').insert({
+      organization_id: informe.organization_id,
+      tipo_relacionado: 'lead',
+      id_relacionado: informe.lead_id,
+      ruta_almacenamiento: doc.key,
+      tipo_documento: `informe_${doc.tipo}`,
+    })
+  }
+
   try {
-    const respuesta = await fetch(process.env.N8N_WEBHOOK_URL!, {
+    const respuesta = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        'x-informe-secret': process.env.INFORME_CALLBACK_SECRET!,
+      },
       body: JSON.stringify({
         informe_id: informe.id,
-        organization_id: organizationId,
-        lead_id: leadId,
-        contacto_id: contactoId,
-        documentos: documentosParaN8n,
+        organization_id: informe.organization_id,
+        lead_id: informe.lead_id,
+        contacto_id: informe.contacto_id,
+        documentos: documentosParaAnalisis,
         contexto_financiero: contextoFinanciero,
         callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/informe-resultado`,
       }),
     })
-    if (!respuesta.ok) throw new Error(`n8n respondió ${respuesta.status}`)
+    if (!respuesta.ok) throw new Error(`Edge Function respondió ${respuesta.status}`)
   } catch (err) {
-    console.error('--- ERROR AL LLAMAR WEBHOOK N8N ---', err)
+    console.error('--- ERROR AL LLAMAR EDGE FUNCTION DE INFORME ---', err)
     await supabase
       .from('informes_evaluacion')
       .update({ estado: 'error', error_mensaje: 'No se pudo conectar con el motor de análisis.' })
-      .eq('id', informe.id)
+      .eq('id', informeId)
     return { ok: false, mensaje: 'No se pudo iniciar el análisis. Intenta de nuevo.' }
   }
 
-  return { ok: true, informeId: informe.id as string }
+  return { ok: true }
 }
 
 export async function obtenerEstadoInforme(informeId: string) {

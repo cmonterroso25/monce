@@ -186,8 +186,8 @@ async function generarPdfInforme(datos: {
 }
 
 export async function POST(req: NextRequest) {
-  const secreto = req.headers.get('x-n8n-secret')
-  if (!process.env.N8N_CALLBACK_SECRET || secreto !== process.env.N8N_CALLBACK_SECRET) {
+  const secreto = req.headers.get('x-informe-secret')
+  if (!process.env.INFORME_CALLBACK_SECRET || secreto !== process.env.INFORME_CALLBACK_SECRET) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 

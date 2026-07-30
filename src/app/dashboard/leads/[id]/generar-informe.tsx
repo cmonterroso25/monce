@@ -1,8 +1,8 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { FileSearch, X } from 'lucide-react'
-import { dispararInforme } from './informes'
-import { CAMPOS_DOCUMENTOS_INFORME } from './campos-informe'
+import { crearInforme, obtenerUrlSubidaDocumento, finalizarInforme } from './informes'
+import { CAMPOS_DOCUMENTOS_INFORME, type CampoArchivo } from './campos-informe'
 import { useInforme } from './contexto-informe'
 
 export default function GenerarInforme({
@@ -16,37 +16,88 @@ export default function GenerarInforme({
 }) {
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progreso, setProgreso] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const { setInforme } = useInforme()
 
   function cerrar() {
     setAbierto(false)
     setError(null)
+    setProgreso(null)
+  }
+
+  // Sube un archivo directo del navegador a R2 (PUT a la URL firmada),
+  // sin pasar por el Server Action — evita el límite de 4.5MB por request
+  // de las funciones serverless de Vercel.
+  async function subirArchivo(informeId: string, campo: CampoArchivo, archivo: File) {
+    const preparado = await obtenerUrlSubidaDocumento(
+      informeId,
+      archivo.name,
+      archivo.type || 'application/octet-stream'
+    )
+    if (!preparado.ok || !preparado.url || !preparado.key) {
+      throw new Error(preparado.mensaje ?? `No se pudo preparar la subida de ${campo.label}.`)
+    }
+    const respuestaPut = await fetch(preparado.url, {
+      method: 'PUT',
+      headers: { 'Content-Type': archivo.type || 'application/octet-stream' },
+      body: archivo,
+    })
+    if (!respuestaPut.ok) {
+      throw new Error(`Error al subir ${campo.label} (${respuestaPut.status})`)
+    }
+    return { tipo: campo.key, label: campo.label, key: preparado.key }
   }
 
   function alEnviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
     const formData = new FormData(e.currentTarget)
-    formData.set('lead_id', leadId)
-    formData.set('contacto_id', contactoId)
 
     startTransition(async () => {
-      const resultado = await dispararInforme(formData)
-      if (!resultado.ok || !resultado.informeId) {
-        setError(resultado.mensaje ?? 'No se pudo generar el informe.')
-        return
+      try {
+        setProgreso('Iniciando informe...')
+        const creado = await crearInforme(leadId, contactoId)
+        if (!creado.ok || !creado.informeId) {
+          setError(creado.mensaje ?? 'No se pudo generar el informe.')
+          setProgreso(null)
+          return
+        }
+        const informeId = creado.informeId
+
+        const documentos: { tipo: string; label: string; key: string }[] = []
+        for (const campo of CAMPOS_DOCUMENTOS_INFORME) {
+          const archivos = formData.getAll(campo.key) as File[]
+          for (const archivo of archivos) {
+            if (!archivo || archivo.size === 0) continue
+            setProgreso(`Subiendo: ${campo.label}...`)
+            const doc = await subirArchivo(informeId, campo, archivo)
+            documentos.push(doc)
+          }
+        }
+
+        setProgreso('Iniciando análisis...')
+        const finalizado = await finalizarInforme(informeId, documentos)
+        if (!finalizado.ok) {
+          setError(finalizado.mensaje ?? 'No se pudo iniciar el análisis.')
+          setProgreso(null)
+          return
+        }
+
+        setInforme({
+          id: informeId,
+          estado: 'procesando',
+          ruta_pdf: null,
+          resultado_recomendacion: null,
+          resultado_resumen: null,
+          error_mensaje: null,
+          detalle_criterios: null,
+        })
+        cerrar()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al subir los documentos.')
+        setProgreso(null)
       }
-      setInforme({
-        id: resultado.informeId,
-        estado: 'procesando',
-        ruta_pdf: null,
-        resultado_recomendacion: null,
-        resultado_resumen: null,
-        error_mensaje: null,
-        detalle_criterios: null,
-      })
-      cerrar()
     })
   }
 
@@ -82,6 +133,12 @@ export default function GenerarInforme({
               {error && (
                 <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {error}
+                </div>
+              )}
+
+              {progreso && !error && (
+                <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  {progreso}
                 </div>
               )}
 

@@ -1,11 +1,13 @@
-import { urlSitio } from '@/lib/url'
-const FUNCTIONS_URL = 'https://ymvrddvckmwiajcqaled.supabase.co/functions/v1/whatsapp-enviar'
-const WHATSAPP_FUNCTION_SECRET = process.env.WHATSAPP_FUNCTION_SECRET!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 export type GrupoWhatsapp = 'ventas' | 'rentas' | 'citas'
+
 interface ClienteConsulta {
   from: (tabla: string) => any
 }
+
+const FUNCTIONS_URL = 'https://ymvrddvckmwiajcqaled.supabase.co/functions/v1/whatsapp-enviar'
+const WHATSAPP_FUNCTION_SECRET = process.env.WHATSAPP_FUNCTION_SECRET!
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export async function obtenerChatIdGrupo(
   supabase: ClienteConsulta,
   organizationId: string,
@@ -26,6 +28,7 @@ export async function obtenerChatIdGrupo(
   }
   return (data as Record<string, string | null>)[columna]
 }
+
 export async function notificarWhatsapp(params: {
   chatId: string
   mensaje: string
@@ -63,29 +66,4 @@ export async function notificarWhatsapp(params: {
   } catch (err) {
     console.error('Error de red notificando WhatsApp:', err)
   }
-}
-export function mensajePropiedad(p: {
-  titulo: string
-  precio: number | null
-  moneda: string | null
-  zona: string | null
-  ciudad: string | null
-  dormitorios: string | null
-  banos: string | null
-  slug: string | null
-  codigo: string | null
-  encabezado: string
-}): string {
-  const ubicacion = [p.zona, p.ciudad].filter(Boolean).join(', ')
-  const enlace = p.slug ? urlSitio(`/propiedades/${p.slug}`) : null
-  const bloques = [
-    p.encabezado,
-    `*${p.titulo}*` + (p.codigo ? ` (${p.codigo})` : ''),
-    p.precio != null && `${p.moneda ?? 'GTQ'} ${Number(p.precio).toLocaleString()}`,
-    ubicacion && `📍 ${ubicacion}`,
-    (p.dormitorios || p.banos) && `🛏️ ${p.dormitorios ?? '—'} hab  🛁 ${p.banos ?? '—'} baños`,
-  ].filter(Boolean)
-  let mensaje = bloques.join('\n\n')
-  if (enlace) mensaje += `\n\n${enlace}`
-  return mensaje
 }
