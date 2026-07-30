@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Phone, Mail } from 'lucide-react'
+import { ArrowLeft, Pencil, Phone } from 'lucide-react'
 import CambiarEtapaLead from './cambiar-etapa'
 import GenerarRecibo from './generar-recibo'
 import GenerarInforme from './generar-informe'
@@ -11,6 +11,7 @@ import MarcarCompletada from '../../actividades/marcar-completada'
 import { crearActividad } from '../acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
 import BotonEliminarLeadConRedireccion from '../boton-eliminar-lead-con-redireccion'
+import BotonEnviar from '@/components/boton-enviar'
 
 export default async function DetalleLead({
   params,
@@ -50,9 +51,15 @@ export default async function DetalleLead({
     .eq('activo', true)
     .order('nombre_completo')
 
+  const { data: colegas } = await supabase
+    .from('colegas')
+    .select('id, nombre')
+    .eq('organization_id', lead.organization_id)
+    .order('nombre')
+
   const { data: actividades } = await supabase
     .from('actividades')
-    .select('*, agente:perfiles(nombre_completo)')
+    .select('*, agente:perfiles(nombre_completo), colega:colegas(nombre)')
     .eq('lead_id', id)
     .order('creado_en', { ascending: false })
 
@@ -102,9 +109,6 @@ export default async function DetalleLead({
           <p className="flex items-center gap-2 text-slate-600">
             <Phone size={14} className="text-slate-400 flex-shrink-0" /> {lead.contacto?.telefono ?? '—'}
           </p>
-          <p className="flex items-center gap-2 text-slate-600">
-            <Mail size={14} className="text-slate-400 flex-shrink-0" /> <span className="truncate">{lead.contacto?.correo ?? '—'}</span>
-          </p>
           <p className="text-slate-600">
             <span className="font-medium">Propiedad:</span>{' '}
             {lead.propiedad ? (
@@ -136,22 +140,37 @@ export default async function DetalleLead({
             </select>
             <input name="programada_en" type="datetime-local" className="rounded border border-gray-300 px-3 py-2 text-sm" />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Agente que atenderá</label>
-            <select
-              name="agente_id"
-              defaultValue={user?.id ?? ''}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              {(agentes ?? []).map((a) => (
-                <option key={a.id} value={a.id}>{a.nombre_completo}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Agente que atenderá</label>
+              <select
+                name="agente_id"
+                defaultValue={user?.id ?? ''}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              >
+                {(agentes ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>{a.nombre_completo}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Colega</label>
+              <select
+                name="colega_id"
+                defaultValue=""
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Sin colega</option>
+                {(colegas ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <textarea name="notas" placeholder="Notas de la actividad..." rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
-          <button type="submit" className="rounded bg-[#2C3E50] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#38B6FF]">
+          <BotonEnviar className="rounded bg-[#2C3E50] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#38B6FF]">
             Registrar actividad
-          </button>
+          </BotonEnviar>
         </form>
 
         {(!actividades || actividades.length === 0) && (
@@ -170,6 +189,7 @@ export default async function DetalleLead({
                 </p>
                 {a.notas && <p className="text-slate-600">{a.notas}</p>}
                 {a.agente?.nombre_completo && <p className="text-xs text-slate-400">{a.agente.nombre_completo}</p>}
+                {a.colega?.nombre && <p className="text-xs text-slate-400">Colega: {a.colega.nombre}</p>}
               </div>
               <div className="shrink-0">
                 {a.completada_en ? (

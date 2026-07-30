@@ -171,6 +171,7 @@ export async function crearActividad(formData: FormData) {
 
   const tipoActividad = formData.get('tipo_actividad') as string
   const programadaEn = aTimestampGuatemala(formData.get('programada_en'))
+  const colegaId = textoOpcional(formData.get('colega_id'))
 
   // El agente que atenderá la cita ahora se puede elegir en el formulario
   // (campo "agente_id"); si no se selecciona ninguno, se usa quien registra
@@ -181,6 +182,7 @@ export async function crearActividad(formData: FormData) {
     contacto_id: contactoId,
     lead_id: leadId,
     agente_id: agenteAsignadoId,
+    colega_id: colegaId,
     tipo_actividad: tipoActividad,
     notas: textoOpcional(formData.get('notas')),
     programada_en: programadaEn,
@@ -267,17 +269,20 @@ export async function actualizarActividad(formData: FormData) {
 
   const { data: antes } = await supabase
     .from('actividades')
-    .select('tipo_actividad, programada_en, contacto_id, organization_id, agente_id')
+    .select('tipo_actividad, programada_en, contacto_id, organization_id, agente_id, colega_id')
     .eq('id', actividadId)
     .single()
 
   const nuevoTipo = formData.get('tipo_actividad') as string
   const nuevaProgramadaEn = aTimestampGuatemala(formData.get('programada_en'))
 
-  // Si el formulario de edición trae "agente_id", se actualiza; si no viene
-  // (por ejemplo un formulario viejo sin el campo), se conserva el agente
-  // que ya tenía la actividad.
+  // Si el formulario de edición trae "agente_id"/"colega_id", se actualizan;
+  // si no vienen (por ejemplo un formulario viejo sin esos campos), se
+  // conserva lo que ya tenía la actividad.
   const nuevoAgenteId = textoOpcional(formData.get('agente_id')) ?? antes?.agente_id ?? null
+  const nuevoColegaId = formData.has('colega_id')
+    ? textoOpcional(formData.get('colega_id'))
+    : antes?.colega_id ?? null
 
   const { error } = await supabase
     .from('actividades')
@@ -286,6 +291,7 @@ export async function actualizarActividad(formData: FormData) {
       programada_en: nuevaProgramadaEn,
       notas: textoOpcional(formData.get('notas')),
       agente_id: nuevoAgenteId,
+      colega_id: nuevoColegaId,
     })
     .eq('id', actividadId)
 
