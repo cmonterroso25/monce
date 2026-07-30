@@ -27,7 +27,7 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
       // no se distinguen entre sí en el mensaje.
       const enlace = urlPropiedadParaWhatsapp(propiedadId)
       const mensaje = [
-        'Propiedad no disponible',
+        '🚫 Propiedad no disponible',
         propiedad.codigo ?? propiedadId,
         propiedad.titulo,
         enlace,
