@@ -136,6 +136,18 @@ export default async function DetalleLead({
             </select>
             <input name="programada_en" type="datetime-local" className="rounded border border-gray-300 px-3 py-2 text-sm" />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Agente que atenderá</label>
+            <select
+              name="agente_id"
+              defaultValue={user?.id ?? ''}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              {(agentes ?? []).map((a) => (
+                <option key={a.id} value={a.id}>{a.nombre_completo}</option>
+              ))}
+            </select>
+          </div>
           <textarea name="notas" placeholder="Notas de la actividad..." rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
           <button type="submit" className="rounded bg-[#2C3E50] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#38B6FF]">
             Registrar actividad

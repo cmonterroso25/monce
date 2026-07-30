@@ -172,10 +172,15 @@ export async function crearActividad(formData: FormData) {
   const tipoActividad = formData.get('tipo_actividad') as string
   const programadaEn = aTimestampGuatemala(formData.get('programada_en'))
 
+  // El agente que atenderá la cita ahora se puede elegir en el formulario
+  // (campo "agente_id"); si no se selecciona ninguno, se usa quien registra
+  // la actividad como respaldo.
+  const agenteAsignadoId = textoOpcional(formData.get('agente_id')) || user.id
+
   const { error } = await supabase.from('actividades').insert({
     contacto_id: contactoId,
     lead_id: leadId,
-    agente_id: user.id,
+    agente_id: agenteAsignadoId,
     tipo_actividad: tipoActividad,
     notas: textoOpcional(formData.get('notas')),
     programada_en: programadaEn,
@@ -211,10 +216,12 @@ export async function crearActividad(formData: FormData) {
     }
 
     if (perfil?.organization_id) {
-      const { data: leadConPropiedad } = await supabase
-        .from('leads')
-        .select('propiedades(titulo, codigo)')
-        .eq('id', leadId)
+      // Ya no se consulta la propiedad del lead: por decisión de negocio,
+      // el mensaje de cita agendada NO debe mostrar la propiedad de interés.
+      const { data: agente } = await supabase
+        .from('perfiles')
+        .select('nombre_completo')
+        .eq('id', agenteAsignadoId)
         .maybeSingle()
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
@@ -224,12 +231,11 @@ export async function crearActividad(formData: FormData) {
           timeStyle: 'short',
           timeZone: 'America/Guatemala',
         })
-        const propiedadRel = (leadConPropiedad as { propiedades: { titulo: string; codigo: string | null } | null } | null)?.propiedades
-        const propiedadInfo = propiedadRel ? `\n🏠 ${propiedadRel.titulo} (${propiedadRel.codigo ?? ''})` : ''
         const notas = textoOpcional(formData.get('notas'))
         const mensaje = [
           `📅 *Nueva cita agendada*`,
-          `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}${propiedadInfo}`,
+          `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+          `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
           `🕐 ${fechaTexto}`,
           notas ? `📝 ${notas}` : null,
         ].filter(Boolean).join('\n')
@@ -239,7 +245,7 @@ export async function crearActividad(formData: FormData) {
           mensaje,
           organizationId: perfil.organization_id,
           tipoNotificacion: 'nueva_cita',
-          agenteId: user.id,
+          agenteId: agenteAsignadoId,
           contactoId,
         })
       }
@@ -261,12 +267,17 @@ export async function actualizarActividad(formData: FormData) {
 
   const { data: antes } = await supabase
     .from('actividades')
-    .select('tipo_actividad, programada_en, contacto_id, organization_id')
+    .select('tipo_actividad, programada_en, contacto_id, organization_id, agente_id')
     .eq('id', actividadId)
     .single()
 
   const nuevoTipo = formData.get('tipo_actividad') as string
   const nuevaProgramadaEn = aTimestampGuatemala(formData.get('programada_en'))
+
+  // Si el formulario de edición trae "agente_id", se actualiza; si no viene
+  // (por ejemplo un formulario viejo sin el campo), se conserva el agente
+  // que ya tenía la actividad.
+  const nuevoAgenteId = textoOpcional(formData.get('agente_id')) ?? antes?.agente_id ?? null
 
   const { error } = await supabase
     .from('actividades')
@@ -274,6 +285,7 @@ export async function actualizarActividad(formData: FormData) {
       tipo_actividad: nuevoTipo,
       programada_en: nuevaProgramadaEn,
       notas: textoOpcional(formData.get('notas')),
+      agente_id: nuevoAgenteId,
     })
     .eq('id', actividadId)
 
@@ -294,6 +306,10 @@ export async function actualizarActividad(formData: FormData) {
       .eq('id', antes.contacto_id)
       .single()
 
+    const { data: agente } = nuevoAgenteId
+      ? await supabase.from('perfiles').select('nombre_completo').eq('id', nuevoAgenteId).maybeSingle()
+      : { data: null }
+
     const chatIdCitas = await obtenerChatIdGrupo(supabase, antes.organization_id, 'citas')
     if (chatIdCitas) {
       const fechaTexto = new Date(nuevaProgramadaEn).toLocaleString('es-GT', {
@@ -304,6 +320,7 @@ export async function actualizarActividad(formData: FormData) {
       const mensaje = [
         `🔄 *Cita reprogramada*`,
         `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+        `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
         `🕐 Nueva fecha: ${fechaTexto}`,
       ].join('\n')
       await notificarWhatsapp({
@@ -311,7 +328,7 @@ export async function actualizarActividad(formData: FormData) {
         mensaje,
         organizationId: antes.organization_id,
         tipoNotificacion: 'cambio_cita',
-        agenteId: user.id,
+        agenteId: nuevoAgenteId ?? user.id,
         contactoId: antes.contacto_id,
       })
     }
