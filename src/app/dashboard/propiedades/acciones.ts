@@ -198,6 +198,12 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
 
   const titulo = formData.get('titulo') as string
 
+  const { data: propiedadAnterior } = await supabase
+    .from('propiedades')
+    .select('precio')
+    .eq('id', propiedadId)
+    .single()
+
   const { error } = await supabase
     .from('propiedades')
     .update({
@@ -253,12 +259,22 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
   }
 
   if (organizationId) {
+    const precioNuevo = Number(formData.get('precio'))
+    const precioAnterior = propiedadAnterior?.precio != null ? Number(propiedadAnterior.precio) : null
+    let encabezado = '✏️ Propiedad actualizada'
+    if (precioAnterior != null && !Number.isNaN(precioNuevo)) {
+      if (precioNuevo < precioAnterior) {
+        encabezado = '💸 Propiedad baja de precio'
+      } else if (precioNuevo > precioAnterior) {
+        encabezado = '🔺 Propiedad cambió de precio'
+      }
+    }
     await notificarFichaPropiedad(
       supabase,
       propiedadId,
       organizationId,
       user.id,
-      '✏️ Propiedad actualizada',
+      encabezado,
       'cambio_propiedad'
     )
   }
