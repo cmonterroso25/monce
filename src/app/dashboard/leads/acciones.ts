@@ -226,6 +226,10 @@ export async function crearActividad(formData: FormData) {
         .eq('id', agenteAsignadoId)
         .maybeSingle()
 
+      const { data: colega } = colegaId
+        ? await supabase.from('colegas').select('nombre').eq('id', colegaId).maybeSingle()
+        : { data: null }
+
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
       if (chatIdCitas) {
         const fechaTexto = fechaVisita.toLocaleString('es-GT', {
@@ -236,8 +240,9 @@ export async function crearActividad(formData: FormData) {
         const notas = textoOpcional(formData.get('notas'))
         const mensaje = [
           `📅 *Nueva cita agendada*`,
-          `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+          `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
           `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
+          colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
           `🕐 ${fechaTexto}`,
           notas ? `📝 ${notas}` : null,
         ].filter(Boolean).join('\n')
@@ -316,6 +321,10 @@ export async function actualizarActividad(formData: FormData) {
       ? await supabase.from('perfiles').select('nombre_completo').eq('id', nuevoAgenteId).maybeSingle()
       : { data: null }
 
+    const { data: colega } = nuevoColegaId
+      ? await supabase.from('colegas').select('nombre').eq('id', nuevoColegaId).maybeSingle()
+      : { data: null }
+
     const chatIdCitas = await obtenerChatIdGrupo(supabase, antes.organization_id, 'citas')
     if (chatIdCitas) {
       const fechaTexto = new Date(nuevaProgramadaEn).toLocaleString('es-GT', {
@@ -325,10 +334,11 @@ export async function actualizarActividad(formData: FormData) {
       })
       const mensaje = [
         `🔄 *Cita reprogramada*`,
-        `👤 ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+        `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
         `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
+        colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
         `🕐 Nueva fecha: ${fechaTexto}`,
-      ].join('\n')
+      ].filter(Boolean).join('\n')
       await notificarWhatsapp({
         chatId: chatIdCitas,
         mensaje,
