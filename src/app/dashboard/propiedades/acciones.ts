@@ -266,7 +266,7 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
       if (precioNuevo < precioAnterior) {
         encabezado = '💸 Propiedad baja de precio'
       } else if (precioNuevo > precioAnterior) {
-        encabezado = '🔺 Propiedad cambió de precio'
+        encabezado = '💰 Propiedad sube de precio'
       }
     }
     await notificarFichaPropiedad(
