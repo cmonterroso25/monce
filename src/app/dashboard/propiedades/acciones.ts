@@ -198,58 +198,73 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
 
   const titulo = formData.get('titulo') as string
 
+  // Se trae la fila completa (no solo "precio") para poder comparar,
+  // campo por campo, contra los datos nuevos y así saber si hubo un
+  // cambio real antes de decidir si se notifica por WhatsApp.
   const { data: propiedadAnterior } = await supabase
     .from('propiedades')
-    .select('precio')
+    .select('*')
     .eq('id', propiedadId)
     .single()
 
+  const nuevosDatos = {
+    titulo,
+    tipo_operacion: formData.get('tipo_operacion') as string,
+    tipo_propiedad: formData.get('tipo_propiedad') as string,
+    requisitos_renta: textoOpcional(formData.get('requisitos_renta')),
+    modalidad_captacion: textoOpcional(formData.get('modalidad_captacion')),
+    precio: Number(formData.get('precio')),
+    moneda: formData.get('moneda') as string,
+    direccion: textoOpcional(formData.get('direccion')),
+    zona: textoOpcional(formData.get('zona')),
+    ciudad: textoOpcional(formData.get('ciudad')),
+    municipio_id: municipioId,
+    sector: textoOpcional(formData.get('sector')),
+    condominio: textoOpcional(formData.get('condominio')),
+    numero_casa: textoOpcional(formData.get('numero_casa')),
+    niveles: textoOpcional(formData.get('niveles')),
+    dormitorios: textoOpcional(formData.get('dormitorios')),
+    banos: textoOpcional(formData.get('banos')),
+    sala: textoOpcional(formData.get('sala')),
+    comedor: textoOpcional(formData.get('comedor')),
+    cocina: textoOpcional(formData.get('cocina')),
+    estudio: textoOpcional(formData.get('estudio')),
+    sala_familiar: textoOpcional(formData.get('sala_familiar')),
+    habitacion_servicio: textoOpcional(formData.get('habitacion_servicio')),
+    lavanderia: textoOpcional(formData.get('lavanderia')),
+    jardin: textoOpcional(formData.get('jardin')),
+    parqueos: numeroOpcional(formData.get('parqueos')),
+    extras: textoOpcional(formData.get('extras')),
+    area_construccion_m2: numeroOpcional(formData.get('area_construccion_m2')),
+    area_terreno_m2: numeroOpcional(formData.get('area_terreno_m2')),
+    medidas_terreno: textoOpcional(formData.get('medidas_terreno')),
+    mantenimiento: numeroOpcional(formData.get('mantenimiento')),
+    iusi: numeroOpcional(formData.get('iusi')),
+    comision: textoOpcional(formData.get('comision')),
+    hipoteca: textoOpcional(formData.get('hipoteca')),
+    valor_hipoteca: numeroOpcional(formData.get('valor_hipoteca')),
+    mascota: textoOpcional(formData.get('mascota')),
+    acceso: textoOpcional(formData.get('acceso')),
+    propietario_nombre: textoOpcional(formData.get('propietario_nombre')),
+    colega_id: colegaId,
+    captado_por: textoOpcional(formData.get('captado_por')),
+    descripcion: textoOpcional(formData.get('descripcion')),
+    comentarios: textoOpcional(formData.get('comentarios')),
+  }
+
+  // ¿Hubo algún cambio real? Se compara cada campo contra el valor que
+  // ya existía en la base de datos. Si no hay fila anterior (no debería
+  // pasar) se asume que sí hay cambios, para no bloquear la notificación
+  // por un error inesperado de lectura.
+  const hayCambios = propiedadAnterior
+    ? (Object.keys(nuevosDatos) as (keyof typeof nuevosDatos)[]).some(
+        (campo) => (propiedadAnterior as Record<string, unknown>)[campo] !== nuevosDatos[campo]
+      )
+    : true
+
   const { error } = await supabase
     .from('propiedades')
-    .update({
-      titulo,
-      tipo_operacion: formData.get('tipo_operacion') as string,
-      tipo_propiedad: formData.get('tipo_propiedad') as string,
-      requisitos_renta: textoOpcional(formData.get('requisitos_renta')),
-      modalidad_captacion: textoOpcional(formData.get('modalidad_captacion')),
-      precio: Number(formData.get('precio')),
-      moneda: formData.get('moneda') as string,
-      direccion: textoOpcional(formData.get('direccion')),
-      zona: textoOpcional(formData.get('zona')),
-      ciudad: textoOpcional(formData.get('ciudad')),
-      municipio_id: municipioId,
-      sector: textoOpcional(formData.get('sector')),
-      condominio: textoOpcional(formData.get('condominio')),
-      numero_casa: textoOpcional(formData.get('numero_casa')),
-      niveles: textoOpcional(formData.get('niveles')),
-      dormitorios: textoOpcional(formData.get('dormitorios')),
-      banos: textoOpcional(formData.get('banos')),
-      sala: textoOpcional(formData.get('sala')),
-      comedor: textoOpcional(formData.get('comedor')),
-      cocina: textoOpcional(formData.get('cocina')),
-      estudio: textoOpcional(formData.get('estudio')),
-      sala_familiar: textoOpcional(formData.get('sala_familiar')),
-      habitacion_servicio: textoOpcional(formData.get('habitacion_servicio')),
-      lavanderia: textoOpcional(formData.get('lavanderia')),
-      jardin: textoOpcional(formData.get('jardin')),
-      parqueos: numeroOpcional(formData.get('parqueos')),
-      extras: textoOpcional(formData.get('extras')),
-      area_construccion_m2: numeroOpcional(formData.get('area_construccion_m2')),
-      area_terreno_m2: numeroOpcional(formData.get('area_terreno_m2')),
-      medidas_terreno: textoOpcional(formData.get('medidas_terreno')),
-      mantenimiento: numeroOpcional(formData.get('mantenimiento')),
-      iusi: numeroOpcional(formData.get('iusi')),
-      comision: textoOpcional(formData.get('comision')),
-      hipoteca: textoOpcional(formData.get('hipoteca')),
-      valor_hipoteca: numeroOpcional(formData.get('valor_hipoteca')),
-      mascota: textoOpcional(formData.get('mascota')),
-      acceso: textoOpcional(formData.get('acceso')),
-      propietario_nombre: textoOpcional(formData.get('propietario_nombre')),
-      colega_id: colegaId,
-      captado_por: textoOpcional(formData.get('captado_por')),
-      descripcion: textoOpcional(formData.get('descripcion')),
-      comentarios: textoOpcional(formData.get('comentarios')),
-    })
+    .update(nuevosDatos)
     .eq('id', propiedadId)
 
   if (error) {
@@ -258,7 +273,7 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     return { ok: false, mensaje: error.message }
   }
 
-  if (organizationId) {
+  if (organizationId && hayCambios) {
     const precioNuevo = Number(formData.get('precio'))
     const precioAnterior = propiedadAnterior?.precio != null ? Number(propiedadAnterior.precio) : null
     let encabezado = '✏️ Propiedad actualizada'
