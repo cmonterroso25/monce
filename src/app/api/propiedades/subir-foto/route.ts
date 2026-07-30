@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { subirImagen } from '@/lib/r2/subir-imagen'
 import { revalidatePath } from 'next/cache'
 import { notificarFichaPropiedad } from '@/lib/whatsapp/notificar-propiedad'
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -54,35 +53,40 @@ export async function POST(request: NextRequest) {
     console.error('--- ERROR AL SUBIR IMAGEN ---', err)
     return NextResponse.json({ error: 'No se pudo subir la imagen' }, { status: 500 })
   }
-
-  // Notificación de "nueva propiedad" disparada en la PRIMERA foto subida,
-  // no al crear el registro (para que el enlace ya tenga imagen cuando
-  // WhatsApp genere la vista previa). El UPDATE condicional evita doble
-  // envío si varias fotos se suben en paralelo: solo la petición que
-  // realmente cambia el flag de false→true procede a notificar.
+  // Notificación de "nueva propiedad" disparada en la PRIMERA foto subida.
+  // El UPDATE condicional evita doble envío si varias fotos se suben en
+  // paralelo: solo la petición que realmente cambia el flag de false→true
+  // procede a notificar. Se captura el error explícitamente y se distingue
+  // de "ya estaba notificada" (0 filas afectadas, sin error).
   if (miPerfil?.organization_id) {
-    const { data: gano } = await supabase
+    const { data: gano, error: errorFlag } = await supabase
       .from('propiedades')
       .update({ notificado_nueva_propiedad: true })
       .eq('id', propiedadId)
       .eq('notificado_nueva_propiedad', false)
       .select('id')
       .maybeSingle()
-
-    if (gano) {
-      await notificarFichaPropiedad(
-        supabase,
-        propiedadId,
-        miPerfil.organization_id,
-        user.id,
-        '🆕 Nueva propiedad publicada',
-        'nueva_propiedad'
-      )
+    if (errorFlag) {
+      console.error(`--- ERROR AL MARCAR notificado_nueva_propiedad (propiedad ${propiedadId}) ---`, errorFlag)
+    } else if (!gano) {
+      console.log(`Propiedad ${propiedadId}: no se notificó (ya estaba marcada como notificada o la fila no fue visible/actualizable bajo RLS para user ${user.id}).`)
+    } else {
+      try {
+        await notificarFichaPropiedad(
+          supabase,
+          propiedadId,
+          miPerfil.organization_id,
+          user.id,
+          '🆕 Nueva propiedad publicada',
+          'nueva_propiedad'
+        )
+      } catch (errNotif) {
+        console.error(`--- ERROR AL NOTIFICAR WHATSAPP (propiedad ${propiedadId}) ---`, errNotif)
+      }
     }
   } else {
     console.error(`Subida de foto para propiedad ${propiedadId}: no se resolvió organization_id del usuario; no se evaluó notificación.`)
   }
-
   revalidatePath('/dashboard/propiedades')
   revalidatePath(`/dashboard/propiedades/${propiedadId}`)
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
