@@ -1,14 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { actualizarActividad } from '../../../leads/acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../../../leads/constantes'
-
+import BotonEnviar from '@/components/boton-enviar'
 function aInputLocal(valor: string | null): string {
   if (!valor) return ''
   const fecha = new Date(valor)
   const offsetMs = fecha.getTimezoneOffset() * 60000
   return new Date(fecha.getTime() - offsetMs).toISOString().slice(0, 16)
 }
-
 export default async function EditarActividad({
   params,
   searchParams,
@@ -19,10 +18,8 @@ export default async function EditarActividad({
   const { id } = await params
   const { error } = await searchParams
   const supabase = await createClient()
-
   const { data: actividad } = await supabase.from('actividades').select('*').eq('id', id).single()
   if (!actividad) return <div className="p-8">Actividad no encontrada.</div>
-
   // Se necesita la organización de la actividad para limitar el selector
   // de agente a los agentes de la misma organización.
   const { data: agentes } = actividad.organization_id
@@ -33,7 +30,6 @@ export default async function EditarActividad({
         .eq('activo', true)
         .order('nombre_completo')
     : { data: [] }
-
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
       <h1 className="mb-6 text-xl font-bold text-[#2C3E50] sm:text-2xl">Editar actividad</h1>
@@ -76,9 +72,9 @@ export default async function EditarActividad({
           <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
           <textarea name="notas" defaultValue={actividad.notas ?? ''} rows={3} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
-        <button type="submit" className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
+        <BotonEnviar className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Guardar cambios
-        </button>
+        </BotonEnviar>
       </form>
     </div>
   )
