@@ -2,16 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { notificarWhatsapp, obtenerChatIdGrupo, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
-import { urlSitio } from '@/lib/url'
+import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
+import { grupoParaOperacion, urlPropiedadParaWhatsapp } from '@/lib/whatsapp/notificar-propiedad'
 
 const ESTADOS_NO_DISPONIBLE = ['vendida', 'rentada', 'inactiva']
-
-function grupoParaOperacion(tipoOperacion: string | null): GrupoWhatsapp | null {
-  if (tipoOperacion === 'venta') return 'ventas'
-  if (tipoOperacion === 'renta') return 'rentas'
-  return null
-}
 
 export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {
   const supabase = await createClient()
@@ -40,8 +34,12 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
         rentada: '✅ Rentada',
         inactiva: '⛔ Ya no disponible',
       }
-      const enlace = propiedad.slug ? `\n\n${urlSitio(`/propiedades/${propiedad.slug}`)}` : ''
-      const mensaje = `${etiquetas[nuevoEstado]}\n\n*${propiedad.titulo}* (${propiedad.codigo ?? propiedadId})${enlace}`
+      const enlace = urlPropiedadParaWhatsapp(propiedad.slug)
+      const mensaje = [
+        etiquetas[nuevoEstado],
+        `*${propiedad.titulo}* (${propiedad.codigo ?? propiedadId})`,
+        enlace,
+      ].filter(Boolean).join('\n\n')
       await notificarWhatsapp({
         chatId,
         mensaje,

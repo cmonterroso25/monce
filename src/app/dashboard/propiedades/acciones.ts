@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { subirImagen, eliminarImagenR2 } from '@/lib/r2/subir-imagen'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import { notificarWhatsapp, obtenerChatIdGrupo, mensajePropiedad, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
+import { urlSitio } from '@/lib/url'
+import { notificarFichaPropiedad } from '@/lib/whatsapp/notificar-propiedad'
 
 function generarSlug(titulo: string) {
   const base = titulo
@@ -26,12 +27,6 @@ function numeroOpcional(valor: FormDataEntryValue | null) {
 function textoOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
   return valor as string
-}
-
-function grupoParaOperacion(tipoOperacion: string | null): GrupoWhatsapp | null {
-  if (tipoOperacion === 'venta') return 'ventas'
-  if (tipoOperacion === 'renta') return 'rentas'
-  return null
 }
 
 export async function crearPropiedadDatos(formData: FormData): Promise<{
@@ -142,35 +137,9 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
     return { ok: false, mensaje: error.message }
   }
 
-  const grupo = grupoParaOperacion(propiedad.tipo_operacion)
-  if (grupo && organizationId) {
-    const chatId = await obtenerChatIdGrupo(supabase, organizationId, grupo)
-    if (chatId) {
-      const mensaje = mensajePropiedad({
-        titulo: propiedad.titulo,
-        precio: propiedad.precio,
-        moneda: propiedad.moneda,
-        zona: propiedad.zona,
-        ciudad: propiedad.ciudad,
-        dormitorios: propiedad.dormitorios,
-        banos: propiedad.banos,
-        slug: propiedad.slug,
-        codigo: propiedad.codigo,
-        encabezado: '🆕 Nueva propiedad',
-      })
-      await notificarWhatsapp({
-        chatId,
-        mensaje,
-        organizationId,
-        tipoNotificacion: 'nueva_propiedad',
-        agenteId: user.id,
-      })
-    } else {
-      console.error(`Propiedad ${propiedad.id}: grupo "${grupo}" no configurado en organizaciones.`)
-    }
-  } else {
-    console.error(`Propiedad ${propiedad.id} sin tipo_operacion definido; no se notificó a ningún grupo.`)
-  }
+  // La notificación de "nueva propiedad" ya NO se dispara aquí: se movió a
+  // subir-foto/route.ts, en la primera foto subida, para que el enlace
+  // siempre tenga imagen cuando WhatsApp genere la vista previa.
 
   revalidatePath('/dashboard/propiedades')
   return { ok: true, propiedadId: propiedad.id as string }
@@ -198,12 +167,6 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     .single()
 
   const organizationId = perfil?.organization_id
-
-  const { data: antes } = await supabase
-    .from('propiedades')
-    .select('titulo, precio, moneda, zona, ciudad, dormitorios, banos, tipo_operacion, slug, codigo')
-    .eq('id', propiedadId)
-    .single()
 
   let municipioId = textoOpcional(formData.get('municipio_id'))
   if (municipioId === '__nuevo__') {
@@ -289,41 +252,15 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     return { ok: false, mensaje: error.message }
   }
 
-  if (antes && organizationId) {
-    const despues = {
-      titulo,
-      precio: Number(formData.get('precio')),
-      moneda: formData.get('moneda') as string,
-      zona: textoOpcional(formData.get('zona')),
-      ciudad: textoOpcional(formData.get('ciudad')),
-      dormitorios: textoOpcional(formData.get('dormitorios')),
-      banos: textoOpcional(formData.get('banos')),
-    }
-    const cambios: string[] = []
-    if (antes.titulo !== despues.titulo) cambios.push(`Título: "${antes.titulo}" → "${despues.titulo}"`)
-    if (Number(antes.precio) !== despues.precio) {
-      cambios.push(`Precio: ${antes.moneda} ${Number(antes.precio ?? 0).toLocaleString()} → ${despues.moneda} ${despues.precio.toLocaleString()}`)
-    }
-    if (antes.zona !== despues.zona) cambios.push(`Zona: ${antes.zona ?? '—'} → ${despues.zona ?? '—'}`)
-    if (antes.ciudad !== despues.ciudad) cambios.push(`Ciudad: ${antes.ciudad ?? '—'} → ${despues.ciudad ?? '—'}`)
-    if (antes.dormitorios !== despues.dormitorios) cambios.push(`Dormitorios: ${antes.dormitorios ?? '—'} → ${despues.dormitorios ?? '—'}`)
-    if (antes.banos !== despues.banos) cambios.push(`Baños: ${antes.banos ?? '—'} → ${despues.banos ?? '—'}`)
-
-    const grupo = grupoParaOperacion(antes.tipo_operacion)
-    if (cambios.length > 0 && grupo) {
-      const chatId = await obtenerChatIdGrupo(supabase, organizationId, grupo)
-      if (chatId) {
-        const enlace = antes.slug ? `\n\n${(await import('@/lib/url')).urlSitio(`/propiedades/${antes.slug}`)}` : ''
-        const mensaje = `✏️ *Cambio en propiedad* (${antes.codigo ?? propiedadId})\n\n${cambios.join('\n')}${enlace}`
-        await notificarWhatsapp({
-          chatId,
-          mensaje,
-          organizationId,
-          tipoNotificacion: 'cambio_propiedad',
-          agenteId: user.id,
-        })
-      }
-    }
+  if (organizationId) {
+    await notificarFichaPropiedad(
+      supabase,
+      propiedadId,
+      organizationId,
+      user.id,
+      '✏️ Propiedad actualizada',
+      'cambio_propiedad'
+    )
   }
 
   revalidatePath('/dashboard/propiedades')
