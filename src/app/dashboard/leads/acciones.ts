@@ -332,12 +332,14 @@ export async function actualizarActividad(formData: FormData) {
         timeStyle: 'short',
         timeZone: 'America/Guatemala',
       })
+      const notasReprogramada = textoOpcional(formData.get('notas'))
       const mensaje = [
         `🔄 *Cita reprogramada*`,
         `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
         `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
         colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
         `🕐 Nueva fecha: ${fechaTexto}`,
+        notasReprogramada ? `📝 ${notasReprogramada}` : null,
       ].filter(Boolean).join('\n')
       await notificarWhatsapp({
         chatId: chatIdCitas,
