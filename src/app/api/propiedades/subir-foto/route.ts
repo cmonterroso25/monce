@@ -37,11 +37,12 @@ export async function POST(request: NextRequest) {
   if (!puedeSubir) {
     return NextResponse.json({ error: 'No tienes permiso para agregar fotos a esta propiedad' }, { status: 403 })
   }
+  let urlImagenSubida: string
   try {
-    const url = await subirImagen(archivo, `propiedades/${propiedadId}`)
+    urlImagenSubida = await subirImagen(archivo, `propiedades/${propiedadId}`)
     const { error: errorInsert } = await supabase.from('imagenes_propiedad').insert({
       propiedad_id: propiedadId,
-      ruta_almacenamiento: url,
+      ruta_almacenamiento: urlImagenSubida,
       es_portada: esPortada,
       orden,
     })
@@ -78,7 +79,8 @@ export async function POST(request: NextRequest) {
           miPerfil.organization_id,
           user.id,
           '🆕 Nueva propiedad publicada',
-          'nueva_propiedad'
+          'nueva_propiedad',
+          urlImagenSubida
         )
       } catch (errNotif) {
         console.error(`--- ERROR AL NOTIFICAR WHATSAPP (propiedad ${propiedadId}) ---`, errNotif)
