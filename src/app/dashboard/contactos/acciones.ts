@@ -15,10 +15,6 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
-// Deja solo dígitos y, si el número quedó con el código de país de
-// Guatemala pegado (+502 u 502 antepuesto a un número de 8 dígitos),
-// lo quita. Así "+502 3227-5260", "3227-5260" y "32275260" se
-// consideran el mismo teléfono al comparar duplicados.
 function normalizarTelefono(telefono: string): string {
   const soloDigitos = telefono.replace(/\D/g, '')
   if (soloDigitos.startsWith('502') && soloDigitos.length > 8) {
@@ -27,11 +23,6 @@ function normalizarTelefono(telefono: string): string {
   return soloDigitos
 }
 
-// Busca si el teléfono (normalizado) ya pertenece a otro contacto de la
-// misma organización, sin importar el agente asignado. Usa supabaseAdmin
-// a propósito: la política RLS de `contactos` solo deja ver los contactos
-// del propio agente (o todos si es admin), así que con el cliente normal
-// nunca se detectaría un duplicado que pertenece a otro agente.
 async function buscarDuplicadoTelefono(
   telefono: string,
   organizationId: string,
@@ -47,9 +38,6 @@ async function buscarDuplicadoTelefono(
     .not('telefono', 'is', null)
 
   if (error) {
-    // No bloqueamos el guardado por un fallo de la validación en sí
-    // (podría ser un problema de GRANTs de service_role, ver comentario
-    // en src/lib/supabase/admin.ts), pero nunca en silencio.
     console.error('--- ERROR AL BUSCAR DUPLICADOS DE TELEFONO (supabaseAdmin) ---', error)
     return null
   }
@@ -222,10 +210,6 @@ export async function eliminarContacto(contactoId: string) {
     redirect('/login')
   }
 
-  // A diferencia de leads, la política RLS de `contactos` solo permite
-  // DELETE a administradores (no hay policy de "el agente asignado borra
-  // los suyos"). Se replica esa misma regla aquí antes de intentar borrar,
-  // para dar un mensaje claro en vez de que RLS lo bloquee en silencio.
   const { data: miPerfil } = await supabase
     .from('perfiles')
     .select('rol')
@@ -238,6 +222,11 @@ export async function eliminarContacto(contactoId: string) {
     throw new Error('Solo un administrador puede eliminar contactos.')
   }
 
+  // NOTA: aún falta confirmar con la query de information_schema si hay
+  // más tablas con FK hacia contactos además de las que ya conocíamos +
+  // notificaciones_whatsapp (confirmada por el log de Vercel). Si aparece
+  // otro error de foreign key al probar, es una tabla más que falta aquí.
+  await supabase.from('notificaciones_whatsapp').delete().eq('contacto_id', contactoId)
   await supabase.from('documentos').delete().eq('tipo_relacionado', 'contacto').eq('id_relacionado', contactoId)
   await supabase.from('recibos').delete().eq('contacto_id', contactoId)
   await supabase.from('informes_evaluacion').delete().eq('contacto_id', contactoId)
