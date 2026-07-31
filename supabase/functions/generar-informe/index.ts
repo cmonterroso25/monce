@@ -53,11 +53,15 @@ function armarPartes(documentos: Documento[], contexto: ContextoFinanciero) {
   // ajustada para tolerar diferencias menores de captura/formato, y para
   // ignorar el estado civil explícitamente (ajustado el 31/07/2026: es
   // común que varíe entre documentos por documentos desactualizados y no
-  // es relevante para este análisis).
+  // es relevante para este análisis). Restricción de teléfonos agregada
+  // el 31/07/2026: el PDF final no debe exponer números de teléfono de
+  // titular ni fiador, así que se le pide a Gemini que nunca los mencione
+  // en el texto libre que genera.
   let promptTexto = `Eres un analista de riesgo para una inmobiliaria en Guatemala. Evalúa a un candidato (titular y, si aplica, fiador) para un negocio de tipo "${tipoOperacion}" con un monto de referencia de ${montoReferencia} ${moneda}.
 Criterios de evaluación (ambos son obligatorios, pero aplícalos con criterio experto y sentido común, no de forma mecánica):
 1. Consistencia de datos entre documentos: verifica que el nombre y el DPI coincidan entre los documentos. Sé tolerante con diferencias menores que no comprometan la identificación real de la persona (errores de tipeo, mayúsculas/minúsculas, acentos, orden o abreviación de nombres compuestos, formato de fecha, un dígito que claramente sea error de captura). NO consideres el estado civil como criterio de inconsistencia bajo ninguna circunstancia: es común que varíe entre documentos porque el más antiguo no se ha renovado, y no es relevante para este análisis. Marca inconsistencia real solo cuando la diferencia sugiera razonablemente que podría tratarse de una persona distinta o de un documento alterado.
 2. Capacidad de pago: como referencia general, el ingreso mensual del titular (y del fiador si aplica) debería acercarse a 2 veces el monto de referencia. No lo trates como un corte estricto: si el ingreso está razonablemente cerca de ese umbral (por ejemplo, hasta un 15-20% por debajo), o si hay otros factores que compensan (ingresos adicionales declarados, fiador solvente, estabilidad laboral), puedes considerar que el criterio se cumple, usando tu criterio experto. Si el monto de referencia no aplica a esta regla (por ejemplo compra), usa tu criterio experto para evaluar la capacidad de pago frente al monto.
+Restricción de privacidad: en "resumen" y en el "detalle" de cada criterio, NUNCA incluyas números de teléfono, aunque los veas en los documentos. Puedes usar cualquier otro dato (nombres, DPI, montos) con normalidad.
 Documentos disponibles para tu análisis:
 ${soportados.map((d) => '- ' + d.label).join('\n')}`
 

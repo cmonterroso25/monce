@@ -64,7 +64,6 @@ async function generarPdfInforme(datos: {
   resumen: string
   criterios: Record<string, { cumple: boolean; detalle: string }> | null
   candidatoNombre: string
-  candidatoTelefono: string
   propiedadTitulo: string
   tipoOperacion: string
   montoReferencia: string
@@ -111,9 +110,12 @@ async function generarPdfInforme(datos: {
   }
 
   // --- Datos del candidato ---
+  // Nota: solo se muestra el nombre. El teléfono del titular se quitó a
+  // pedido del usuario (31/07/2026) por privacidad, y el fiador nunca tuvo
+  // sección propia aquí (no hay registro estructurado de sus datos, solo
+  // documentos adjuntos que Gemini analiza).
   tituloSeccion('Datos del candidato')
   lineaDato('Nombre:', datos.candidatoNombre)
-  lineaDato('Teléfono:', datos.candidatoTelefono)
   y -= 8
 
   // --- Datos del negocio ---
@@ -221,7 +223,6 @@ export async function POST(req: NextRequest) {
       .single()
 
     let candidatoNombre = 'N/D'
-    let candidatoTelefono = 'N/D'
     let propiedadTitulo = 'N/D'
     let tipoOperacion = 'N/D'
     let montoReferencia = 'N/D'
@@ -237,13 +238,12 @@ export async function POST(req: NextRequest) {
       if (informeRow.contacto_id) {
         const { data: contacto, error: errorContactoTmp } = await supabaseAdmin
           .from('contactos')
-          .select('nombre_completo, telefono')
+          .select('nombre_completo')
           .eq('id', informeRow.contacto_id)
           .single()
         errorContacto = errorContactoTmp
         if (contacto) {
           candidatoNombre = contacto.nombre_completo ?? 'N/D'
-          candidatoTelefono = contacto.telefono ?? 'N/D'
         }
       }
 
@@ -302,7 +302,6 @@ export async function POST(req: NextRequest) {
       resumen: resumen ?? '',
       criterios: criterios ?? null,
       candidatoNombre,
-      candidatoTelefono,
       propiedadTitulo,
       tipoOperacion,
       montoReferencia,
