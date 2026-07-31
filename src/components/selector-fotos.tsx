@@ -1,7 +1,22 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { Star, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const MAX_ANCHO = 1600
 const MAX_ALTO = 1600
@@ -37,10 +52,99 @@ type FotoLocal = {
   previewUrl: string
 }
 
+function FotoTile({
+  foto,
+  esPortada,
+  onPortada,
+  onEliminar,
+}: {
+  foto: FotoLocal
+  esPortada: boolean
+  onPortada: () => void
+  onEliminar: () => void
+}) {
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-lg border ${
+        esPortada ? 'border-[#38B6FF] ring-2 ring-[#38B6FF]/30' : 'border-slate-200'
+      }`}
+    >
+      <img src={foto.previewUrl} alt="" className="h-24 w-full object-cover" draggable={false} />
+
+      {esPortada && (
+        <span className="absolute left-1 top-1 rounded bg-[#38B6FF] px-1.5 py-0.5 text-[10px] font-medium text-white">
+          Portada
+        </span>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 bg-black/60 px-1 py-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          disabled={esPortada}
+          onClick={onPortada}
+          className="rounded p-1 text-white disabled:opacity-30"
+          title="Hacer portada"
+        >
+          <Star size={14} fill={esPortada ? 'currentColor' : 'none'} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onEliminar}
+          className="rounded p-1 text-red-300 hover:text-red-200"
+          title="Quitar foto"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FotoSortable({
+  foto,
+  esPortada,
+  onPortada,
+  onEliminar,
+}: {
+  foto: FotoLocal
+  esPortada: boolean
+  onPortada: () => void
+  onEliminar: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: foto.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="touch-none cursor-grab active:cursor-grabbing"
+    >
+      <FotoTile foto={foto} esPortada={esPortada} onPortada={onPortada} onEliminar={onEliminar} />
+    </div>
+  )
+}
+
 export default function SelectorFotos({ label }: { label: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [optimizando, setOptimizando] = useState(false)
   const [fotos, setFotos] = useState<FotoLocal[]>([])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  )
 
   // Bloquea el submit del formulario mientras se están optimizando fotos.
   useEffect(() => {
@@ -119,14 +223,14 @@ export default function SelectorFotos({ label }: { label: string }) {
     })
   }
 
-  function manejarMover(id: string, direccion: 'izquierda' | 'derecha') {
+  function manejarDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
     setFotos((prev) => {
-      const index = prev.findIndex((f) => f.id === id)
-      const nuevoIndex = direccion === 'izquierda' ? index - 1 : index + 1
-      if (index === -1 || nuevoIndex < 0 || nuevoIndex >= prev.length) return prev
-      const copia = [...prev]
-      ;[copia[index], copia[nuevoIndex]] = [copia[nuevoIndex], copia[index]]
-      return copia
+      const oldIndex = prev.findIndex((f) => f.id === active.id)
+      const newIndex = prev.findIndex((f) => f.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
     })
   }
 
@@ -151,67 +255,23 @@ export default function SelectorFotos({ label }: { label: string }) {
         <>
           <p className="mb-2 mt-3 text-xs text-slate-500">
             {fotos.length} foto{fotos.length > 1 ? 's' : ''} lista{fotos.length > 1 ? 's' : ''} para subir.
-            La marcada con la estrella será la portada.
+            Arrástralas para cambiar el orden; la marcada con la estrella será la portada.
           </p>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {fotos.map((foto, index) => (
-              <div
-                key={foto.id}
-                className={`group relative overflow-hidden rounded-lg border ${
-                  index === 0 ? 'border-[#38B6FF] ring-2 ring-[#38B6FF]/30' : 'border-slate-200'
-                }`}
-              >
-                <img src={foto.previewUrl} alt="" className="h-24 w-full object-cover" />
-
-                {index === 0 && (
-                  <span className="absolute left-1 top-1 rounded bg-[#38B6FF] px-1.5 py-0.5 text-[10px] font-medium text-white">
-                    Portada
-                  </span>
-                )}
-
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/60 px-1 py-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => manejarMover(foto.id, 'izquierda')}
-                    className="rounded p-1 text-white disabled:opacity-30"
-                    title="Mover a la izquierda"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => manejarPortada(foto.id)}
-                    className="rounded p-1 text-white disabled:opacity-30"
-                    title="Hacer portada"
-                  >
-                    <Star size={14} fill={index === 0 ? 'currentColor' : 'none'} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => manejarEliminar(foto.id)}
-                    className="rounded p-1 text-red-300 hover:text-red-200"
-                    title="Quitar foto"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={index === fotos.length - 1}
-                    onClick={() => manejarMover(foto.id, 'derecha')}
-                    className="rounded p-1 text-white disabled:opacity-30"
-                    title="Mover a la derecha"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={manejarDragEnd}>
+            <SortableContext items={fotos.map((f) => f.id)} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {fotos.map((foto, index) => (
+                  <FotoSortable
+                    key={foto.id}
+                    foto={foto}
+                    esPortada={index === 0}
+                    onPortada={() => manejarPortada(foto.id)}
+                    onEliminar={() => manejarEliminar(foto.id)}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         </>
       )}
     </div>
