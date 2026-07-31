@@ -399,6 +399,24 @@ export async function moverImagen(
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
 }
 
+// reordenarImagenes: contraparte de moverImagen para drag-and-drop. Recibe
+// el arreglo completo de ids en el nuevo orden visual (tal como quedó tras
+// soltar la foto arrastrada) y reescribe `orden` de forma secuencial
+// (0, 1, 2...) para cada una. No toca `es_portada` — eso sigue siendo
+// responsabilidad exclusiva de establecerPortada, igual que con las
+// flechas antes.
+export async function reordenarImagenes(propiedadId: string, idsEnOrden: string[]) {
+  const supabase = await createClient()
+
+  await Promise.all(
+    idsEnOrden.map((id, index) =>
+      supabase.from('imagenes_propiedad').update({ orden: index }).eq('id', id)
+    )
+  )
+
+  revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
+}
+
 export async function eliminarPropiedad(propiedadId: string) {
   const supabase = await createClient()
   const {
