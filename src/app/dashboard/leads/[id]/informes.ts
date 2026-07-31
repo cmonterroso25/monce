@@ -15,7 +15,14 @@ function obtenerExtension(nombreArchivo: string): string {
 // que antes) pero YA NO recibe archivos. Los archivos se suben directo
 // del navegador a R2 en un paso aparte (ver obtenerUrlSubidaDocumento),
 // para no chocar con el límite de 4.5MB por request de Vercel.
-export async function crearInforme(leadId: string, contactoId: string): Promise<{
+// `comentarios` es contexto libre que el agente escribe sobre los
+// documentos adjuntos (agregado 31/07/2026) y se guarda de una vez para
+// no depender de un segundo update.
+export async function crearInforme(
+  leadId: string,
+  contactoId: string,
+  comentarios?: string
+): Promise<{
   ok: boolean
   mensaje?: string
   informeId?: string
@@ -65,6 +72,7 @@ export async function crearInforme(leadId: string, contactoId: string): Promise<
       contacto_id: contactoId,
       estado: 'procesando',
       creado_por: user.id,
+      comentarios_agente: comentarios?.trim() || null,
     })
     .select('id')
     .single()
@@ -126,7 +134,7 @@ export async function finalizarInforme(
 
   const { data: informe, error: errorInforme } = await supabase
     .from('informes_evaluacion')
-    .select('id, organization_id, lead_id, contacto_id')
+    .select('id, organization_id, lead_id, contacto_id, comentarios_agente')
     .eq('id', informeId)
     .single()
 
@@ -152,6 +160,7 @@ export async function finalizarInforme(
     monto_referencia: propiedad?.precio ?? null,
     moneda: propiedad?.moneda ?? null,
     tipo_operacion: propiedad?.tipo_operacion ?? null,
+    comentarios_agente: informe.comentarios_agente ?? null,
   }
 
   const documentosParaAnalisis: { tipo: string; label: string; url: string }[] = []
@@ -162,7 +171,10 @@ export async function finalizarInforme(
 
     await supabase.from('documentos').insert({
       organization_id: informe.organization_id,
-      tipo_relacionado: 'lead',
+      // El constraint documentos_tipo_relacionado_check solo permite
+      // 'contacto' | 'propiedad' | 'negocio' — la tabla "leads" se
+      // referencia como 'negocio' en este campo, no como 'lead'.
+      tipo_relacionado: 'negocio',
       id_relacionado: informe.lead_id,
       ruta_almacenamiento: doc.key,
       tipo_documento: `informe_${doc.tipo}`,

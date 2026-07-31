@@ -53,11 +53,12 @@ export default function GenerarInforme({
     e.preventDefault()
     setError(null)
     const formData = new FormData(e.currentTarget)
+    const comentarios = (formData.get('comentarios_agente') as string) || ''
 
     startTransition(async () => {
       try {
         setProgreso('Iniciando informe...')
-        const creado = await crearInforme(leadId, contactoId)
+        const creado = await crearInforme(leadId, contactoId, comentarios)
         if (!creado.ok || !creado.informeId) {
           setError(creado.mensaje ?? 'No se pudo generar el informe.')
           setProgreso(null)
@@ -173,6 +174,18 @@ export default function GenerarInforme({
                   </div>
                 ))}
               </fieldset>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Comentarios (opcional)
+                </label>
+                <textarea
+                  name="comentarios_agente"
+                  rows={3}
+                  placeholder="Contexto adicional sobre los documentos, por ejemplo: 'El DPI del titular está vencido, ya tramita renovación' o 'El fiador es dueño de negocio, ingresos variables'."
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs text-[#2C3E50] placeholder:text-slate-400 focus:border-[#38B6FF] focus:outline-none"
+                />
+              </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

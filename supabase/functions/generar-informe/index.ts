@@ -31,7 +31,12 @@ function obtenerExtension(url: string): string {
 }
 
 type Documento = { tipo: string; label: string; url: string }
-type ContextoFinanciero = { monto_referencia: number | null; moneda: string | null; tipo_operacion: string | null }
+type ContextoFinanciero = {
+  monto_referencia: number | null
+  moneda: string | null
+  tipo_operacion: string | null
+  comentarios_agente?: string | null
+}
 
 function armarPartes(documentos: Documento[], contexto: ContextoFinanciero) {
   const soportados = documentos.filter((d) => EXTENSIONES_SOPORTADAS[obtenerExtension(d.url)])
@@ -40,16 +45,25 @@ function armarPartes(documentos: Documento[], contexto: ContextoFinanciero) {
   const montoReferencia = contexto.monto_referencia
   const moneda = contexto.moneda || ''
   const tipoOperacion = contexto.tipo_operacion || 'operación'
+  const comentariosAgente = (contexto.comentarios_agente || '').trim()
 
-  // Regla de capacidad de pago: 2x el monto de referencia (confirmado con
-  // el usuario el 30/07/2026 — antes era 3x en un comentario desactualizado
-  // de informes.ts, pero el prompt real en producción ya usaba 2x).
+  // Regla de capacidad de pago: 2x el monto de referencia como referencia
+  // general, no como corte estricto (ajustado el 31/07/2026 para ser más
+  // tolerante, a pedido del usuario). Consistencia de datos también
+  // ajustada para tolerar diferencias menores de captura/formato, y para
+  // ignorar el estado civil explícitamente (ajustado el 31/07/2026: es
+  // común que varíe entre documentos por documentos desactualizados y no
+  // es relevante para este análisis).
   let promptTexto = `Eres un analista de riesgo para una inmobiliaria en Guatemala. Evalúa a un candidato (titular y, si aplica, fiador) para un negocio de tipo "${tipoOperacion}" con un monto de referencia de ${montoReferencia} ${moneda}.
-Criterios de evaluación (ambos son obligatorios):
-1. Consistencia de datos entre documentos: verifica que el nombre y el DPI coincidan entre los documentos, y que no haya señales de alteración o inconsistencia.
-2. Capacidad de pago: el ingreso mensual del titular (y del fiador si aplica) debe ser mayor o igual a 2 veces el monto de referencia (regla general para renta). Si el monto de referencia no aplica a esta regla (por ejemplo compra), usa tu criterio experto para evaluar la capacidad de pago frente al monto.
+Criterios de evaluación (ambos son obligatorios, pero aplícalos con criterio experto y sentido común, no de forma mecánica):
+1. Consistencia de datos entre documentos: verifica que el nombre y el DPI coincidan entre los documentos. Sé tolerante con diferencias menores que no comprometan la identificación real de la persona (errores de tipeo, mayúsculas/minúsculas, acentos, orden o abreviación de nombres compuestos, formato de fecha, un dígito que claramente sea error de captura). NO consideres el estado civil como criterio de inconsistencia bajo ninguna circunstancia: es común que varíe entre documentos porque el más antiguo no se ha renovado, y no es relevante para este análisis. Marca inconsistencia real solo cuando la diferencia sugiera razonablemente que podría tratarse de una persona distinta o de un documento alterado.
+2. Capacidad de pago: como referencia general, el ingreso mensual del titular (y del fiador si aplica) debería acercarse a 2 veces el monto de referencia. No lo trates como un corte estricto: si el ingreso está razonablemente cerca de ese umbral (por ejemplo, hasta un 15-20% por debajo), o si hay otros factores que compensan (ingresos adicionales declarados, fiador solvente, estabilidad laboral), puedes considerar que el criterio se cumple, usando tu criterio experto. Si el monto de referencia no aplica a esta regla (por ejemplo compra), usa tu criterio experto para evaluar la capacidad de pago frente al monto.
 Documentos disponibles para tu análisis:
 ${soportados.map((d) => '- ' + d.label).join('\n')}`
+
+  if (comentariosAgente) {
+    promptTexto += `\n\nContexto adicional proporcionado por el agente inmobiliario sobre este caso (tómalo en cuenta, pero no lo aceptes como verificación documental — es información de apoyo, no un documento):\n${comentariosAgente}`
+  }
 
   if (excluidos.length > 0) {
     promptTexto += `\n\nDocumentos NO disponibles para tu análisis (formato no soportado en esta etapa):\n${excluidos.map((d) => '- ' + d.label).join('\n')}\nMenciona explícitamente en tu resumen que estos documentos no se analizaron, y si alguno es crítico para tu conclusión, baja el puntaje de forma proporcional a esa incertidumbre.`
