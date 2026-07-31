@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { actualizarPropiedadDatos } from '../../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
+import SelectorUbicacion from '@/components/selector-ubicacion'
 import GestorFotos from './gestor-fotos'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../../selector-requisitos-renta'
@@ -36,6 +37,7 @@ export default async function EditarPropiedad({
     { data: perfiles },
     { data: imagenes },
     { data: miPerfil },
+    { data: ubicaciones },
   ] = await Promise.all([
     supabase.from('propiedades').select('*').eq('id', id).single(),
     supabase.from('municipios').select('id, nombre').order('nombre'),
@@ -47,6 +49,7 @@ export default async function EditarPropiedad({
       .eq('propiedad_id', id)
       .order('orden', { ascending: true }),
     supabase.from('perfiles').select('rol').eq('id', user.id).single(),
+    supabase.from('ubicaciones').select('id, nombre').order('nombre'),
   ])
 
   if (!propiedadData) {
@@ -145,6 +148,8 @@ export default async function EditarPropiedad({
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
+
+        <SelectorUbicacion opciones={ubicaciones ?? []} defaultValue={propiedad.ubicacion_id ?? ''} />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Zona</label>

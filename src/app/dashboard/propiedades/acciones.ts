@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { urlSitio } from '@/lib/url'
 import { notificarFichaPropiedad } from '@/lib/whatsapp/notificar-propiedad'
+import { parsearUbicacion } from '@/lib/ubicaciones/parsear'
 
 function generarSlug(titulo: string) {
   const base = titulo
@@ -27,6 +28,42 @@ function numeroOpcional(valor: FormDataEntryValue | null) {
 function textoOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
   return valor as string
+}
+
+async function resolverUbicacionId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  formData: FormData,
+  organizationId: string | undefined
+): Promise<{ ubicacionId: string | null; error?: string }> {
+  let ubicacionId = textoOpcional(formData.get('ubicacion_id'))
+  if (ubicacionId !== '__nuevo__') {
+    return { ubicacionId }
+  }
+
+  const nombreNuevo = formData.get('ubicacion_nombre_nuevo') as string
+  const googleMapsUrl = textoOpcional(formData.get('ubicacion_google_maps_nuevo'))
+  const wazeUrl = textoOpcional(formData.get('ubicacion_waze_nuevo'))
+
+  const { lat, lng } = await parsearUbicacion(googleMapsUrl, wazeUrl)
+
+  const { data: nuevaUbicacion, error } = await supabase
+    .from('ubicaciones')
+    .insert({
+      nombre: nombreNuevo,
+      google_maps_url: googleMapsUrl,
+      waze_url: wazeUrl,
+      latitud: lat,
+      longitud: lng,
+      organization_id: organizationId,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return { ubicacionId: null, error: error.message }
+  }
+
+  return { ubicacionId: nuevaUbicacion.id }
 }
 
 export async function crearPropiedadDatos(formData: FormData): Promise<{
@@ -78,6 +115,11 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
     colegaId = nuevoColega.id
   }
 
+  const { ubicacionId, error: errorUbicacion } = await resolverUbicacionId(supabase, formData, organizationId)
+  if (errorUbicacion) {
+    return { ok: false, mensaje: errorUbicacion }
+  }
+
   const titulo = formData.get('titulo') as string
   const slug = generarSlug(titulo)
 
@@ -124,6 +166,7 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
       acceso: textoOpcional(formData.get('acceso')),
       propietario_nombre: textoOpcional(formData.get('propietario_nombre')),
       colega_id: colegaId,
+      ubicacion_id: ubicacionId,
       captado_por: textoOpcional(formData.get('captado_por')),
       descripcion: textoOpcional(formData.get('descripcion')),
       comentarios: textoOpcional(formData.get('comentarios')),
@@ -196,6 +239,11 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     colegaId = nuevoColega.id
   }
 
+  const { ubicacionId, error: errorUbicacion } = await resolverUbicacionId(supabase, formData, organizationId)
+  if (errorUbicacion) {
+    return { ok: false, mensaje: errorUbicacion }
+  }
+
   const titulo = formData.get('titulo') as string
 
   // Se trae la fila completa (no solo "precio") para poder comparar,
@@ -247,6 +295,7 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     acceso: textoOpcional(formData.get('acceso')),
     propietario_nombre: textoOpcional(formData.get('propietario_nombre')),
     colega_id: colegaId,
+    ubicacion_id: ubicacionId,
     captado_por: textoOpcional(formData.get('captado_por')),
     descripcion: textoOpcional(formData.get('descripcion')),
     comentarios: textoOpcional(formData.get('comentarios')),
@@ -399,12 +448,6 @@ export async function moverImagen(
   revalidatePath(`/dashboard/propiedades/${propiedadId}/editar`)
 }
 
-// reordenarImagenes: contraparte de moverImagen para drag-and-drop. Recibe
-// el arreglo completo de ids en el nuevo orden visual (tal como quedó tras
-// soltar la foto arrastrada) y reescribe `orden` de forma secuencial
-// (0, 1, 2...) para cada una. No toca `es_portada` — eso sigue siendo
-// responsabilidad exclusiva de establecerPortada, igual que con las
-// flechas antes.
 export async function reordenarImagenes(propiedadId: string, idsEnOrden: string[]) {
   const supabase = await createClient()
 

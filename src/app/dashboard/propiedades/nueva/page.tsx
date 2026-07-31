@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { crearPropiedadDatos } from '../acciones'
 import SelectConNuevo from '@/components/select-con-nuevo'
+import SelectorUbicacion from '@/components/selector-ubicacion'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../selector-requisitos-renta'
 import SelectorFotos from '@/components/selector-fotos'
@@ -24,10 +25,12 @@ export default async function NuevaPropiedad({
     { data: municipios },
     { data: colegas },
     { data: perfiles },
+    { data: ubicaciones },
   ] = await Promise.all([
     supabase.from('municipios').select('id, nombre').order('nombre'),
     supabase.from('colegas').select('id, nombre').order('nombre'),
     supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo'),
+    supabase.from('ubicaciones').select('id, nombre').order('nombre'),
   ])
 
   return (
@@ -88,6 +91,8 @@ export default async function NuevaPropiedad({
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
+
+        <SelectorUbicacion opciones={ubicaciones ?? []} />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Zona</label>
