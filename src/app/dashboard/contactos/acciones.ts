@@ -212,3 +212,46 @@ export async function actualizarEstadoContacto(contactoId: string, nuevoEstado: 
   if (error) return { ok: false, mensaje: error.message }
   return { ok: true, mensaje: null }
 }
+
+export async function eliminarContacto(contactoId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
+  // A diferencia de leads, la política RLS de `contactos` solo permite
+  // DELETE a administradores (no hay policy de "el agente asignado borra
+  // los suyos"). Se replica esa misma regla aquí antes de intentar borrar,
+  // para dar un mensaje claro en vez de que RLS lo bloquee en silencio.
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+
+  const esAdmin = miPerfil?.rol === 'administrador'
+
+  if (!esAdmin) {
+    throw new Error('Solo un administrador puede eliminar contactos.')
+  }
+
+  await supabase.from('documentos').delete().eq('tipo_relacionado', 'contacto').eq('id_relacionado', contactoId)
+  await supabase.from('recibos').delete().eq('contacto_id', contactoId)
+  await supabase.from('informes_evaluacion').delete().eq('contacto_id', contactoId)
+  await supabase.from('coincidencias_propiedad').delete().eq('contacto_id', contactoId)
+  await supabase.from('actividades').delete().eq('contacto_id', contactoId)
+  await supabase.from('tareas').delete().eq('contacto_id', contactoId)
+  await supabase.from('leads').delete().eq('contacto_id', contactoId)
+
+  const { error } = await supabase.from('contactos').delete().eq('id', contactoId)
+
+  if (error) {
+    console.error('--- ERROR AL ELIMINAR CONTACTO ---', error)
+    throw new Error(error.message)
+  }
+
+  revalidatePath('/dashboard/contactos')
+}

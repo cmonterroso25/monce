@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Mail, Phone, MapPin } from 'lucide-react'
 import FiltrosContactos from './filtros-contactos'
+import BotonEliminarContacto from './boton-eliminar-contacto'
 
 const coloresEstado: Record<string, string> = {
   nuevo: 'bg-blue-100 text-blue-700',
@@ -12,7 +13,7 @@ const coloresEstado: Record<string, string> = {
   perdido: 'bg-red-100 text-red-700',
 }
 
-const GRID_COLS = 'grid-cols-[2fr_1.4fr_1fr_1.2fr_1fr_120px]'
+const GRID_COLS = 'grid-cols-[2fr_1.4fr_1fr_1.2fr_1fr_120px_40px]'
 
 export default async function ListadoContactos({
   searchParams,
@@ -71,7 +72,7 @@ export default async function ListadoContactos({
 
       {contactos && contactos.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="min-w-[900px]">
+          <div className="min-w-[940px]">
             <div
               className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
             >
@@ -81,6 +82,7 @@ export default async function ListadoContactos({
               <div>Presupuesto</div>
               <div>Agente</div>
               <div>Estado</div>
+              <div />
             </div>
 
             {contactos.map((c) => (
@@ -129,6 +131,12 @@ export default async function ListadoContactos({
                   >
                     {c.estado}
                   </span>
+                </div>
+
+                <div className="flex justify-end">
+                  {esAdmin && (
+                    <BotonEliminarContacto contactoId={c.id} nombreContacto={c.nombre_completo} />
+                  )}
                 </div>
               </Link>
             ))}

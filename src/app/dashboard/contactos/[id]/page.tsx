@@ -4,6 +4,7 @@ import { Pencil, Phone, ArrowLeft, ArrowUpRight } from 'lucide-react'
 import CambiarEstadoContacto from './cambiar-estado'
 import { BuscarCoincidencias, MarcarNotificada } from '../buscar-coincidencias'
 import { CompartirPropiedad } from '../compartir-propiedad'
+import BotonEliminarContacto from '../boton-eliminar-contacto'
 import { ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
@@ -17,10 +18,19 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
   const { id } = await params
   const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const { data: contacto } = await supabase.from('contactos').select('*').eq('id', id).single()
   const { data: agente } = contacto?.agente_asignado
     ? await supabase.from('perfiles').select('nombre_completo').eq('id', contacto.agente_asignado).single()
     : { data: null }
+
+  const { data: miPerfil } = user
+    ? await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+    : { data: null }
+  const esAdmin = miPerfil?.rol === 'administrador'
 
   if (!contacto) return <div className="p-8">Contacto no encontrado.</div>
 
@@ -64,6 +74,14 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
           >
             <Pencil size={16} /> Editar
           </Link>
+          {esAdmin && (
+            <BotonEliminarContacto
+              contactoId={id}
+              nombreContacto={contacto.nombre_completo}
+              redirectTo="/dashboard/contactos"
+              className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+            />
+          )}
         </div>
       </div>
 
