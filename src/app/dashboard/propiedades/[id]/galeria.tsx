@@ -15,22 +15,60 @@ export default function Galeria({
 
   async function descargarTodas() {
     setDescargando(true)
+    const nombreBase = titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
     try {
-      for (let i = 0; i < imagenes.length; i++) {
-        const nombreBase = titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-        const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(imagenes[i].url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
+      if (imagenes.length === 1) {
+        const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(imagenes[0].url)}&nombre=${encodeURIComponent(`${nombreBase}.webp`)}`
         const respuesta = await fetch(rutaProxy)
         const blob = await respuesta.blob()
         const urlBlob = URL.createObjectURL(blob)
         const enlace = document.createElement('a')
         enlace.href = urlBlob
-        enlace.download = `${nombreBase}-${i + 1}.webp`
+        enlace.download = `${nombreBase}.webp`
+        document.body.appendChild(enlace)
+        enlace.click()
+        document.body.removeChild(enlace)
+        URL.revokeObjectURL(urlBlob)
+        return
+      }
+
+      const archivos = await Promise.all(
+        imagenes.map(async (img, i) => {
+          const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
+          const respuesta = await fetch(rutaProxy)
+          const blob = await respuesta.blob()
+          return new File([blob], `${nombreBase}-${i + 1}.webp`, { type: blob.type || 'image/webp' })
+        })
+      )
+
+      const puedeCompartirArchivos =
+        typeof navigator !== 'undefined' &&
+        'canShare' in navigator &&
+        navigator.canShare({ files: archivos })
+
+      if (puedeCompartirArchivos) {
+        await navigator.share({ files: archivos, title: titulo })
+        return
+      }
+
+      // Escritorio / navegadores sin soporte para compartir archivos: se
+      // mantiene el comportamiento original de descarga individual, que
+      // ahi si funciona bien (no aplica el limite anti-abuso de moviles).
+      for (let i = 0; i < archivos.length; i++) {
+        const urlBlob = URL.createObjectURL(archivos[i])
+        const enlace = document.createElement('a')
+        enlace.href = urlBlob
+        enlace.download = archivos[i].name
         document.body.appendChild(enlace)
         enlace.click()
         document.body.removeChild(enlace)
         URL.revokeObjectURL(urlBlob)
         await new Promise((resolve) => setTimeout(resolve, 300))
       }
+    } catch (err) {
+      // AbortError cuando el usuario cierra la hoja de compartir sin elegir
+      // nada: no es un error real, no bloqueamos la UI por esto.
+      console.error('--- ERROR AL DESCARGAR/COMPARTIR FOTOS ---', err)
     } finally {
       setDescargando(false)
     }

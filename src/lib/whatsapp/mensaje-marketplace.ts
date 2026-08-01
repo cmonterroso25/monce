@@ -12,6 +12,7 @@ const EMOJI_TIPO: Record<string, string> = {
 }
 
 export type PropiedadMarketplace = {
+  codigo?: string | null
   titulo: string
   tipo_operacion: string | null
   tipo_propiedad: string | null
@@ -47,7 +48,7 @@ export type PropiedadMarketplace = {
 // (el botón "Copiar para Marketplace" no lo pasa), no aparece esa fila,
 // así que generarTextoMarketplace() sigue produciendo exactamente el mismo
 // texto que hoy usa el botón — nada cambia para Facebook Marketplace.
-function generarBloquesPropiedad(p: PropiedadMarketplace & { codigo?: string | null }): (string | false | null)[] {
+function generarBloquesPropiedad(p: PropiedadMarketplace): (string | false | null)[] {
   const emojiTipo = EMOJI_TIPO[p.tipo_propiedad ?? ''] ?? '🏠'
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const tipoLabel = (p.tipo_propiedad ?? 'PROPIEDAD').toUpperCase()
