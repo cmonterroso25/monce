@@ -7,6 +7,7 @@ import GenerarInforme from './generar-informe'
 import EstadoInforme from './estado-informe'
 import { ProveedorInforme } from './contexto-informe'
 import { obtenerUltimoInforme } from './informes'
+import FormularioArrendamiento from './formulario-arrendamiento'
 import MarcarCompletada from '../../actividades/marcar-completada'
 import { crearActividad } from '../acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
@@ -65,6 +66,12 @@ export default async function DetalleLead({
 
   const informeInicial = await obtenerUltimoInforme(id)
 
+  const { data: solicitudArrendamiento } = await supabase
+    .from('solicitudes_arrendamiento')
+    .select('id, estado')
+    .eq('lead_id', id)
+    .maybeSingle()
+
   return (
     <ProveedorInforme informeInicial={informeInicial}>
     <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
@@ -72,29 +79,62 @@ export default async function DetalleLead({
         <ArrowLeft size={16} /> Volver a leads
       </Link>
 
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{lead.contacto?.nombre_completo ?? 'Lead'}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <GenerarRecibo
-            leadId={id}
-            contactoId={lead.contacto_id}
-            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
-            agentes={agentes ?? []}
-            agenteActualId={user?.id ?? ''}
-          />
-          <GenerarInforme
-            leadId={id}
-            contactoId={lead.contacto_id}
-            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
-          />
-          <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
-            <Pencil size={16} /> Editar
-          </Link>
-          {puedeEliminar && (
-            <BotonEliminarLeadConRedireccion leadId={id} nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'} />
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <GenerarRecibo
+              leadId={id}
+              contactoId={lead.contacto_id}
+              contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+              agentes={agentes ?? []}
+              agenteActualId={user?.id ?? ''}
+            />
+            <GenerarInforme
+              leadId={id}
+              contactoId={lead.contacto_id}
+              contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+            />
+            <FormularioArrendamiento
+              leadId={id}
+              contactoId={lead.contacto_id}
+              solicitudInicial={
+                solicitudArrendamiento
+                  ? {
+                      id: solicitudArrendamiento.id,
+                      estado: solicitudArrendamiento.estado,
+                      link: `${process.env.NEXT_PUBLIC_SITE_URL}/formulario-arrendamiento/${solicitudArrendamiento.id}`,
+                    }
+                  : null
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
+              <Pencil size={16} /> Editar
+            </Link>
+            {puedeEliminar && (
+              <BotonEliminarLeadConRedireccion leadId={id} nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'} />
+            )}
+          </div>
         </div>
       </div>
+
+      {solicitudArrendamiento && (
+        <div className="mb-4">
+          <span
+            className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${
+              solicitudArrendamiento.estado === 'completado'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {solicitudArrendamiento.estado === 'completado'
+              ? 'Formulario de arrendamiento: completado por el cliente'
+              : 'Formulario de arrendamiento: pendiente de que el cliente lo complete'}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>

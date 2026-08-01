@@ -27,7 +27,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const rutasPublicas = ['/login', '/registro', '/auth', '/propiedades', '/api/webhooks']
+  const rutasPublicas = ['/login', '/registro', '/auth', '/propiedades', '/api/webhooks', '/formulario-arrendamiento']
   const esRutaPublica =
     request.nextUrl.pathname === '/' ||
     rutasPublicas.some((ruta) => request.nextUrl.pathname.startsWith(ruta))
