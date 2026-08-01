@@ -79,44 +79,42 @@ export default async function DetalleLead({
         <ArrowLeft size={16} /> Volver a leads
       </Link>
 
-      <div className="mb-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative mb-1 pr-20 sm:pr-28">
         <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">{lead.contacto?.nombre_completo ?? 'Lead'}</h1>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <GenerarRecibo
-              leadId={id}
-              contactoId={lead.contacto_id}
-              contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
-              agentes={agentes ?? []}
-              agenteActualId={user?.id ?? ''}
-            />
-            <GenerarInforme
-              leadId={id}
-              contactoId={lead.contacto_id}
-              contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
-            />
-            <FormularioArrendamiento
-              leadId={id}
-              contactoId={lead.contacto_id}
-              solicitudInicial={
-                solicitudArrendamiento
-                  ? {
-                      id: solicitudArrendamiento.id,
-                      estado: solicitudArrendamiento.estado,
-                      link: `${process.env.NEXT_PUBLIC_SITE_URL}/formulario-arrendamiento/${solicitudArrendamiento.id}`,
-                    }
-                  : null
-              }
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
-              <Pencil size={16} /> Editar
-            </Link>
-            {puedeEliminar && (
-              <BotonEliminarLeadConRedireccion leadId={id} nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'} />
-            )}
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <GenerarRecibo
+            leadId={id}
+            contactoId={lead.contacto_id}
+            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+            agentes={agentes ?? []}
+            agenteActualId={user?.id ?? ''}
+          />
+          <GenerarInforme
+            leadId={id}
+            contactoId={lead.contacto_id}
+            contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}
+          />
+          <FormularioArrendamiento
+            leadId={id}
+            contactoId={lead.contacto_id}
+            solicitudInicial={
+              solicitudArrendamiento
+                ? {
+                    id: solicitudArrendamiento.id,
+                    estado: solicitudArrendamiento.estado,
+                    link: `${process.env.NEXT_PUBLIC_SITE_URL}/formulario-arrendamiento/${solicitudArrendamiento.id}`,
+                  }
+                : null
+            }
+          />
+        </div>
+        <div className="absolute right-0 top-0 flex items-center gap-1">
+          <Link href={`/dashboard/leads/${id}/editar`} className="flex items-center gap-1 rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-[#38B6FF]">
+            <Pencil size={16} /> Editar
+          </Link>
+          {puedeEliminar && (
+            <BotonEliminarLeadConRedireccion leadId={id} nombreContacto={lead.contacto?.nombre_completo ?? 'este lead'} />
+          )}
         </div>
       </div>
 

@@ -41,6 +41,7 @@ export default function FormularioArrendamiento({
   const [copiado, setCopiado] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
 
   function manejarGenerarLink() {
     setError(null)
@@ -89,15 +90,16 @@ export default function FormularioArrendamiento({
 
   function manejarEliminarSolicitud() {
     if (!solicitud) return
-    if (!confirm('¿Eliminar esta solicitud? El link actual dejará de funcionar y podrás generar uno nuevo.')) return
     setError(null)
     startTransition(async () => {
       const resultado = await eliminarSolicitudArrendamiento(solicitud.id, leadId)
       if (!resultado.ok) {
         setError(resultado.mensaje ?? 'No se pudo eliminar la solicitud.')
+        setConfirmandoEliminar(false)
         return
       }
       setSolicitud(null)
+      setConfirmandoEliminar(false)
     })
   }
 
@@ -155,15 +157,37 @@ export default function FormularioArrendamiento({
                     >
                       {solicitud.estado === 'completado' ? 'Completado por el cliente' : 'Esperando al cliente'}
                     </span>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={manejarEliminarSolicitud}
-                      className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-                    >
-                      <Trash2 size={12} />
-                      Eliminar solicitud
-                    </button>
+                    {confirmandoEliminar ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500">¿Eliminar?</span>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={manejarEliminarSolicitud}
+                          className="font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                        >
+                          {isPending ? 'Eliminando...' : 'Sí, eliminar'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => setConfirmandoEliminar(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => setConfirmandoEliminar(true)}
+                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                      >
+                        <Trash2 size={12} />
+                        Eliminar solicitud
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <input
