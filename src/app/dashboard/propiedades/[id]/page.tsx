@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Lock, ExternalLink } from 'lucide-react'
 import Galeria from './galeria'
+import MapaUbicacion from '@/components/mapa-ubicacion'
 import CompartirWhatsapp from './compartir-whatsapp'
 import CompartirMarketplace from './compartir-marketplace'
 import CambiarEstado from './cambiar-estado'
@@ -59,7 +60,8 @@ export default async function DetallePropiedad({
       propietario:contactos!contacto_propietario (nombre_completo, telefono, correo),
       capturador:perfiles!captado_por (nombre_completo, telefono),
       municipio:municipios (nombre),
-      colega:colegas (nombre, telefono, inmobiliaria)
+      colega:colegas (nombre, telefono, inmobiliaria),
+      ubicacion:ubicaciones (nombre, google_maps_url, waze_url, latitud, longitud)
     `
     )
     .eq('id', id)
@@ -92,6 +94,9 @@ export default async function DetallePropiedad({
     propiedad.capturador ||
     propiedad.colega
 
+  const ubicacion = propiedad.ubicacion
+  const tieneCoordenadas = ubicacion?.latitud != null && ubicacion?.longitud != null
+
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <Link
@@ -102,13 +107,24 @@ export default async function DetallePropiedad({
       </Link>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <Galeria
-          imagenes={imagenes.map((img) => ({
-            id: img.id,
-            url: urlImagen(img.ruta_almacenamiento),
-          }))}
-          titulo={propiedad.titulo}
-        />
+        <div>
+          <Galeria
+            imagenes={imagenes.map((img) => ({
+              id: img.id,
+              url: urlImagen(img.ruta_almacenamiento),
+            }))}
+            titulo={propiedad.titulo}
+          />
+
+          {tieneCoordenadas && (
+            <MapaUbicacion
+              latitud={ubicacion.latitud}
+              longitud={ubicacion.longitud}
+              googleMapsUrl={ubicacion.google_maps_url}
+              wazeUrl={ubicacion.waze_url}
+            />
+          )}
+        </div>
 
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
