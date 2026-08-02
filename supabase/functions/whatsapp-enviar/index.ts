@@ -72,13 +72,9 @@ Deno.serve(async (req) => {
   }
   try {
     if (payload.imagenUrl) {
-      console.log(`Enviando imagen por URL a ${payload.chatId}: ${payload.imagenUrl}`)
       await enviarImagenPorUrlGreenApi(payload.chatId, payload.imagenUrl, payload.mensaje)
-      console.log('Imagen enviada correctamente vía sendFileByUrl.')
     } else {
-      console.log(`Enviando mensaje de texto a ${payload.chatId} (sin imagenUrl).`)
       await enviarGreenApi(payload.chatId, payload.mensaje)
-      console.log('Mensaje de texto enviado correctamente vía sendMessage.')
     }
   } catch (err) {
     console.error('Error enviando WhatsApp:', err)
