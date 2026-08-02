@@ -349,17 +349,6 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
   return { ok: true, propiedadId }
 }
 
-// cambiarEstadoPropiedad: sin uso confirmado en src/ (solo su propia
-// definición). Se deja intacta, sin notificación, hasta que confirmes si
-// se elimina o se retoma en algún flujo.
-export async function cambiarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {
-  const supabase = await createClient()
-  await supabase
-    .from('propiedades')
-    .update({ estado: nuevoEstado })
-    .eq('id', propiedadId)
-  revalidatePath('/dashboard/propiedades')
-}
 
 // ============================================================
 // Gestión de fotos existentes (sesión #5)
