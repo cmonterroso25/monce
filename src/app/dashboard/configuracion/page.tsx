@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { invitarUsuario, crearOrganizacion } from './acciones'
+import BotonEliminarOrganizacion from '@/components/boton-eliminar-organizacion'
 
 export default async function Configuracion({
   searchParams,
@@ -35,7 +36,11 @@ export default async function Configuracion({
   }
 
   const { data: organizaciones } = esPropietario
-    ? await supabase.from('organizaciones').select('id, nombre').order('nombre')
+    ? await supabase
+        .from('organizaciones')
+        .select('id, nombre')
+        .is('eliminada_en', null)
+        .order('nombre')
     : { data: null }
 
   return (
@@ -55,6 +60,11 @@ export default async function Configuracion({
       {exito === 'org' && (
         <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Organización creada correctamente.
+        </div>
+      )}
+      {exito === 'org_eliminada' && (
+        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Organización eliminada. Sus agentes fueron desactivados.
         </div>
       )}
 
@@ -108,7 +118,7 @@ export default async function Configuracion({
       </div>
 
       {esPropietario && (
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-8 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-semibold text-[#2C3E50]">Crear nueva organización</h2>
           <form action={crearOrganizacion} className="space-y-4">
             <div>
@@ -128,6 +138,20 @@ export default async function Configuracion({
               Crear organización
             </button>
           </form>
+        </div>
+      )}
+
+      {esPropietario && (
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold text-[#2C3E50]">Organizaciones</h2>
+          <ul className="space-y-2">
+            {(organizaciones ?? []).map((o) => (
+              <li key={o.id} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm">
+                <span>{o.nombre}</span>
+                <BotonEliminarOrganizacion organizacionId={o.id} organizacionNombre={o.nombre} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
