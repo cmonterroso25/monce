@@ -2,15 +2,6 @@
 import { useState, useEffect } from 'react'
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 
-function esIOS(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent
-  const esIphoneOIpad = /iPad|iPhone|iPod/.test(ua)
-  // iPadOS reporta user agent de "Mac" pero soporta touch, a diferencia de un Mac real.
-  const esIpadComoMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
-  return esIphoneOIpad || esIpadComoMac
-}
-
 export default function Galeria({
   imagenes,
   titulo,
@@ -21,6 +12,32 @@ export default function Galeria({
   const [activa, setActiva] = useState(0)
   const [abierta, setAbierta] = useState(false)
   const [descargando, setDescargando] = useState(false)
+
+  async function descargarZip(nombreBase: string) {
+    const respuesta = await fetch('/api/descargar-fotos-zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        urls: imagenes.map((img) => img.url),
+        nombreBase,
+      }),
+    })
+
+    if (!respuesta.ok) {
+      const detalle = await respuesta.json().catch(() => null)
+      throw new Error(detalle?.error ?? 'No se pudo generar el zip')
+    }
+
+    const blob = await respuesta.blob()
+    const urlBlob = URL.createObjectURL(blob)
+    const enlace = document.createElement('a')
+    enlace.href = urlBlob
+    enlace.download = `${nombreBase}.zip`
+    document.body.appendChild(enlace)
+    enlace.click()
+    document.body.removeChild(enlace)
+    URL.revokeObjectURL(urlBlob)
+  }
 
   async function descargarTodas() {
     setDescargando(true)
@@ -41,60 +58,43 @@ export default function Galeria({
         return
       }
 
-      // iOS (Safari/Brave, motor WebKit): Web Share API funciona bien ahi,
-      // confirmado en pruebas reales. Un solo toque abre la hoja nativa y
-      // el usuario guarda todas las fotos juntas en el rollo de camara.
-      if (esIOS()) {
-        const archivos = await Promise.all(
-          imagenes.map(async (img, i) => {
-            const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
-            const respuesta = await fetch(rutaProxy)
-            const blob = await respuesta.blob()
-            return new File([blob], `${nombreBase}-${i + 1}.webp`, { type: blob.type || 'image/webp' })
-          })
-        )
+      const archivos = await Promise.all(
+        imagenes.map(async (img, i) => {
+          const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
+          const respuesta = await fetch(rutaProxy)
+          const blob = await respuesta.blob()
+          return new File([blob], `${nombreBase}-${i + 1}.webp`, { type: blob.type || 'image/webp' })
+        })
+      )
 
-        const puedeCompartirArchivos =
-          typeof navigator !== 'undefined' &&
-          'canShare' in navigator &&
-          navigator.canShare({ files: archivos })
+      // Deteccion por capacidad (no por navegador/UA, que es fragil y
+      // puede venir alterado por proteccion de fingerprinting de Brave).
+      // Donde funciona (tipicamente iOS), un solo toque en la hoja de
+      // compartir nativa guarda todas las fotos juntas en la galeria.
+      const puedeCompartirArchivos =
+        typeof navigator !== 'undefined' &&
+        'canShare' in navigator &&
+        navigator.canShare({ files: archivos })
 
-        if (puedeCompartirArchivos) {
+      if (puedeCompartirArchivos) {
+        try {
           await navigator.share({ files: archivos, title: titulo })
           return
+        } catch (errShare) {
+          if (errShare instanceof Error && errShare.name === 'AbortError') {
+            // El usuario cerro la hoja de compartir sin elegir nada:
+            // respetamos esa decision, no forzamos una descarga.
+            return
+          }
+          // Cualquier otro error (ej. canShare dijo que si pero share()
+          // fallo por "user activation" expirada, visto en Chrome Android):
+          // cae al zip como plan B, sin mostrar error todavia.
         }
-        // Si por algun motivo iOS no soporta compartir archivos en este caso
-        // puntual, cae al mismo camino de zip que Android/escritorio.
       }
 
-      // Android y escritorio: Web Share API es inconsistente entre
-      // navegadores (Chrome Android pierde el "user activation" mientras
-      // se traen las fotos; Firefox Android no soporta archivos en share()).
-      // Se baja un solo .zip generado en el servidor, sin depender de
-      // ningun mecanismo de compartir del navegador.
-      const respuesta = await fetch('/api/descargar-fotos-zip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          urls: imagenes.map((img) => img.url),
-          nombreBase,
-        }),
-      })
-
-      if (!respuesta.ok) {
-        const detalle = await respuesta.json().catch(() => null)
-        throw new Error(detalle?.error ?? 'No se pudo generar el zip')
-      }
-
-      const blob = await respuesta.blob()
-      const urlBlob = URL.createObjectURL(blob)
-      const enlace = document.createElement('a')
-      enlace.href = urlBlob
-      enlace.download = `${nombreBase}.zip`
-      document.body.appendChild(enlace)
-      enlace.click()
-      document.body.removeChild(enlace)
-      URL.revokeObjectURL(urlBlob)
+      // Sin soporte de compartir archivos, o share() fallo arriba:
+      // se baja un solo .zip generado en el servidor.
+      await descargarZip(nombreBase)
     } catch (err) {
       console.error('--- ERROR AL DESCARGAR FOTOS ---', err)
       window.alert('Ocurrió un error al descargar las fotos. Intenta de nuevo.')
