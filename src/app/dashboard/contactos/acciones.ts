@@ -222,17 +222,46 @@ export async function eliminarContacto(contactoId: string) {
     throw new Error('Solo un administrador puede eliminar contactos.')
   }
 
-  // NOTA: aún falta confirmar con la query de information_schema si hay
-  // más tablas con FK hacia contactos además de las que ya conocíamos +
-  // notificaciones_whatsapp (confirmada por el log de Vercel). Si aparece
-  // otro error de foreign key al probar, es una tabla más que falta aquí.
+  // Lista completa de FKs hacia `contactos`, confirmada con information_schema
+  // el 2026-08-01. Todas con delete_rule = NO ACTION (restrict):
+  // propiedades.contacto_propietario, leads.contacto_id, actividades.contacto_id,
+  // tareas.contacto_id, coincidencias_propiedad.contacto_id,
+  // notificaciones_whatsapp.contacto_id, recibos.contacto_id,
+  // informes_evaluacion.contacto_id, solicitudes_arrendamiento.contacto_id.
+
+  // 1. propiedades.contacto_propietario no se borra en cascada (borraría la
+  //    propiedad), solo se desvincula.
+  await supabase
+    .from('propiedades')
+    .update({ contacto_propietario: null })
+    .eq('contacto_propietario', contactoId)
+
+  // 2. IDs de leads de este contacto, para limpiar defensivamente filas hijas
+  //    de esos leads cuyo contacto_id pudiera estar en null.
+  const { data: leadsDelContacto } = await supabase
+    .from('leads')
+    .select('id')
+    .eq('contacto_id', contactoId)
+  const leadIds = (leadsDelContacto ?? []).map((l) => l.id)
+
   await supabase.from('notificaciones_whatsapp').delete().eq('contacto_id', contactoId)
   await supabase.from('documentos').delete().eq('tipo_relacionado', 'contacto').eq('id_relacionado', contactoId)
+
   await supabase.from('recibos').delete().eq('contacto_id', contactoId)
   await supabase.from('informes_evaluacion').delete().eq('contacto_id', contactoId)
+  await supabase.from('solicitudes_arrendamiento').delete().eq('contacto_id', contactoId)
   await supabase.from('coincidencias_propiedad').delete().eq('contacto_id', contactoId)
   await supabase.from('actividades').delete().eq('contacto_id', contactoId)
   await supabase.from('tareas').delete().eq('contacto_id', contactoId)
+
+  if (leadIds.length > 0) {
+    await supabase.from('recibos').delete().in('lead_id', leadIds)
+    await supabase.from('informes_evaluacion').delete().in('lead_id', leadIds)
+    await supabase.from('solicitudes_arrendamiento').delete().in('lead_id', leadIds)
+    await supabase.from('actividades').delete().in('lead_id', leadIds)
+    await supabase.from('tareas').delete().in('lead_id', leadIds)
+  }
+
   await supabase.from('leads').delete().eq('contacto_id', contactoId)
 
   const { error } = await supabase.from('contactos').delete().eq('id', contactoId)

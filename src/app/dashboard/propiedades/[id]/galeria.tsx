@@ -32,43 +32,32 @@ export default function Galeria({
         return
       }
 
-      const archivos = await Promise.all(
-        imagenes.map(async (img, i) => {
-          const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
-          const respuesta = await fetch(rutaProxy)
-          const blob = await respuesta.blob()
-          return new File([blob], `${nombreBase}-${i + 1}.webp`, { type: blob.type || 'image/webp' })
-        })
-      )
+      const respuesta = await fetch('/api/descargar-fotos-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urls: imagenes.map((img) => img.url),
+          nombreBase,
+        }),
+      })
 
-      const puedeCompartirArchivos =
-        typeof navigator !== 'undefined' &&
-        'canShare' in navigator &&
-        navigator.canShare({ files: archivos })
-
-      if (puedeCompartirArchivos) {
-        await navigator.share({ files: archivos, title: titulo })
-        return
+      if (!respuesta.ok) {
+        const detalle = await respuesta.json().catch(() => null)
+        throw new Error(detalle?.error ?? 'No se pudo generar el zip')
       }
 
-      // Escritorio / navegadores sin soporte para compartir archivos: se
-      // mantiene el comportamiento original de descarga individual, que
-      // ahi si funciona bien (no aplica el limite anti-abuso de moviles).
-      for (let i = 0; i < archivos.length; i++) {
-        const urlBlob = URL.createObjectURL(archivos[i])
-        const enlace = document.createElement('a')
-        enlace.href = urlBlob
-        enlace.download = archivos[i].name
-        document.body.appendChild(enlace)
-        enlace.click()
-        document.body.removeChild(enlace)
-        URL.revokeObjectURL(urlBlob)
-        await new Promise((resolve) => setTimeout(resolve, 300))
-      }
+      const blob = await respuesta.blob()
+      const urlBlob = URL.createObjectURL(blob)
+      const enlace = document.createElement('a')
+      enlace.href = urlBlob
+      enlace.download = `${nombreBase}.zip`
+      document.body.appendChild(enlace)
+      enlace.click()
+      document.body.removeChild(enlace)
+      URL.revokeObjectURL(urlBlob)
     } catch (err) {
-      // AbortError cuando el usuario cierra la hoja de compartir sin elegir
-      // nada: no es un error real, no bloqueamos la UI por esto.
-      console.error('--- ERROR AL DESCARGAR/COMPARTIR FOTOS ---', err)
+      console.error('--- ERROR AL DESCARGAR FOTOS ---', err)
+      window.alert('Ocurrió un error al descargar las fotos. Intenta de nuevo.')
     } finally {
       setDescargando(false)
     }
