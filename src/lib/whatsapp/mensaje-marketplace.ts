@@ -79,7 +79,7 @@ function generarBloquesPropiedad(p: PropiedadMarketplace): (string | false | nul
   const textoMantenimiento =
     !p.mantenimiento || Number(p.mantenimiento) === 0
       ? '🛠️ Mantenimiento incluido'
-      : `🛠️ Mantenimiento: ${p.moneda ?? 'Q'} ${Number(p.mantenimiento).toLocaleString()}`
+      : `🛠️ Mantenimiento: ${p.moneda ?? 'Q'}${Number(p.mantenimiento).toLocaleString()}`
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
@@ -105,8 +105,8 @@ function generarBloquesPropiedad(p: PropiedadMarketplace): (string | false | nul
     p.extras && `✨ Extras:\n${p.extras}`,
     textoMascota,
     lineasRequisitos.length > 0 && lineasRequisitos.join('\n'),
-    p.precio ? `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'} ${Number(p.precio).toLocaleString()}` : false,
-    p.iusi ? `📑 IUSI: ${p.moneda ?? 'Q'} ${Number(p.iusi).toLocaleString()}` : false,
+    p.precio ? `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'}${Number(p.precio).toLocaleString()}` : false,
+    p.iusi ? `📑 IUSI: ${p.moneda ?? 'Q'}${Number(p.iusi).toLocaleString()}` : false,
     textoMantenimiento,
   ]
 }
