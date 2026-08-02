@@ -20,8 +20,8 @@ export default async function EditarActividad({
   const supabase = await createClient()
   const { data: actividad } = await supabase.from('actividades').select('*').eq('id', id).single()
   if (!actividad) return <div className="p-8">Actividad no encontrada.</div>
-  // Se necesita la organización de la actividad para limitar el selector
-  // de agente a los agentes de la misma organización.
+  // Se necesita la organización de la actividad para limitar los selectores
+  // de agente y colega a los de la misma organización.
   const { data: agentes } = actividad.organization_id
     ? await supabase
         .from('perfiles')
@@ -29,6 +29,13 @@ export default async function EditarActividad({
         .eq('organization_id', actividad.organization_id)
         .eq('activo', true)
         .order('nombre_completo')
+    : { data: [] }
+  const { data: colegas } = actividad.organization_id
+    ? await supabase
+        .from('colegas')
+        .select('id, nombre')
+        .eq('organization_id', actividad.organization_id)
+        .order('nombre')
     : { data: [] }
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
@@ -56,17 +63,32 @@ export default async function EditarActividad({
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Agente que atenderá</label>
-          <select
-            name="agente_id"
-            defaultValue={actividad.agente_id ?? ''}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            {(agentes ?? []).map((a) => (
-              <option key={a.id} value={a.id}>{a.nombre_completo}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Agente que atenderá</label>
+            <select
+              name="agente_id"
+              defaultValue={actividad.agente_id ?? ''}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              {(agentes ?? []).map((a) => (
+                <option key={a.id} value={a.id}>{a.nombre_completo}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Colega</label>
+            <select
+              name="colega_id"
+              defaultValue={actividad.colega_id ?? ''}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Sin colega</option>
+              {(colegas ?? []).map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
