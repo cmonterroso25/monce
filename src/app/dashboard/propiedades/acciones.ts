@@ -326,11 +326,14 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     const precioNuevo = Number(formData.get('precio'))
     const precioAnterior = propiedadAnterior?.precio != null ? Number(propiedadAnterior.precio) : null
     let encabezado = '✏️ Propiedad actualizada'
+    let tipoNotificacion = 'cambio_propiedad'
     if (precioAnterior != null && !Number.isNaN(precioNuevo)) {
       if (precioNuevo < precioAnterior) {
         encabezado = '💸 Propiedad baja de precio'
+        tipoNotificacion = 'baja_precio'
       } else if (precioNuevo > precioAnterior) {
         encabezado = '💰 Propiedad sube de precio'
+        tipoNotificacion = 'sube_precio'
       }
     }
     await notificarFichaPropiedad(
@@ -339,7 +342,7 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
       organizationId,
       user.id,
       encabezado,
-      'cambio_propiedad'
+      tipoNotificacion
     )
   }
 
