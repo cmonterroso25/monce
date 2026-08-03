@@ -38,8 +38,6 @@ function envolverTexto(texto: string, fuente: PDFFont, tamano: number, anchoMax:
   return lineas
 }
 
-// Umbral de negocio para clasificar el puntaje. Ajustar aquí si el criterio
-// de aceptación de la inmobiliaria cambia.
 function colorRecomendacion(puntaje: number) {
   if (puntaje >= 70) return { fondo: VERDE_FONDO, texto: VERDE_TEXTO, etiqueta: 'Recomendado' }
   if (puntaje >= 40) return { fondo: AMBAR_FONDO, texto: AMBAR_TEXTO, etiqueta: 'Con reservas' }
@@ -79,7 +77,6 @@ async function generarPdfInforme(datos: {
   const anchoUtil = 595 - margenX * 2
   let y = 842 - 45
 
-  // --- Encabezado ---
   const logoBytes = obtenerLogoBytes()
   if (logoBytes) {
     const logoImg = await pdfDoc.embedPng(logoBytes)
@@ -109,23 +106,16 @@ async function generarPdfInforme(datos: {
     y -= 15
   }
 
-  // --- Datos del candidato ---
-  // Nota: solo se muestra el nombre. El teléfono del titular se quitó a
-  // pedido del usuario (31/07/2026) por privacidad, y el fiador nunca tuvo
-  // sección propia aquí (no hay registro estructurado de sus datos, solo
-  // documentos adjuntos que Gemini analiza).
   tituloSeccion('Datos del candidato')
   lineaDato('Nombre:', datos.candidatoNombre)
   y -= 8
 
-  // --- Datos del negocio ---
   tituloSeccion('Datos del negocio')
   lineaDato('Propiedad:', datos.propiedadTitulo)
   lineaDato('Tipo de operación:', datos.tipoOperacion)
   lineaDato('Monto de referencia:', datos.montoReferencia)
   y -= 8
 
-  // --- Evaluación ---
   tituloSeccion('Evaluación')
   lineaDato('Agente responsable:', datos.agenteNombre)
   lineaDato('Fecha de evaluación:', datos.fechaEvaluacion)
@@ -138,7 +128,6 @@ async function generarPdfInforme(datos: {
   page.drawText(etiqueta, { x: margenX + anchoUtil - anchoEtiqueta - 12, y: y - 12, size: 12, font: fuenteBold, color: texto })
   y -= 45
 
-  // --- Desglose de criterios ---
   if (datos.criterios && Object.keys(datos.criterios).length > 0) {
     tituloSeccion('Desglose de criterios')
     for (const [clave, valor] of Object.entries(datos.criterios)) {
@@ -167,7 +156,6 @@ async function generarPdfInforme(datos: {
     y -= 4
   }
 
-  // --- Resumen general ---
   tituloSeccion('Resumen general')
   const lineasResumen = envolverTexto(datos.resumen || 'Sin resumen disponible.', fuente, 10.5, anchoUtil)
   for (const linea of lineasResumen) {
@@ -175,7 +163,6 @@ async function generarPdfInforme(datos: {
     y -= 15
   }
 
-  // --- Pie de página ---
   page.drawText(`Informe #${datos.informeId} · Generado automáticamente por el CRM de Monce Inmobiliaria`, {
     x: margenX,
     y: 30,
@@ -200,99 +187,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Falta informe_id' }, { status: 400 })
   }
 
-  // Caso: n8n reporta que el análisis falló. No se genera PDF.
   if (error) {
-    await supabaseAdmin
-      .from('informes_evaluacion')
-      .update({
-        estado: 'error',
-        error_mensaje: typeof error === 'string' ? error : 'El motor de análisis reportó un error.',
-        actualizado_en: new Date().toISOString(),
-      })
-      .eq('id', informe_id)
-
+    await supabaseAdmin.rpc('informe_marcar_error', {
+      p_informe_id: informe_id,
+      p_mensaje: typeof error === 'string' ? error : 'El motor de análisis reportó un error.',
+    })
     return NextResponse.json({ ok: true })
   }
 
   try {
-    // --- Enriquecer el informe con datos del candidato, la propiedad y el agente ---
-    const { data: informeRow, error: errorInformeRow } = await supabaseAdmin
-      .from('informes_evaluacion')
-      .select('lead_id, contacto_id, creado_en')
-      .eq('id', informe_id)
-      .single()
+    const { data: contexto, error: errorContexto } = await supabaseAdmin
+      .rpc('informe_obtener_contexto_pdf', { p_informe_id: informe_id })
+      .maybeSingle()
 
-    let candidatoNombre = 'N/D'
-    let propiedadTitulo = 'N/D'
-    let tipoOperacion = 'N/D'
-    let montoReferencia = 'N/D'
-    let agenteNombre = 'N/D'
-    let fechaEvaluacion = new Date().toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })
-    let errorContacto: unknown = null
-    let errorLeadRow: unknown = null
-    let errorAgente: unknown = null
-
-    if (informeRow) {
-      fechaEvaluacion = new Date(informeRow.creado_en).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })
-
-      if (informeRow.contacto_id) {
-        const { data: contacto, error: errorContactoTmp } = await supabaseAdmin
-          .from('contactos')
-          .select('nombre_completo')
-          .eq('id', informeRow.contacto_id)
-          .single()
-        errorContacto = errorContactoTmp
-        if (contacto) {
-          candidatoNombre = contacto.nombre_completo ?? 'N/D'
-        }
-      }
-
-      if (informeRow.lead_id) {
-        const { data: lead, error: errorLeadRowTmp } = await supabaseAdmin
-          .from('leads')
-          .select('agente_id, propiedad_id')
-          .eq('id', informeRow.lead_id)
-          .single()
-        errorLeadRow = errorLeadRowTmp
-
-        if (lead?.agente_id) {
-          const { data: agente, error: errorAgenteTmp } = await supabaseAdmin
-            .from('perfiles')
-            .select('nombre_completo')
-            .eq('id', lead.agente_id)
-            .single()
-          errorAgente = errorAgenteTmp
-          if (agente) agenteNombre = agente.nombre_completo ?? 'N/D'
-        }
-
-        if (lead?.propiedad_id) {
-          const { data: propiedad, error: errorPropiedad } = await supabaseAdmin
-            .from('propiedades')
-            .select('titulo, precio, moneda, tipo_operacion')
-            .eq('id', lead.propiedad_id)
-            .single()
-          if (propiedad) {
-            propiedadTitulo = propiedad.titulo ?? 'N/D'
-            tipoOperacion = propiedad.tipo_operacion ?? 'N/D'
-            montoReferencia = propiedad.precio != null
-              ? `${propiedad.moneda ?? ''} ${Number(propiedad.precio).toLocaleString('es-GT')}`.trim()
-              : 'N/D'
-          }
-          if (errorPropiedad) {
-            console.error('--- Error al consultar propiedad para enriquecer informe ---', informe_id, errorPropiedad)
-          }
-        }
-      }
+    if (errorContexto) {
+      console.error('--- Error al enriquecer datos del informe (algunos campos pueden quedar en N/D) ---', informe_id, errorContexto)
     }
 
-    if (errorInformeRow || errorContacto || errorLeadRow || errorAgente) {
-      console.error('--- Error al enriquecer datos del informe (algunos campos pueden quedar en N/D) ---', informe_id, {
-        errorInformeRow,
-        errorContacto,
-        errorLeadRow,
-        errorAgente,
-      })
-    }
+    const candidatoNombre = contexto?.candidato_nombre ?? 'N/D'
+    const propiedadTitulo = contexto?.propiedad_titulo ?? 'N/D'
+    const tipoOperacion = contexto?.tipo_operacion ?? 'N/D'
+    const agenteNombre = contexto?.agente_nombre ?? 'N/D'
+    const montoReferencia = contexto?.precio != null
+      ? `${contexto.moneda ?? ''} ${Number(contexto.precio).toLocaleString('es-GT')}`.trim()
+      : 'N/D'
+    const fechaEvaluacion = contexto?.creado_en
+      ? new Date(contexto.creado_en).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })
+      : new Date().toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })
 
     const puntajeNumerico = Number(recomendacion) || 0
 
@@ -319,25 +240,21 @@ export async function POST(req: NextRequest) {
       })
     )
 
-    await supabaseAdmin
-      .from('informes_evaluacion')
-      .update({
-        estado: 'completado',
-        resultado_recomendacion: recomendacion,
-        resultado_resumen: resumen,
-        detalle_criterios: criterios ?? null,
-        ruta_pdf: key,
-        actualizado_en: new Date().toISOString(),
-      })
-      .eq('id', informe_id)
+    await supabaseAdmin.rpc('informe_marcar_completado', {
+      p_informe_id: informe_id,
+      p_recomendacion: recomendacion != null ? String(recomendacion) : null,
+      p_resumen: resumen ?? null,
+      p_criterios: criterios ?? null,
+      p_ruta_pdf: key,
+    })
 
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('--- ERROR PROCESANDO CALLBACK DE INFORME ---', err)
-    await supabaseAdmin
-      .from('informes_evaluacion')
-      .update({ estado: 'error', error_mensaje: 'Error al generar el PDF del informe.' })
-      .eq('id', informe_id)
+    await supabaseAdmin.rpc('informe_marcar_error', {
+      p_informe_id: informe_id,
+      p_mensaje: 'Error al generar el PDF del informe.',
+    })
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
