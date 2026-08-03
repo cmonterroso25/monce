@@ -19,7 +19,15 @@ const ROJO_TEXTO = rgb(0.7, 0.15, 0.15)
 const AMBAR_FONDO = rgb(0.99, 0.93, 0.78)
 const AMBAR_TEXTO = rgb(0.6, 0.42, 0.05)
 
-
+type ContextoInformePdf = {
+  candidato_nombre: string | null
+  propiedad_titulo: string | null
+  tipo_operacion: string | null
+  agente_nombre: string | null
+  precio: number | string | null
+  moneda: string | null
+  creado_en: string | null
+}
 
 function envolverTexto(texto: string, fuente: PDFFont, tamano: number, anchoMax: number): string[] {
   const palabras = texto.split(' ')
@@ -196,9 +204,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { data: contexto, error: errorContexto } = await supabaseAdmin
+    const { data: contextoRaw, error: errorContexto } = await supabaseAdmin
       .rpc('informe_obtener_contexto_pdf', { p_informe_id: informe_id })
       .maybeSingle()
+
+    const contexto = contextoRaw as ContextoInformePdf | null
 
     if (errorContexto) {
       console.error('--- Error al enriquecer datos del informe (algunos campos pueden quedar en N/D) ---', informe_id, errorContexto)

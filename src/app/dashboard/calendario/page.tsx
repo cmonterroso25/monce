@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import CalendarioMensual from './calendario-mensual'
 import TablaCitas from './tabla-citas'
+import { inicioDeMesGT, finDeMesGT } from '@/lib/fecha-gt'
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 export default async function Calendario({
   searchParams,
@@ -14,8 +15,8 @@ export default async function Calendario({
   const mes = params.mes ? parseInt(params.mes, 10) : ahora.getMonth() + 1
   const anio = params.anio ? parseInt(params.anio, 10) : ahora.getFullYear()
   const supabase = await createClient()
-  const inicioMes = new Date(anio, mes - 1, 1)
-  const finMes = new Date(anio, mes, 1)
+  const inicioMes = inicioDeMesGT(anio, mes)
+  const finMes = finDeMesGT(anio, mes)
   const { data: citasMes } = await supabase
     .from('actividades')
     .select('id, programada_en, contacto:contactos(nombre_completo)')

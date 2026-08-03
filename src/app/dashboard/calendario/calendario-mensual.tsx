@@ -1,36 +1,29 @@
 import Link from 'next/link'
-
+import { componentesGT } from '@/lib/fecha-gt'
 type Cita = {
   id: string
   programada_en: string
   contacto: { nombre_completo: string } | null
 }
-
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-
 export default function CalendarioMensual({ mes, anio, citas }: { mes: number; anio: number; citas: Cita[] }) {
   const primerDia = new Date(anio, mes - 1, 1)
   const diasEnMes = new Date(anio, mes, 0).getDate()
   const offsetInicio = (primerDia.getDay() + 6) % 7 // lunes = 0
-
   const citasPorDia: Record<number, Cita[]> = {}
   citas.forEach((c) => {
-    const fecha = new Date(c.programada_en)
-    const dia = fecha.getDate()
+    const { dia } = componentesGT(new Date(c.programada_en))
     if (!citasPorDia[dia]) citasPorDia[dia] = []
     citasPorDia[dia].push(c)
   })
-
   const celdas: (number | null)[] = [
     ...Array(offsetInicio).fill(null),
     ...Array.from({ length: diasEnMes }, (_, i) => i + 1),
   ]
   while (celdas.length % 7 !== 0) celdas.push(null)
-
-  const hoy = new Date()
+  const hoyGT = componentesGT(new Date())
   const esHoy = (dia: number) =>
-    hoy.getDate() === dia && hoy.getMonth() + 1 === mes && hoy.getFullYear() === anio
-
+    hoyGT.dia === dia && hoyGT.mes === mes && hoyGT.anio === anio
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="min-w-[640px]">
@@ -64,7 +57,11 @@ export default function CalendarioMensual({ mes, anio, citas }: { mes: number; a
                         className="block truncate rounded bg-[#38B6FF]/10 px-1 py-0.5 text-[10px] text-[#2C3E50] hover:bg-[#38B6FF]/20"
                         title={`${c.contacto?.nombre_completo ?? ''} — clic para editar`}
                       >
-                        {new Date(c.programada_en).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}{' '}
+                        {new Date(c.programada_en).toLocaleTimeString('es-GT', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          timeZone: 'America/Guatemala',
+                        })}{' '}
                         {c.contacto?.nombre_completo ?? ''}
                       </Link>
                     ))}

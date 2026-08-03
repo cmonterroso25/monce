@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { Phone, ArrowUpRight, Pencil } from 'lucide-react'
 import MarcarCompletada from '../actividades/marcar-completada'
 import { colorParaAgente } from '@/lib/ui/color-agente'
-
 type Cita = {
   id: string
   notas: string | null
@@ -14,14 +13,11 @@ type Cita = {
   lead: { id: string; propiedad: { titulo: string } | null } | null
   agente: { nombre_completo: string } | null
 }
-
 const GRID_COLS = 'grid-cols-[140px_1.6fr_1.4fr_1.2fr_130px]'
-
 export default function TablaCitas({ citas }: { citas: Cita[] }) {
   if (!citas || citas.length === 0) {
     return <p className="mt-6 text-sm text-slate-500">No hay citas próximas programadas.</p>
   }
-
   return (
     <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="min-w-[820px]">
@@ -34,11 +30,9 @@ export default function TablaCitas({ citas }: { citas: Cita[] }) {
           <div>Agente</div>
           <div className="text-right">Acción</div>
         </div>
-
         {citas.map((cita) => {
           const fecha = new Date(cita.programada_en)
           const color = colorParaAgente(cita.agente_id)
-
           return (
             <div
               key={cita.id}
@@ -46,13 +40,12 @@ export default function TablaCitas({ citas }: { citas: Cita[] }) {
             >
               <div>
                 <p className="text-sm font-semibold text-[#2C3E50]">
-                  {fecha.toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })}
+                  {fecha.toLocaleDateString('es-GT', { day: 'numeric', month: 'short', timeZone: 'America/Guatemala' })}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {fecha.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+                  {fecha.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })}
                 </p>
               </div>
-
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[#2C3E50]">
                   {cita.contacto?.nombre_completo ?? 'Sin contacto'}
@@ -63,7 +56,6 @@ export default function TablaCitas({ citas }: { citas: Cita[] }) {
                   </p>
                 )}
               </div>
-
               <div className="min-w-0">
                 <p className="truncate text-sm text-slate-600">{cita.lead?.propiedad?.titulo ?? '—'}</p>
                 {cita.lead_id && (
@@ -72,14 +64,12 @@ export default function TablaCitas({ citas }: { citas: Cita[] }) {
                   </Link>
                 )}
               </div>
-
               <div>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${color.bg} ${color.text}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${color.dot}`} />
                   {cita.agente?.nombre_completo ?? '—'}
                 </span>
               </div>
-
               <div className="flex items-center justify-end gap-2">
                 <Link
                   href={`/dashboard/actividades/${cita.id}/editar`}

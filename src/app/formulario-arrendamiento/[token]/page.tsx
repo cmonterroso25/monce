@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import FormularioArrendamientoPublico from './formulario'
 
+type SolicitudArrendamientoPublica = {
+  estado: string
+  vencido: boolean
+}
+
 export default async function PaginaFormularioArrendamiento({
   params,
 }: {
@@ -8,11 +13,10 @@ export default async function PaginaFormularioArrendamiento({
 }) {
   const { token } = await params
   const supabase = await createClient()
-
-  const { data: solicitud, error } = await supabase
+  const { data: solicitudRaw, error } = await supabase
     .rpc('obtener_solicitud_arrendamiento_publica', { token })
     .maybeSingle()
-
+  const solicitud = solicitudRaw as SolicitudArrendamientoPublica | null
   if (error || !solicitud) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -22,7 +26,6 @@ export default async function PaginaFormularioArrendamiento({
       </div>
     )
   }
-
   if (solicitud.estado === 'completado') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -32,7 +35,6 @@ export default async function PaginaFormularioArrendamiento({
       </div>
     )
   }
-
   if (solicitud.vencido) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -42,6 +44,5 @@ export default async function PaginaFormularioArrendamiento({
       </div>
     )
   }
-
   return <FormularioArrendamientoPublico token={token} />
 }
