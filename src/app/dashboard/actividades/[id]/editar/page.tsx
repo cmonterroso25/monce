@@ -2,12 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { actualizarActividad } from '../../../leads/acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../../../leads/constantes'
 import BotonEnviar from '@/components/boton-enviar'
-function aInputLocal(valor: string | null): string {
-  if (!valor) return ''
-  const fecha = new Date(valor)
-  const offsetMs = fecha.getTimezoneOffset() * 60000
-  return new Date(fecha.getTime() - offsetMs).toISOString().slice(0, 16)
-}
+import { aInputLocalGT } from '@/lib/fecha-gt'
 export default async function EditarActividad({
   params,
   searchParams,
@@ -59,7 +54,7 @@ export default async function EditarActividad({
           <input
             name="programada_en"
             type="datetime-local"
-            defaultValue={aInputLocal(actividad.programada_en)}
+            defaultValue={aInputLocalGT(actividad.programada_en)}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
         </div>

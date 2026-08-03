@@ -29,3 +29,23 @@ export function finDeMesGT(anio: number, mes: number) {
   }
   return inicioDeMesGT(anioSig, mesSig)
 }
+
+const OFFSET_GT_MS = 6 * 60 * 60 * 1000 // Guatemala es UTC-6 fijo, sin horario de verano
+
+// Convierte un timestamp UTC (de la BD) al string que espera <input type="datetime-local">,
+// representando la hora local de Guatemala.
+export function aInputLocalGT(valor: string | null): string {
+  if (!valor) return ''
+  const fechaUTC = new Date(valor)
+  const fechaGT = new Date(fechaUTC.getTime() - OFFSET_GT_MS)
+  return fechaGT.toISOString().slice(0, 16)
+}
+
+// Convierte el string de <input type="datetime-local"> (interpretado como hora de Guatemala)
+// de vuelta a un ISO string en UTC para guardar en la BD.
+export function deInputLocalGT(valorInput: string | null | undefined): string | null {
+  if (!valorInput) return null
+  const fechaGT = new Date(`${valorInput}:00`)
+  const fechaUTC = new Date(fechaGT.getTime() + OFFSET_GT_MS)
+  return fechaUTC.toISOString()
+}
