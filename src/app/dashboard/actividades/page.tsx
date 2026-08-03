@@ -152,6 +152,7 @@ export default async function ListadoActividades() {
                     ? new Date(a.programada_en).toLocaleString('es-GT', {
                         dateStyle: 'short',
                         timeStyle: 'short',
+                        timeZone: 'America/Guatemala',
                       })
                     : '—'}
                 </div>
