@@ -14,7 +14,7 @@ const EMOJI_TIPO: Record<string, string> = {
 // Umbral (en caracteres) que decide la estructura del texto en
 // "Copiar para Marketplace": por debajo, se agrega la descripción a la
 // estructura completa; en o por encima, se usa la estructura reducida
-// (Descripción, Código, Requisitos).
+// (Título, Código, Descripción, Requisitos).
 const UMBRAL_DESCRIPCION_CORTA = 50
 
 export type PropiedadMarketplace = {
@@ -52,8 +52,8 @@ export type PropiedadMarketplace = {
 }
 
 // Paquete completo (titular + fiador + condiciones) del código A/B/C
-// asignado a la propiedad. Antes solo se mostraba "titular"; el fiador
-// quedaba fuera del texto aunque el paquete lo definiera.
+// asignado a la propiedad. Deja una línea en blanco entre el último
+// requisito del fiador y las condiciones de contrato/depósito.
 function lineasRequisitos(p: PropiedadMarketplace): string[] {
   const requisitos =
     p.tipo_operacion === 'renta' && p.requisitos_renta
@@ -68,6 +68,7 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
     ...requisitos.titular.map((r) => `• ${r}`),
     'Fiador:',
     ...requisitos.fiador.map((r) => `• ${r}`),
+    '',
     `• Contrato mínimo: ${requisitos.contratoMinimo}`,
     `• Depósito: ${requisitos.deposito}`,
   ]
@@ -135,15 +136,16 @@ function generarBloquesPropiedad(
   ]
 }
 
-// Estructura reducida: Descripción, Código, Requisitos para aplicar (sin
-// título). Se usa cuando la descripción ya trae suficiente detalle
+// Estructura reducida: Título, Código, Descripción, Requisitos para
+// aplicar. Se usa cuando la descripción ya trae suficiente detalle
 // (>= UMBRAL_DESCRIPCION_CORTA caracteres), para no duplicar información.
 function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
   const requisitos = lineasRequisitos(p)
 
   return [
-    p.descripcion ?? null,
+    p.titulo,
     p.codigo ? `📌 Código: ${p.codigo}` : null,
+    p.descripcion ?? null,
     requisitos.length > 0 && requisitos.join('\n'),
   ]
 }
