@@ -54,6 +54,8 @@ export type PropiedadMarketplace = {
 // Paquete completo (titular + fiador + condiciones) del código A/B/C
 // asignado a la propiedad. Deja una línea en blanco entre el último
 // requisito del fiador y las condiciones de contrato/depósito.
+// Usado solo por "Copiar para Marketplace" (botón manual); la notificación
+// automática de WhatsApp ya no incluye este bloque (ver incluirRequisitos).
 function lineasRequisitos(p: PropiedadMarketplace): string[] {
   const requisitos =
     p.tipo_operacion === 'renta' && p.requisitos_renta
@@ -76,12 +78,15 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
 
 // Núcleo compartido. "codigo" es opcional a propósito: cuando no se pasa,
 // no aparece esa fila. `incluirDescripcion` solo lo activa la rama de
-// descripción corta de generarTextoMarketplace(); mensajeWhatsappPropiedad()
-// (notificaciones automáticas a grupos) nunca lo pasa, así que su salida
-// no cambia en ese aspecto.
+// descripción corta de generarTextoMarketplace(). `incluirRequisitos`
+// (default true) se pone en false desde mensajeWhatsappPropiedad() para
+// que la notificación automática a grupos no incluya el paquete de
+// requisitos de renta — Green API rechaza captions de más de 1024
+// caracteres en sendFileByUrl, y ese bloque era el que más hacía crecer
+// el mensaje.
 function generarBloquesPropiedad(
   p: PropiedadMarketplace,
-  opts?: { incluirDescripcion?: boolean }
+  opts?: { incluirDescripcion?: boolean; incluirRequisitos?: boolean }
 ): (string | false | null)[] {
   const emojiTipo = EMOJI_TIPO[p.tipo_propiedad ?? ''] ?? '🏠'
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
@@ -119,7 +124,8 @@ function generarBloquesPropiedad(
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
-  const requisitos = lineasRequisitos(p)
+  const incluirRequisitos = opts?.incluirRequisitos ?? true
+  const requisitos = incluirRequisitos ? lineasRequisitos(p) : []
 
   return [
     `${tipoLabel} EN ${negocio}${ubicacion ? ` - ${ubicacion}` : ''}`,
@@ -139,6 +145,7 @@ function generarBloquesPropiedad(
 // Estructura reducida: Título, Código, Descripción, Requisitos para
 // aplicar. Se usa cuando la descripción ya trae suficiente detalle
 // (>= UMBRAL_DESCRIPCION_CORTA caracteres), para no duplicar información.
+// Solo la usa "Copiar para Marketplace" (nunca la notificación automática).
 function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
   const requisitos = lineasRequisitos(p)
 
@@ -160,11 +167,13 @@ export function generarTextoMarketplace(p: PropiedadMarketplace): string {
   return bloques.filter(Boolean).join('\n\n')
 }
 
+// Notificación automática a grupos de WhatsApp (Green API). No incluye el
+// bloque de requisitos de renta: ver nota en generarBloquesPropiedad.
 export function mensajeWhatsappPropiedad(
   p: PropiedadMarketplace & { codigo: string | null },
   opts: { encabezado: string; enlace: string | null }
 ): string {
-  const bloques = [opts.encabezado, ...generarBloquesPropiedad(p)]
+  const bloques = [opts.encabezado, ...generarBloquesPropiedad(p, { incluirRequisitos: false })]
   if (opts.enlace) bloques.push(opts.enlace)
   return bloques.filter(Boolean).join('\n\n')
 }
