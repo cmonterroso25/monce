@@ -14,7 +14,7 @@ const EMOJI_TIPO: Record<string, string> = {
 // Umbral (en caracteres) que decide la estructura del texto en
 // "Copiar para Marketplace": por debajo, se agrega la descripción a la
 // estructura completa; en o por encima, se usa la estructura reducida
-// (Título, Código, Descripción, Requisitos).
+// (Descripción, Código, Requisitos).
 const UMBRAL_DESCRIPCION_CORTA = 50
 
 export type PropiedadMarketplace = {
@@ -51,6 +51,9 @@ export type PropiedadMarketplace = {
   requisitos_renta: string | null
 }
 
+// Paquete completo (titular + fiador + condiciones) del código A/B/C
+// asignado a la propiedad. Antes solo se mostraba "titular"; el fiador
+// quedaba fuera del texto aunque el paquete lo definiera.
 function lineasRequisitos(p: PropiedadMarketplace): string[] {
   const requisitos =
     p.tipo_operacion === 'renta' && p.requisitos_renta
@@ -61,7 +64,10 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
 
   return [
     '📋 Requisitos para aplicar:',
+    'Titular:',
     ...requisitos.titular.map((r) => `• ${r}`),
+    'Fiador:',
+    ...requisitos.fiador.map((r) => `• ${r}`),
     `• Contrato mínimo: ${requisitos.contratoMinimo}`,
     `• Depósito: ${requisitos.deposito}`,
   ]
@@ -71,7 +77,7 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
 // no aparece esa fila. `incluirDescripcion` solo lo activa la rama de
 // descripción corta de generarTextoMarketplace(); mensajeWhatsappPropiedad()
 // (notificaciones automáticas a grupos) nunca lo pasa, así que su salida
-// no cambia.
+// no cambia en ese aspecto.
 function generarBloquesPropiedad(
   p: PropiedadMarketplace,
   opts?: { incluirDescripcion?: boolean }
@@ -103,10 +109,12 @@ function generarBloquesPropiedad(
     p.parqueos && `• Parqueo para ${p.parqueos} vehículo${p.parqueos > 1 ? 's' : ''} 🚗`,
   ].filter(Boolean)
 
+  // El mantenimiento siempre se muestra en quetzales, sin importar la
+  // moneda configurada para precio/IUSI de la propiedad.
   const textoMantenimiento =
     !p.mantenimiento || Number(p.mantenimiento) === 0
       ? '🛠️ Mantenimiento incluido'
-      : `🛠️ Mantenimiento: ${p.moneda ?? 'Q'}${Number(p.mantenimiento).toLocaleString()}`
+      : `🛠️ Mantenimiento: Q${Number(p.mantenimiento).toLocaleString()}`
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
@@ -127,16 +135,15 @@ function generarBloquesPropiedad(
   ]
 }
 
-// Estructura reducida: Título, Código, Descripción, Requisitos para
-// aplicar. Se usa cuando la descripción ya trae suficiente detalle
+// Estructura reducida: Descripción, Código, Requisitos para aplicar (sin
+// título). Se usa cuando la descripción ya trae suficiente detalle
 // (>= UMBRAL_DESCRIPCION_CORTA caracteres), para no duplicar información.
 function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
   const requisitos = lineasRequisitos(p)
 
   return [
-    p.titulo,
-    p.codigo ? `📌 Código: ${p.codigo}` : null,
     p.descripcion ?? null,
+    p.codigo ? `📌 Código: ${p.codigo}` : null,
     requisitos.length > 0 && requisitos.join('\n'),
   ]
 }
