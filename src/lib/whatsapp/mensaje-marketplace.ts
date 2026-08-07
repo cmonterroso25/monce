@@ -11,9 +11,16 @@ const EMOJI_TIPO: Record<string, string> = {
   granja: '🐄',
 }
 
+// Umbral (en caracteres) que decide la estructura del texto en
+// "Copiar para Marketplace": por debajo, se agrega la descripción a la
+// estructura completa; en o por encima, se usa la estructura reducida
+// (Título, Código, Descripción, Requisitos).
+const UMBRAL_DESCRIPCION_CORTA = 50
+
 export type PropiedadMarketplace = {
   codigo?: string | null
   titulo: string
+  descripcion?: string | null
   tipo_operacion: string | null
   tipo_propiedad: string | null
   direccion: string | null
@@ -44,11 +51,31 @@ export type PropiedadMarketplace = {
   requisitos_renta: string | null
 }
 
-// Núcleo compartido. "codigo" es opcional a propósito: cuando no se pasa
-// (el botón "Copiar para Marketplace" no lo pasa), no aparece esa fila,
-// así que generarTextoMarketplace() sigue produciendo exactamente el mismo
-// texto que hoy usa el botón — nada cambia para Facebook Marketplace.
-function generarBloquesPropiedad(p: PropiedadMarketplace): (string | false | null)[] {
+function lineasRequisitos(p: PropiedadMarketplace): string[] {
+  const requisitos =
+    p.tipo_operacion === 'renta' && p.requisitos_renta
+      ? REQUISITOS_RENTA[p.requisitos_renta as CodigoRequisitosRenta]
+      : null
+
+  if (!requisitos) return []
+
+  return [
+    '📋 Requisitos para aplicar:',
+    ...requisitos.titular.map((r) => `• ${r}`),
+    `• Contrato mínimo: ${requisitos.contratoMinimo}`,
+    `• Depósito: ${requisitos.deposito}`,
+  ]
+}
+
+// Núcleo compartido. "codigo" es opcional a propósito: cuando no se pasa,
+// no aparece esa fila. `incluirDescripcion` solo lo activa la rama de
+// descripción corta de generarTextoMarketplace(); mensajeWhatsappPropiedad()
+// (notificaciones automáticas a grupos) nunca lo pasa, así que su salida
+// no cambia.
+function generarBloquesPropiedad(
+  p: PropiedadMarketplace,
+  opts?: { incluirDescripcion?: boolean }
+): (string | false | null)[] {
   const emojiTipo = EMOJI_TIPO[p.tipo_propiedad ?? ''] ?? '🏠'
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const tipoLabel = (p.tipo_propiedad ?? 'PROPIEDAD').toUpperCase()
@@ -83,36 +110,45 @@ function generarBloquesPropiedad(p: PropiedadMarketplace): (string | false | nul
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
-  const requisitos =
-    p.tipo_operacion === 'renta' && p.requisitos_renta
-      ? REQUISITOS_RENTA[p.requisitos_renta as CodigoRequisitosRenta]
-      : null
-
-  const lineasRequisitos = requisitos
-    ? [
-        '📋 Requisitos para aplicar:',
-        ...requisitos.titular.map((r) => `• ${r}`),
-        `• Contrato mínimo: ${requisitos.contratoMinimo}`,
-        `• Depósito: ${requisitos.deposito}`,
-      ]
-    : []
+  const requisitos = lineasRequisitos(p)
 
   return [
     `${tipoLabel} EN ${negocio}${ubicacion ? ` - ${ubicacion}` : ''}`,
     p.codigo ? `📌 Código: ${p.codigo}` : null,
+    opts?.incluirDescripcion && p.descripcion ? `📝 Descripción:\n${p.descripcion}` : null,
     lineasDetalle.length > 0 && `📐 Detalles de la propiedad:\n${lineasDetalle.join('\n')}`,
     lineasDistribucion.length > 0 && `${emojiTipo} Distribución:\n${lineasDistribucion.join('\n')}`,
     p.extras && `✨ Extras:\n${p.extras}`,
     textoMascota,
-    lineasRequisitos.length > 0 && lineasRequisitos.join('\n'),
+    requisitos.length > 0 && requisitos.join('\n'),
     p.precio ? `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'}${Number(p.precio).toLocaleString()}` : false,
     p.iusi ? `📑 IUSI: ${p.moneda ?? 'Q'}${Number(p.iusi).toLocaleString()}` : false,
     textoMantenimiento,
   ]
 }
 
+// Estructura reducida: Título, Código, Descripción, Requisitos para
+// aplicar. Se usa cuando la descripción ya trae suficiente detalle
+// (>= UMBRAL_DESCRIPCION_CORTA caracteres), para no duplicar información.
+function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
+  const requisitos = lineasRequisitos(p)
+
+  return [
+    p.titulo,
+    p.codigo ? `📌 Código: ${p.codigo}` : null,
+    p.descripcion ?? null,
+    requisitos.length > 0 && requisitos.join('\n'),
+  ]
+}
+
 export function generarTextoMarketplace(p: PropiedadMarketplace): string {
-  return generarBloquesPropiedad(p).filter(Boolean).join('\n\n')
+  const descripcionCorta = (p.descripcion?.trim().length ?? 0) < UMBRAL_DESCRIPCION_CORTA
+
+  const bloques = descripcionCorta
+    ? generarBloquesPropiedad(p, { incluirDescripcion: true })
+    : generarBloquesResumen(p)
+
+  return bloques.filter(Boolean).join('\n\n')
 }
 
 export function mensajeWhatsappPropiedad(
