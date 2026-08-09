@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from './sidebar'
+import ArreglarToquesIOS from '@/components/arreglar-toques-ios'
 
 export default async function DashboardLayout({
   children,
@@ -27,6 +28,7 @@ export default async function DashboardLayout({
     .lt('programada_en', finHoy.toISOString())
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
+      <ArreglarToquesIOS />
       <Sidebar
         nombreCompleto={perfil?.nombre_completo ?? null}
         rol={perfil?.rol ?? null}
