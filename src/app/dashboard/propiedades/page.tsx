@@ -91,11 +91,17 @@ export default async function ListadoPropiedades({
   if (params.m2_max) query = query.lte('area_construccion_m2', Number(params.m2_max))
 
   const { data: propiedades } = await query
+  const totalPropiedades = propiedades?.length ?? 0
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Propiedades</h1>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Propiedades</h1>
+          <span className="text-sm font-medium text-slate-400">
+            ({totalPropiedades})
+          </span>
+        </div>
         <Link
           href="/dashboard/propiedades/nueva"
           className="rounded bg-[#2C3E50] px-4 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-[#38B6FF] sm:w-auto"
