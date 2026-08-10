@@ -10,6 +10,7 @@ import CambiarEstado from './cambiar-estado'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
+import { formatearZona } from '@/lib/formato-zona'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -146,13 +147,13 @@ export default async function DetallePropiedad({
             {propiedad.direccion ? `${propiedad.direccion}, ` : ''}
             {propiedad.condominio ? `${propiedad.condominio}, ` : ''}
             {propiedad.sector ? `${propiedad.sector}, ` : ''}
-            {propiedad.zona ? `${propiedad.zona}, ` : ''}
+            {propiedad.zona ? `${formatearZona(propiedad.zona)}, ` : ''}
             {propiedad.municipio?.nombre ? `${propiedad.municipio.nombre}, ` : ''}
             {propiedad.ciudad}
           </p>
 
           {visibleEnPortal && (
-              <a
+            <a
               href={`/propiedades/${propiedad.slug}`}
               target="_blank"
               rel="noopener noreferrer"

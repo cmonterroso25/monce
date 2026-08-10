@@ -49,7 +49,7 @@ export default async function EditarPropiedad({
       .eq('propiedad_id', id)
       .order('orden', { ascending: true }),
     supabase.from('perfiles').select('rol').eq('id', user.id).single(),
-    supabase.from('ubicaciones').select('id, nombre').order('nombre'),
+    supabase.from('ubicaciones').select('id, nombre, google_maps_url, waze_url').order('nombre'),
   ])
 
   if (!propiedadData) {
@@ -149,7 +149,11 @@ export default async function EditarPropiedad({
           />
         </div>
 
-        <SelectorUbicacion opciones={ubicaciones ?? []} defaultValue={propiedad.ubicacion_id ?? ''} />
+        <SelectorUbicacion
+          opciones={ubicaciones ?? []}
+          defaultValue={propiedad.ubicacion_id ?? ''}
+          puedeEditar={esAdmin}
+        />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Zona</label>

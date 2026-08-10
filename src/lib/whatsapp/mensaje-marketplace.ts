@@ -1,4 +1,5 @@
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
+import { formatearZona } from '@/lib/formato-zona'
 
 const EMOJI_TIPO: Record<string, string> = {
   casa: '🛏️',
@@ -92,7 +93,7 @@ function generarBloquesPropiedad(
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const tipoLabel = (p.tipo_propiedad ?? 'PROPIEDAD').toUpperCase()
 
-  const ubicacion = [p.direccion, p.condominio, p.numero_casa && `Casa ${p.numero_casa}`, p.sector, p.zona, p.municipioNombre, p.ciudad]
+  const ubicacion = [p.direccion, p.condominio, p.numero_casa && `Casa ${p.numero_casa}`, p.sector, formatearZona(p.zona), p.municipioNombre, p.ciudad]
     .filter(Boolean)
     .join(', ')
 

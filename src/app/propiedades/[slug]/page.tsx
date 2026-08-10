@@ -7,6 +7,7 @@ import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import Galeria from '@/app/dashboard/propiedades/[id]/galeria'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
 import { urlSitio } from '@/lib/url'
+import { formatearZona } from '@/lib/formato-zona'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -77,7 +78,7 @@ export async function generateMetadata({
     propiedad.imagenes_propiedad?.[0]
   const imagenUrl = portada ? urlImagen(portada.ruta_almacenamiento) : undefined
   const descripcionCorta = `${propiedad.moneda} ${Number(propiedad.precio).toLocaleString()} · ${[
-    propiedad.zona,
+    formatearZona(propiedad.zona),
     propiedad.ciudad,
   ]
     .filter(Boolean)
@@ -119,7 +120,7 @@ export default async function PropiedadPublica({
 
   const numero = numeroWhatsapp(propiedad.telefonoContacto)
   const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
-  const ubicacionPropiedad = [propiedad.zona, propiedad.municipio?.nombre, propiedad.ciudad]
+  const ubicacionPropiedad = [formatearZona(propiedad.zona), propiedad.municipio?.nombre, propiedad.ciudad]
     .filter(Boolean)
     .join(', ')
   const bloquesWhatsapp = [
@@ -162,7 +163,7 @@ export default async function PropiedadPublica({
           <h1 className="text-2xl font-bold text-[#2C3E50]">{propiedad.titulo}</h1>
           <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
             <MapPin size={14} />
-            {[propiedad.zona, propiedad.municipio?.nombre, propiedad.ciudad].filter(Boolean).join(', ')}
+            {[formatearZona(propiedad.zona), propiedad.municipio?.nombre, propiedad.ciudad].filter(Boolean).join(', ')}
           </p>
 
           <p className="mt-3 text-3xl font-bold text-[#2C3E50]">
@@ -199,7 +200,7 @@ export default async function PropiedadPublica({
           )}
 
           {numero && (
-              <a
+            <a
               href={`https://wa.me/${numero}?text=${mensajeWhatsapp}`}
               target="_blank"
               rel="noopener noreferrer"

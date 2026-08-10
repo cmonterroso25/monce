@@ -30,12 +30,50 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
+// Resuelve la ubicación de la propiedad en tres modos, según lo que
+// envía SelectorUbicacion:
+// - Selección existente sin editar: se usa el id tal cual.
+// - "__nuevo__": se inserta una ubicación nueva (flujo original).
+// - Existente + ubicacion_modo="editar": se actualiza esa fila en la
+//   tabla `ubicaciones` (nombre y links), recalculando lat/lng. Esto
+//   afecta a TODAS las propiedades que comparten esa ubicación, ya que
+//   es un catálogo compartido por organización. RLS exige admin o
+//   propietario de plataforma para el UPDATE (política "Solo admin
+//   edita ubicaciones"), así que un agente sin permiso recibirá el
+//   error de Supabase aquí mismo.
 async function resolverUbicacionId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   formData: FormData,
   organizationId: string | undefined
 ): Promise<{ ubicacionId: string | null; error?: string }> {
-  let ubicacionId = textoOpcional(formData.get('ubicacion_id'))
+  const ubicacionId = textoOpcional(formData.get('ubicacion_id'))
+  const modo = textoOpcional(formData.get('ubicacion_modo'))
+
+  if (ubicacionId && ubicacionId !== '__nuevo__' && modo === 'editar') {
+    const nombreNuevo = formData.get('ubicacion_nombre_nuevo') as string
+    const googleMapsUrl = textoOpcional(formData.get('ubicacion_google_maps_nuevo'))
+    const wazeUrl = textoOpcional(formData.get('ubicacion_waze_nuevo'))
+
+    const { lat, lng } = await parsearUbicacion(googleMapsUrl, wazeUrl)
+
+    const { error } = await supabase
+      .from('ubicaciones')
+      .update({
+        nombre: nombreNuevo,
+        google_maps_url: googleMapsUrl,
+        waze_url: wazeUrl,
+        latitud: lat,
+        longitud: lng,
+      })
+      .eq('id', ubicacionId)
+
+    if (error) {
+      return { ubicacionId: null, error: error.message }
+    }
+
+    return { ubicacionId }
+  }
+
   if (ubicacionId !== '__nuevo__') {
     return { ubicacionId }
   }

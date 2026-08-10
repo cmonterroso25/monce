@@ -1,16 +1,24 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 
-type Ubicacion = { id: string; nombre: string }
+type Ubicacion = {
+  id: string
+  nombre: string
+  google_maps_url?: string | null
+  waze_url?: string | null
+}
 
 export default function SelectorUbicacion({
   opciones,
   defaultValue = '',
+  puedeEditar = false,
 }: {
   opciones: Ubicacion[]
   defaultValue?: string
+  puedeEditar?: boolean
 }) {
   const [modoNuevo, setModoNuevo] = useState(false)
+  const [modoEditar, setModoEditar] = useState(false)
   const [ubicacionId, setUbicacionId] = useState(defaultValue)
   const [busqueda, setBusqueda] = useState('')
   const [abierto, setAbierto] = useState(false)
@@ -31,11 +39,19 @@ export default function SelectorUbicacion({
     return () => document.removeEventListener('mousedown', alClickFuera)
   }, [])
 
+  // Al cambiar la ubicación seleccionada se cierra cualquier edición
+  // abierta, para no enviar por error datos editados de una ubicación
+  // distinta a la que quedó finalmente seleccionada.
+  useEffect(() => {
+    setModoEditar(false)
+  }, [ubicacionId])
+
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-gray-700">Ubicación</label>
 
       <input type="hidden" name="ubicacion_id" value={modoNuevo ? '__nuevo__' : ubicacionId} />
+      <input type="hidden" name="ubicacion_modo" value={modoEditar ? 'editar' : ''} />
 
       {!modoNuevo && (
         <div className="relative" ref={contenedorRef}>
@@ -85,6 +101,16 @@ export default function SelectorUbicacion({
               </button>
             </div>
           )}
+
+          {puedeEditar && seleccionada && !modoEditar && (
+            <button
+              type="button"
+              onClick={() => setModoEditar(true)}
+              className="mt-1 text-xs font-medium text-[#38B6FF] hover:underline"
+            >
+              Editar esta ubicación
+            </button>
+          )}
         </div>
       )}
 
@@ -124,6 +150,51 @@ export default function SelectorUbicacion({
             className="text-xs text-slate-500 hover:text-red-600"
           >
             Cancelar y elegir una existente
+          </button>
+        </div>
+      )}
+
+      {modoEditar && seleccionada && (
+        <div className="mt-2 space-y-2 rounded border border-amber-200 bg-amber-50/40 p-3">
+          <p className="text-xs font-medium text-amber-700">
+            Editando &quot;{seleccionada.nombre}&quot; — afecta a todas las propiedades que usan esta ubicación.
+          </p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Nombre</label>
+            <input
+              type="text"
+              name="ubicacion_nombre_nuevo"
+              defaultValue={seleccionada.nombre}
+              required
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Link de Google Maps</label>
+            <input
+              type="url"
+              name="ubicacion_google_maps_nuevo"
+              defaultValue={seleccionada.google_maps_url ?? ''}
+              placeholder="https://maps.app.goo.gl/..."
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Link de Waze</label>
+            <input
+              type="url"
+              name="ubicacion_waze_nuevo"
+              defaultValue={seleccionada.waze_url ?? ''}
+              placeholder="https://waze.com/ul/..."
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setModoEditar(false)}
+            className="text-xs text-slate-500 hover:text-red-600"
+          >
+            Cancelar edición
           </button>
         </div>
       )}
