@@ -108,7 +108,16 @@ export async function notificarFichaPropiedad(
     return
   }
   const enlace = urlPropiedadParaWhatsapp(propiedadId)
-  const mensaje = mensajeWhatsappPropiedad(aPropiedadMarketplace(fresca), { encabezado, enlace })
+  const { data: agentePerfil } = await supabase
+    .from('perfiles')
+    .select('nombre_completo')
+    .eq('id', agenteId)
+    .maybeSingle()
+  const mensaje = mensajeWhatsappPropiedad(aPropiedadMarketplace(fresca), {
+    encabezado,
+    enlace,
+    agenteNombre: agentePerfil?.nombre_completo ?? null,
+  })
   const imagenUrl = imagenPortadaUrl !== undefined
     ? imagenPortadaUrl
     : await obtenerUrlPortada(supabase, propiedadId)

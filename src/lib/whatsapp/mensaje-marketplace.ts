@@ -170,11 +170,14 @@ export function generarTextoMarketplace(p: PropiedadMarketplace): string {
 
 // Notificación automática a grupos de WhatsApp (Green API). No incluye el
 // bloque de requisitos de renta: ver nota en generarBloquesPropiedad.
+// `agenteNombre` se muestra como "Ingresado por: <nombre>" al final del
+// mensaje, antes del enlace (si el enlace no viene, queda al final del todo).
 export function mensajeWhatsappPropiedad(
   p: PropiedadMarketplace & { codigo: string | null },
-  opts: { encabezado: string; enlace: string | null }
+  opts: { encabezado: string; enlace: string | null; agenteNombre?: string | null }
 ): string {
   const bloques = [opts.encabezado, ...generarBloquesPropiedad(p, { incluirRequisitos: false })]
+  if (opts.agenteNombre) bloques.push(`Ingresado por: ${opts.agenteNombre}`)
   if (opts.enlace) bloques.push(opts.enlace)
   return bloques.filter(Boolean).join('\n\n')
 }
