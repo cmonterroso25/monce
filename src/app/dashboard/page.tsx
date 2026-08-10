@@ -50,14 +50,14 @@ export default async function Dashboard() {
     supabase
       .from('actividades')
       .select('id', { count: 'exact', head: true })
-      .eq('tipo_actividad', 'visita')
+      .in('tipo_actividad', ['cita', 'reunion'])
       .is('completada_en', null)
       .gte('programada_en', inicioHoy.toISOString())
       .lt('programada_en', finHoy.toISOString()),
     supabase
       .from('actividades')
       .select('id', { count: 'exact', head: true })
-      .eq('tipo_actividad', 'visita')
+      .in('tipo_actividad', ['cita', 'reunion'])
       .is('completada_en', null)
       .gte('programada_en', finHoy.toISOString())
       .lte('programada_en', en7dias.toISOString()),
