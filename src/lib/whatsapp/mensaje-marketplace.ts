@@ -37,6 +37,9 @@ export type PropiedadMarketplace = {
   medidas_terreno: string | null
   dormitorios: string | null
   banos: string | null
+  sala: string | null
+  comedor: string | null
+  cocina: string | null
   estudio: string | null
   sala_familiar: string | null
   habitacion_servicio: string | null
@@ -84,10 +87,12 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
 // que la notificación automática a grupos no incluya el paquete de
 // requisitos de renta — Green API rechaza captions de más de 1024
 // caracteres en sendFileByUrl, y ese bloque era el que más hacía crecer
-// el mensaje.
+// el mensaje. `noPublicar` (default false) agrega una advertencia debajo
+// del título cuando la propiedad no debe publicarse (propiedades.publicable
+// = false); solo lo activa mensajeWhatsappPropiedad().
 function generarBloquesPropiedad(
   p: PropiedadMarketplace,
-  opts?: { incluirDescripcion?: boolean; incluirRequisitos?: boolean }
+  opts?: { incluirDescripcion?: boolean; incluirRequisitos?: boolean; noPublicar?: boolean }
 ): (string | false | null)[] {
   const emojiTipo = EMOJI_TIPO[p.tipo_propiedad ?? ''] ?? '🏠'
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
@@ -104,10 +109,20 @@ function generarBloquesPropiedad(
     p.medidas_terreno && `▪️ Medidas del terreno: ${p.medidas_terreno}`,
   ].filter(Boolean)
 
+  // Solo se arma la línea "Sala | Comedor | Cocina" con los ambientes que
+  // la propiedad realmente tiene marcados. Propiedades sin ninguno de los
+  // tres (terrenos, bodegas, fincas, etc.) simplemente no muestran la línea,
+  // en vez de asumir que toda propiedad los tiene.
+  const ambientesSalaComedorCocina = [
+    p.sala && 'Sala',
+    p.comedor && 'Comedor',
+    p.cocina && 'Cocina',
+  ].filter(Boolean) as string[]
+
   const lineasDistribucion = [
     p.dormitorios && `• ${p.dormitorios} Dormitorios`,
     p.banos && `• ${p.banos} Baños`,
-    '• Sala | Comedor | Cocina',
+    ambientesSalaComedorCocina.length > 0 && `• ${ambientesSalaComedorCocina.join(' | ')}`,
     p.estudio && '• Estudio',
     p.sala_familiar && '• Sala familiar',
     p.habitacion_servicio && '• Cuarto de servicio',
@@ -130,6 +145,7 @@ function generarBloquesPropiedad(
 
   return [
     `${tipoLabel} EN ${negocio}${ubicacion ? ` - ${ubicacion}` : ''}`,
+    opts?.noPublicar ? '🔴 No publicar' : null,
     p.codigo ? `📌 Código: ${p.codigo}` : null,
     opts?.incluirDescripcion && p.descripcion ? `📝 Descripción:\n${p.descripcion}` : null,
     lineasDetalle.length > 0 && `📐 Detalles de la propiedad:\n${lineasDetalle.join('\n')}`,
@@ -173,7 +189,8 @@ export function generarTextoMarketplace(p: PropiedadMarketplace): string {
 // `agenteNombre` se muestra como "Ingresado por: <nombre>". Si la propiedad
 // es de modalidad "Compartida" y viene `colegaNombre`, se agrega debajo una
 // línea "Colega: <nombre>" — antes del enlace (si el enlace no viene, queda
-// al final del todo).
+// al final del todo). Si `publicable` es false, se agrega "🔴 No publicar"
+// debajo del título (ver generarBloquesPropiedad).
 export function mensajeWhatsappPropiedad(
   p: PropiedadMarketplace & { codigo: string | null },
   opts: {
@@ -182,9 +199,13 @@ export function mensajeWhatsappPropiedad(
     agenteNombre?: string | null
     modalidadCaptacion?: string | null
     colegaNombre?: string | null
+    publicable?: boolean | null
   }
 ): string {
-  const bloques = [opts.encabezado, ...generarBloquesPropiedad(p, { incluirRequisitos: false })]
+  const bloques = [
+    opts.encabezado,
+    ...generarBloquesPropiedad(p, { incluirRequisitos: false, noPublicar: opts.publicable === false }),
+  ]
   if (opts.agenteNombre) bloques.push(`Ingresado por: ${opts.agenteNombre}`)
   if (opts.modalidadCaptacion === 'Compartida' && opts.colegaNombre) {
     bloques.push(`Colega: ${opts.colegaNombre}`)

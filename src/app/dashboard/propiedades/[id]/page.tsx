@@ -331,6 +331,9 @@ export default async function DetallePropiedad({
               medidas_terreno={propiedad.medidas_terreno}
               dormitorios={propiedad.dormitorios}
               banos={propiedad.banos}
+              sala={propiedad.sala}
+              comedor={propiedad.comedor}
+              cocina={propiedad.cocina}
               estudio={propiedad.estudio}
               sala_familiar={propiedad.sala_familiar}
               habitacion_servicio={propiedad.habitacion_servicio}

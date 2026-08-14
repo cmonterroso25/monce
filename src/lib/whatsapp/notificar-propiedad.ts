@@ -4,7 +4,8 @@ import { notificarWhatsapp, obtenerChatIdGrupo, type GrupoWhatsapp } from '@/lib
 import { mensajeWhatsappPropiedad, type PropiedadMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
 const SELECT_PROPIEDAD_CON_MUNICIPIO = `
   *,
-  municipio:municipios (nombre)
+  municipio:municipios (nombre),
+  colega:colegas (nombre)
 `
 function aPropiedadMarketplace(row: any): PropiedadMarketplace & { codigo: string | null } {
   return {
@@ -24,6 +25,9 @@ function aPropiedadMarketplace(row: any): PropiedadMarketplace & { codigo: strin
     medidas_terreno: row.medidas_terreno,
     dormitorios: row.dormitorios,
     banos: row.banos,
+    sala: row.sala,
+    comedor: row.comedor,
+    cocina: row.cocina,
     estudio: row.estudio,
     sala_familiar: row.sala_familiar,
     habitacion_servicio: row.habitacion_servicio,
@@ -117,6 +121,9 @@ export async function notificarFichaPropiedad(
     encabezado,
     enlace,
     agenteNombre: agentePerfil?.nombre_completo ?? null,
+    modalidadCaptacion: fresca.modalidad_captacion ?? null,
+    colegaNombre: fresca.colega?.nombre ?? null,
+    publicable: fresca.publicable,
   })
   const imagenUrl = imagenPortadaUrl !== undefined
     ? imagenPortadaUrl
