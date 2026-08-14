@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Lock, ExternalLink } from 'lucide-react'
+import { Lock, ExternalLink, Ban } from 'lucide-react'
 import Galeria from './galeria'
 import MapaUbicacion from '@/components/mapa-ubicacion'
 import CompartirWhatsapp from './compartir-whatsapp'
@@ -111,6 +111,15 @@ export default async function DetallePropiedad({
       >
         ← Volver a propiedades
       </Link>
+
+      {propiedad.publicable === false && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3">
+          <Ban size={20} className="shrink-0 text-red-600" />
+          <p className="text-sm font-bold text-red-700">
+            No publicable — esta propiedad NO se puede compartir en redes sociales.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div>
