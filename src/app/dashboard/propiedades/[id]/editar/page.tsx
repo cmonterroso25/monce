@@ -7,6 +7,7 @@ import SelectorUbicacion from '@/components/selector-ubicacion'
 import GestorFotos from './gestor-fotos'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import SelectorRequisitosRenta from '../../selector-requisitos-renta'
+import SelectorPublicable from '../../selector-publicable'
 import SelectorFotos from '@/components/selector-fotos'
 import BotonGuardarPropiedad from '@/components/boton-guardar-propiedad'
 import FormularioSinEnvioNativo from '@/components/formulario-sin-envio-nativo'
@@ -376,6 +377,8 @@ export default async function EditarPropiedad({
           <h2 className="text-base font-semibold text-[#2C3E50]">Informacion interna (No publicar)</h2>
           <p className="text-xs text-gray-500">Solo visible dentro del CRM, nunca en el portal publico.</p>
         </div>
+
+        <SelectorPublicable defaultValue={propiedad.publicable ?? true} />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Modalidad de captacion</label>

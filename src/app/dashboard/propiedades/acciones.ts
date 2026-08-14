@@ -30,6 +30,14 @@ function textoOpcional(valor: FormDataEntryValue | null) {
   return valor as string
 }
 
+// El radio de "publicable" siempre envia "true" o "false" (tiene default
+// seleccionado en el formulario). Si por algun motivo llega ausente, se
+// asume true para no bloquear la publicacion por defecto.
+function booleano(valor: FormDataEntryValue | null, porDefecto = true) {
+  if (valor === null || valor === '') return porDefecto
+  return valor === 'true'
+}
+
 // Resuelve la ubicación de la propiedad en tres modos, según lo que
 // envía SelectorUbicacion:
 // - Selección existente sin editar: se usa el id tal cual.
@@ -208,6 +216,7 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
       captado_por: textoOpcional(formData.get('captado_por')),
       descripcion: textoOpcional(formData.get('descripcion')),
       comentarios: textoOpcional(formData.get('comentarios')),
+      publicable: booleano(formData.get('publicable')),
     })
     .select()
     .single()
@@ -337,6 +346,7 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
     captado_por: textoOpcional(formData.get('captado_por')),
     descripcion: textoOpcional(formData.get('descripcion')),
     comentarios: textoOpcional(formData.get('comentarios')),
+    publicable: booleano(formData.get('publicable')),
   }
 
   // ¿Hubo algún cambio real? Se compara cada campo contra el valor que
