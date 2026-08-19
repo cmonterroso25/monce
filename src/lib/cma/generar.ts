@@ -19,7 +19,7 @@ export async function generarInformeMercado(params: {
   propiedadId: string
   organizationId: string
   agenteId: string
-  modelo?: 'sonar' | 'sonar-pro'
+  modelo?: 'gemini-2.5-flash' | 'gemini-2.5-pro'
 }): Promise<ResultadoGenerarCma> {
   const supabase = await createClient()
 

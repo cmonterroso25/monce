@@ -1,21 +1,34 @@
 // Genera el informe de análisis de mercado (CMA, sección 4 del documento
-// maestro) usando Perplexity Sonar. Mismo patrón que generar-informe:
-// recibe el payload, responde 200 de inmediato, procesa en background con
-// EdgeRuntime.waitUntil, y postea el resultado al callback_url.
+// maestro) usando Gemini con la herramienta de Google Search grounding —
+// mismo proveedor que ya usa generar-informe, sin agregar Perplexity como
+// dependencia nueva. Mismo patrón de fondo: recibe el payload, responde
+// 200 de inmediato, procesa en background con EdgeRuntime.waitUntil, y
+// postea el resultado al callback_url.
 //
 // Encuadre obligatorio (sección 4.5): esto NUNCA se presenta como
 // "valuación" o "avalúo" — son términos regulados en la mayoría de países
-// y reservados a peritos certificados. El prompt se lo recuerda a Sonar
-// explícitamente y el propio texto de esta función lo llama "informe de
-// posicionamiento de precio" en todo momento.
+// y reservados a peritos certificados. El prompt se lo recuerda a Gemini
+// explícitamente.
+//
+// NOTA TÉCNICA: la API de Gemini no permite combinar la herramienta de
+// grounding (`google_search`) con `response_mime_type: 'application/json'`
+// en la misma llamada. Por eso el JSON se pide como instrucción de texto
+// y se parsea limpiando posibles fences de markdown — igual que se hacía
+// con la respuesta de Perplexity en la versión anterior de esta función.
+// Las fuentes ("fuentes") se toman de `groundingMetadata.groundingChunks`,
+// que trae las URLs reales que Gemini efectivamente consultó — no se
+// confía en URLs que el modelo pudiera escribir de memoria en el JSON.
 
 const CMA_CALLBACK_SECRET = Deno.env.get('CMA_CALLBACK_SECRET')!
-const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY')!
-const PERPLEXITY_URL = 'https://api.perplexity.ai/chat/completions'
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!.trim()
 
-// 'sonar' por defecto (más barato, sección 4.4). Se puede pasar 'sonar-pro'
-// en el payload cuando el agente pide un informe más profundo.
-const MODELO_DEFAULT = 'sonar'
+// 'gemini-2.5-flash' por defecto (más barato). Se puede pasar
+// 'gemini-2.5-pro' en el payload para un informe más profundo.
+const MODELO_DEFAULT = 'gemini-2.5-flash'
+
+function urlGemini(modelo: string) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`
+}
 
 type PropiedadContexto = {
   titulo: string
@@ -34,7 +47,7 @@ type PropiedadContexto = {
 type Payload = {
   informe_id: string
   propiedad: PropiedadContexto
-  modelo?: 'sonar' | 'sonar-pro'
+  modelo?: 'gemini-2.5-flash' | 'gemini-2.5-pro'
   callback_url: string
 }
 
@@ -43,7 +56,7 @@ function armarPrompt(p: PropiedadContexto): string {
   const areaRelevante = p.area_construccion_m2 ?? p.area_terreno_m2
   const operacion = p.tipo_operacion === 'renta' ? 'renta' : 'venta'
 
-  return `Eres un analista de mercado inmobiliario en Guatemala. NO estás haciendo una valuación ni un avalúo formal — esos términos están reservados a peritos certificados. Estás generando un "informe informativo de posicionamiento de precio" para uso interno de un agente inmobiliario, usando fuentes públicas (prioriza Encuentra24 y Mapainmueble si encuentras datos ahí, y cualquier otra fuente pública confiable de Guatemala).
+  return `Eres un analista de mercado inmobiliario en Guatemala. NO estás haciendo una valuación ni un avalúo formal — esos términos están reservados a peritos certificados. Estás generando un "informe informativo de posicionamiento de precio" para uso interno de un agente inmobiliario. Usa la herramienta de búsqueda web para encontrar datos reales y actuales (prioriza Encuentra24 y Mapainmueble si encuentras datos ahí, y cualquier otra fuente pública confiable de Guatemala).
 
 Propiedad a analizar:
 - Tipo: ${p.tipo_propiedad ?? 'no especificado'}, en ${operacion}
@@ -55,60 +68,81 @@ Busca 3 a 6 propiedades comparables en la misma zona, en ${operacion}, de tipo y
 1. Calcula el precio por m² del listado (si tiene precio) y el precio por m² promedio y mediana de los comparables de la zona.
 2. Posiciona el listado como "por_encima", "en_linea" o "por_debajo" del mercado de esa zona.
 3. Escribe una narrativa breve (3-5 líneas) explicando el porqué, en español neutro para Guatemala.
-4. Lista tus fuentes con URL.
 
-Responde ÚNICAMENTE con un objeto JSON con este formato exacto, sin texto adicional, sin markdown:
+Responde ÚNICAMENTE con un objeto JSON con este formato exacto, sin texto adicional, sin markdown, sin backticks:
 {
   "precio_m2": <número o null>,
   "precio_m2_promedio_zona": <número o null>,
   "precio_m2_mediana_zona": <número o null>,
   "posicionamiento": "<por_encima|en_linea|por_debajo>",
-  "comparables": [{"titulo": "<string>", "precio": <número>, "area_m2": <número>, "precio_m2": <número>, "zona": "<string>", "url": "<string o null>"}],
-  "narrativa": "<string>",
-  "fuentes": [{"titulo": "<string>", "url": "<string>"}]
+  "comparables": [{"titulo": "<string>", "precio": <número>, "area_m2": <número>, "precio_m2": <número>, "zona": "<string>"}],
+  "narrativa": "<string>"
 }`
 }
 
-async function llamarPerplexity(prompt: string, modelo: string) {
-  const res = await fetch(PERPLEXITY_URL, {
+async function llamarGemini(prompt: string, modelo: string) {
+  const res = await fetch(urlGemini(modelo), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'x-goog-api-key': GEMINI_API_KEY,
     },
     body: JSON.stringify({
-      model: modelo,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_schema', json_schema: { schema: {} } },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      tools: [{ google_search: {} }],
     }),
   })
   if (!res.ok) {
     const texto = await res.text()
-    throw new Error(`Perplexity respondió ${res.status}: ${texto}`)
+    throw new Error(`Gemini respondió ${res.status}: ${texto}`)
   }
   return res.json()
 }
 
-// Perplexity cobra por tokens de entrada/salida + un cargo fijo por
-// búsqueda ("request fee"). El desglose exacto viene en `usage` — se
-// calcula aquí un estimado conservador si el campo no viene completo.
-// AJUSTA esta función con las tarifas reales de tu cuenta antes de
-// confiar en `costo_usd` para facturar al cliente (sección 13).
+// El costo de Gemini con grounding = tokens normales + un cargo fijo por
+// cada solicitud de búsqueda que el modelo dispare (puede hacer varias
+// por llamada). El free tier de Gemini incluye un cupo diario de
+// solicitudes de grounding — para el volumen del piloto (sección 13,
+// ~20 kits/mes) debería alcanzar sin pagar, pero AJUSTA este estimado
+// contra tu cuenta real si empiezas a facturar costo_usd al cliente.
 function estimarCostoUsd(data: any, modelo: string): number {
-  const usage = data?.usage
-  if (!usage) return modelo === 'sonar-pro' ? 0.04 : 0.015
-  const promptTokens = usage.prompt_tokens ?? 0
-  const completionTokens = usage.completion_tokens ?? 0
-  const tarifaEntrada = modelo === 'sonar-pro' ? 0.000003 : 0.000001
-  const tarifaSalida = modelo === 'sonar-pro' ? 0.000015 : 0.000001
-  const cargoBusqueda = modelo === 'sonar-pro' ? 0.008 : 0.005
-  return promptTokens * tarifaEntrada + completionTokens * tarifaSalida + cargoBusqueda
+  const usage = data?.usageMetadata
+  const numeroBusquedas =
+    data?.candidates?.[0]?.groundingMetadata?.webSearchQueries?.length ?? 1
+  const tarifaEntrada = modelo === 'gemini-2.5-pro' ? 0.00000125 : 0.0000003
+  const tarifaSalida = modelo === 'gemini-2.5-pro' ? 0.00001 : 0.0000025
+  const cargoPorBusqueda = 0.035 // aplica solo fuera del cupo gratis diario
+  const promptTokens = usage?.promptTokenCount ?? 0
+  const completionTokens = usage?.candidatesTokenCount ?? 0
+  return promptTokens * tarifaEntrada + completionTokens * tarifaSalida + numeroBusquedas * cargoPorBusqueda
 }
 
-function parsearRespuesta(data: any) {
-  const contenido = data?.choices?.[0]?.message?.content
-  if (!contenido) throw new Error('Respuesta de Perplexity sin contenido: ' + JSON.stringify(data))
-  const limpio = contenido.replace(/```json|```/g, '').trim()
+function extraerTexto(data: any): string {
+  const contenido = data?.candidates?.[0]?.content?.parts
+    ?.map((parte: any) => parte.text)
+    .filter(Boolean)
+    .join('')
+  if (!contenido) throw new Error('Respuesta de Gemini sin contenido: ' + JSON.stringify(data))
+  return contenido
+}
+
+function extraerFuentes(data: any): { titulo: string; url: string }[] {
+  const chunks = data?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []
+  const fuentes = chunks
+    .map((c: any) => c?.web)
+    .filter((web: any) => web?.uri)
+    .map((web: any) => ({ titulo: web.title ?? web.uri, url: web.uri }))
+  // dedupe por URL
+  const vistos = new Set<string>()
+  return fuentes.filter((f: { url: string }) => {
+    if (vistos.has(f.url)) return false
+    vistos.add(f.url)
+    return true
+  })
+}
+
+function parsearJson(texto: string) {
+  const limpio = texto.replace(/```json|```/g, '').trim()
   return JSON.parse(limpio)
 }
 
@@ -135,8 +169,9 @@ async function procesarCma(payload: Payload) {
   const modelo = payload.modelo ?? MODELO_DEFAULT
   try {
     const prompt = armarPrompt(propiedad)
-    const data = await llamarPerplexity(prompt, modelo)
-    const resultado = parsearRespuesta(data)
+    const data = await llamarGemini(prompt, modelo)
+    const resultado = parsearJson(extraerTexto(data))
+    const fuentes = extraerFuentes(data)
     const costoUsd = estimarCostoUsd(data, modelo)
 
     await enviarCallback(callback_url, {
@@ -148,7 +183,7 @@ async function procesarCma(payload: Payload) {
       posicionamiento: resultado.posicionamiento ?? null,
       comparables: resultado.comparables ?? [],
       narrativa: resultado.narrativa ?? null,
-      fuentes: resultado.fuentes ?? [],
+      fuentes,
       costo_usd: costoUsd,
     })
   } catch (err) {
