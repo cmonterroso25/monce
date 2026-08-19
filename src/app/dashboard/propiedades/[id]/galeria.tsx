@@ -2,6 +2,19 @@
 import { useState, useEffect } from 'react'
 import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 
+// Se usa además de canShare() para decidir si se ofrece la hoja de
+// compartir nativa. canShare() por sí solo ya no es suficiente: navegadores
+// de escritorio (ej. Safari/macOS reciente) también devuelven true ahí,
+// lo que hacía aparecer el share sheet nativo de macOS (AirDrop/Mail/
+// Mensajes) en vez de descargar el .zip a la carpeta Descargas como se
+// espera en escritorio. Se detecta por capacidad de puntero (touch) en vez
+// de por user-agent/SO, que es frágil (ej. Brave altera esos datos por
+// protección de fingerprinting).
+function esDispositivoTactil(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(pointer: coarse)').matches
+}
+
 export default function Galeria({
   imagenes,
   titulo,
@@ -44,13 +57,17 @@ export default function Galeria({
     const nombreBase = titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
     try {
       if (imagenes.length === 1) {
-        const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(imagenes[0].url)}&nombre=${encodeURIComponent(`${nombreBase}.webp`)}`
+        // El proxy /api/descargar-imagen convierte el WebP almacenado a
+        // JPG (Messenger y apps similares no aceptan WebP como adjunto de
+        // foto), así que el nombre de archivo debe ser .jpg para que
+        // coincida con el contenido real del blob.
+        const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(imagenes[0].url)}&nombre=${encodeURIComponent(`${nombreBase}.jpg`)}`
         const respuesta = await fetch(rutaProxy)
         const blob = await respuesta.blob()
         const urlBlob = URL.createObjectURL(blob)
         const enlace = document.createElement('a')
         enlace.href = urlBlob
-        enlace.download = `${nombreBase}.webp`
+        enlace.download = `${nombreBase}.jpg`
         document.body.appendChild(enlace)
         enlace.click()
         document.body.removeChild(enlace)
@@ -60,18 +77,22 @@ export default function Galeria({
 
       const archivos = await Promise.all(
         imagenes.map(async (img, i) => {
-          const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.webp`)}`
+          const rutaProxy = `/api/descargar-imagen?url=${encodeURIComponent(img.url)}&nombre=${encodeURIComponent(`${nombreBase}-${i + 1}.jpg`)}`
           const respuesta = await fetch(rutaProxy)
           const blob = await respuesta.blob()
-          return new File([blob], `${nombreBase}-${i + 1}.webp`, { type: blob.type || 'image/webp' })
+          return new File([blob], `${nombreBase}-${i + 1}.jpg`, { type: blob.type || 'image/jpeg' })
         })
       )
 
-      // Deteccion por capacidad (no por navegador/UA, que es fragil y
-      // puede venir alterado por proteccion de fingerprinting de Brave).
-      // Donde funciona (tipicamente iOS), un solo toque en la hoja de
-      // compartir nativa guarda todas las fotos juntas en la galeria.
+      // Deteccion por capacidad tactil + canShare (no por navegador/UA, que
+      // es fragil y puede venir alterado por proteccion de fingerprinting
+      // de Brave). Se exige ademas ser un dispositivo tactil para evitar
+      // que escritorio (Mac/Windows con canShare=true) abra el share sheet
+      // nativo del SO en vez de descargar el .zip a la carpeta Descargas.
+      // Donde funciona (tipicamente iOS/Android), un solo toque en la hoja
+      // de compartir nativa guarda todas las fotos juntas en la galeria.
       const puedeCompartirArchivos =
+        esDispositivoTactil() &&
         typeof navigator !== 'undefined' &&
         'canShare' in navigator &&
         navigator.canShare({ files: archivos })
@@ -92,8 +113,8 @@ export default function Galeria({
         }
       }
 
-      // Sin soporte de compartir archivos, o share() fallo arriba:
-      // se baja un solo .zip generado en el servidor.
+      // Sin soporte de compartir archivos (o no es dispositivo tactil, o
+      // share() fallo arriba): se baja un solo .zip generado en el servidor.
       await descargarZip(nombreBase)
     } catch (err) {
       console.error('--- ERROR AL DESCARGAR FOTOS ---', err)

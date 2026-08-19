@@ -8,7 +8,16 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
   const supabase = await createClient()
   const { data: propiedad } = await supabase
     .from('propiedades')
-    .select('id, titulo, codigo, tipo_operacion, organization_id')
+    .select(`
+      id,
+      titulo,
+      codigo,
+      tipo_operacion,
+      organization_id,
+      captado_por,
+      ingresado_por:perfiles!propiedades_captado_por_fkey (nombre_completo),
+      colega:colegas (nombre)
+    `)
     .eq('id', propiedadId)
     .single()
   const { error } = await supabase
@@ -24,12 +33,18 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
     if (chatId) {
       // Los 3 estados (vendida, rentada, inactiva) comparten el mismo texto
       // genérico "Propiedad no disponible" — decisión explícita del usuario,
-      // no se distinguen entre sí en el mensaje.
+      // no se distinguen entre sí en el mensaje. Se agregan "Ingresado por"
+      // y "Colega" para saber a quién pertenecía la propiedad que se está
+      // dando de baja.
       const enlace = urlPropiedadParaWhatsapp(propiedadId)
+      const ingresadoPorNombre = (propiedad as any).ingresado_por?.nombre_completo ?? null
+      const colegaNombre = (propiedad as any).colega?.nombre ?? null
       const mensaje = [
         '🚫 Propiedad no disponible',
         propiedad.codigo ?? propiedadId,
         propiedad.titulo,
+        ingresadoPorNombre ? `Ingresado por: ${ingresadoPorNombre}` : null,
+        colegaNombre ? `Colega: ${colegaNombre}` : null,
         enlace,
       ].filter(Boolean).join('\n')
       const imagenUrl = await obtenerUrlPortada(supabase, propiedadId)
