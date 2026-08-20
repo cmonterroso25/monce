@@ -15,6 +15,18 @@ function esDispositivoTactil(): boolean {
   return window.matchMedia('(pointer: coarse)').matches
 }
 
+// En Android, la hoja de compartir nativa solo ofrece guardar via Google
+// Fotos (que sube a la nube si el usuario tiene la copia de seguridad
+// activada) — no hay forma de que un sitio web escriba directo a la
+// galería del dispositivo. Se prefiere entonces el .zip como resultado
+// principal en Android, saltando navigator.share() por completo. iOS no
+// se ve afectado por este check: ahí la hoja de compartir sí guarda bien
+// a Fotos local sin depender de una cuenta en la nube.
+function esAndroid(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /android/i.test(navigator.userAgent)
+}
+
 export default function Galeria({
   imagenes,
   titulo,
@@ -93,6 +105,7 @@ export default function Galeria({
       // de compartir nativa guarda todas las fotos juntas en la galeria.
       const puedeCompartirArchivos =
         esDispositivoTactil() &&
+        !esAndroid() &&
         typeof navigator !== 'undefined' &&
         'canShare' in navigator &&
         navigator.canShare({ files: archivos })
