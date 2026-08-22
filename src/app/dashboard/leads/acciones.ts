@@ -1,5 +1,6 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
@@ -160,7 +161,7 @@ export async function crearActividad(formData: FormData) {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error: errorPerfil } = await supabase
     .from('perfiles')
     .select('organization_id')
     .eq('id', user.id)
@@ -178,24 +179,51 @@ export async function crearActividad(formData: FormData) {
   // la actividad como respaldo.
   const agenteAsignadoId = textoOpcional(formData.get('agente_id')) || user.id
 
-  const { error } = await supabase.from('actividades').insert({
+  const payloadActividad = {
     contacto_id: contactoId,
     lead_id: leadId,
     agente_id: agenteAsignadoId,
+    creado_por: user.id,
     colega_id: colegaId,
     tipo_actividad: tipoActividad,
     notas: textoOpcional(formData.get('notas')),
     programada_en: programadaEn,
     organization_id: perfil?.organization_id,
-  })
+  }
+
+  const { error } = await supabase.from('actividades').insert(payloadActividad)
 
   if (error) {
-    console.error('--- ERROR AL CREAR ACTIVIDAD ---', error)
+    // Diagnóstico ampliado: se registra el payload exacto que se intentó
+    // insertar, el usuario que hizo la petición, y si hubo error al leer
+    // su perfil (lo cual dejaría organization_id en null/undefined).
+    // Se usa supabaseAdmin para releer el perfil real sin RLS y comparar
+    // contra lo que se usó en el insert, para detectar desalineaciones.
+    const { data: perfilReal } = await supabaseAdmin
+      .from('perfiles')
+      .select('id, organization_id, activo, rol')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    console.error('--- ERROR AL CREAR ACTIVIDAD ---', {
+      error,
+      errorPerfil,
+      auth_uid: user.id,
+      payload_intentado: payloadActividad,
+      perfil_real_sin_rls: perfilReal,
+    })
     redirect(`/dashboard/leads/${leadId}?error=${encodeURIComponent(error.message)}`)
   }
 
   if ((tipoActividad === 'cita' || tipoActividad === 'reunion') && programadaEn) {
-    const { data: contacto } = await supabase
+    // Se usa supabaseAdmin (service role) para esta lectura: quien registra
+    // la actividad puede no ser el agente_asignado del contacto (por
+    // ejemplo, otro agente que solo quedó asignado a la cita), y la RLS de
+    // "contactos" restringe SELECT al agente_asignado o admin. Esta lectura
+    // es solo para armar el texto de la notificación interna de WhatsApp,
+    // no expone datos al usuario en la UI, así que bypasear RLS aquí es
+    // seguro y necesario.
+    const { data: contacto } = await supabaseAdmin
       .from('contactos')
       .select('nombre_completo, telefono')
       .eq('id', contactoId)
@@ -311,7 +339,7 @@ export async function actualizarActividad(formData: FormData) {
     nuevaProgramadaEn &&
     antes.programada_en !== nuevaProgramadaEn
   ) {
-    const { data: contacto } = await supabase
+    const { data: contacto } = await supabaseAdmin
       .from('contactos')
       .select('nombre_completo')
       .eq('id', antes.contacto_id)

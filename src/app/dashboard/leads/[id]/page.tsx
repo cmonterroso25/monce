@@ -58,11 +58,15 @@ export default async function DetalleLead({
     .eq('organization_id', lead.organization_id)
     .order('nombre')
 
-  const { data: actividades } = await supabase
+  const { data: actividades, error: errorActividades } = await supabase
     .from('actividades')
-    .select('*, agente:perfiles(nombre_completo), colega:colegas(nombre)')
+    .select('*, agente:perfiles!actividades_agente_id_fkey(nombre_completo), colega:colegas(nombre)')
     .eq('lead_id', id)
     .order('creado_en', { ascending: false })
+
+  if (errorActividades) {
+    console.error('--- ERROR AL CARGAR ACTIVIDADES DEL LEAD ---', errorActividades)
+  }
 
   const informeInicial = await obtenerUltimoInforme(id)
 

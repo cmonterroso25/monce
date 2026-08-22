@@ -59,7 +59,15 @@ export async function POST(request: NextRequest) {
   // paralelo: solo la petición que realmente cambia el flag de false→true
   // procede a notificar. Se captura el error explícitamente y se distingue
   // de "ya estaba notificada" (0 filas afectadas, sin error).
-  if (miPerfil?.organization_id) {
+  // Solo la petición de la foto marcada como portada participa en la
+  // carrera por el flag notificado_nueva_propiedad. Antes, cualquiera de
+  // las fotos que se suben en paralelo (Promise.all en
+  // BotonGuardarPropiedad) podía ganar la carrera y notificar con su
+  // propia urlImagenSubida — resultando en que WhatsApp mostrara una foto
+  // distinta a la portada real, según cuál petición llegara primero por
+  // la red. Restringir la condición a esPortada === true garantiza que,
+  // si la notificación se envía, siempre lleva la imagen correcta.
+  if (esPortada && miPerfil?.organization_id) {
     const { data: gano, error: errorFlag } = await supabase
       .from('propiedades')
       .update({ notificado_nueva_propiedad: true })

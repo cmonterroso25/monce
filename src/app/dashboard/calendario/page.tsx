@@ -26,10 +26,10 @@ export default async function Calendario({
     .order('programada_en', { ascending: true })
   const limiteProximas = new Date()
   limiteProximas.setDate(limiteProximas.getDate() + 14)
-  const { data: proximasCitas } = await supabase
+  const { data: proximasCitas, error: errorProximasCitas } = await supabase
     .from('actividades')
     .select(
-      'id, notas, programada_en, completada_en, lead_id, agente_id, contacto:contactos(nombre_completo, telefono), lead:leads(id, propiedad:propiedades(titulo)), agente:perfiles(nombre_completo)'
+      'id, notas, programada_en, completada_en, lead_id, agente_id, contacto:contactos(nombre_completo, telefono), lead:leads(id, propiedad:propiedades(titulo)), agente:perfiles!actividades_agente_id_fkey(nombre_completo)'
     )
     .in('tipo_actividad', ['cita', 'reunion'])
     .is('completada_en', null)
@@ -37,6 +37,9 @@ export default async function Calendario({
     .lte('programada_en', limiteProximas.toISOString())
     .order('programada_en', { ascending: true })
     .limit(100)
+  if (errorProximasCitas) {
+    console.error('--- ERROR AL CARGAR PROXIMAS CITAS ---', errorProximasCitas)
+  }
   let mesAnterior = mes - 1
   let anioAnterior = anio
   if (mesAnterior < 1) {

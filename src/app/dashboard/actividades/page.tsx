@@ -61,12 +61,15 @@ export default async function ListadoActividades() {
   let query = supabase
     .from('actividades')
     .select(
-      '*, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles(nombre_completo)'
+      '*, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles!actividades_agente_id_fkey(nombre_completo)'
     )
 
   if (!esAdmin) query = query.eq('agente_id', user.id)
 
-  const { data: actividadesData } = await query
+  const { data: actividadesData, error: errorActividades } = await query
+  if (errorActividades) {
+    console.error('--- ERROR AL CARGAR ACTIVIDADES ---', errorActividades)
+  }
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
 
   const ahora = new Date()
