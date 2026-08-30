@@ -11,6 +11,7 @@ import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 import { formatearZona } from '@/lib/formato-zona'
+import { formatearPrecioRenta } from '@/lib/formato-precio'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -87,6 +88,13 @@ export default async function DetallePropiedad({
     ? REQUISITOS_RENTA[propiedad.requisitos_renta as CodigoRequisitosRenta]
     : null
 
+  const { precioPrincipal, notaMantenimiento } = formatearPrecioRenta(
+    propiedad.precio,
+    propiedad.moneda,
+    propiedad.mantenimiento,
+    propiedad.tipo_operacion
+  )
+
   const visibleEnPortal = propiedad.slug && ESTADOS_VISIBLES_PORTAL.includes(propiedad.estado)
 
   const hayInformacionPrivada =
@@ -102,6 +110,8 @@ export default async function DetallePropiedad({
 
   const ubicacion = propiedad.ubicacion
   const tieneCoordenadas = ubicacion?.latitud != null && ubicacion?.longitud != null
+
+  const enlacePortal = `/propiedades/${propiedad.slug}`
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
@@ -177,20 +187,23 @@ export default async function DetallePropiedad({
             {propiedad.ciudad}
           </p>
 
-          {visibleEnPortal && (
-              <a
-              href={`/propiedades/${propiedad.slug}`}
+          {visibleEnPortal ? (
+            <Link
+              href={enlacePortal}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#38B6FF] hover:underline"
             >
               <ExternalLink size={12} />
               Ver en portal público
-            </a>
-          )}
+            </Link>
+          ) : null}
 
-          <p className="mt-3 text-2xl font-bold text-[#2C3E50] sm:text-3xl">
-            {propiedad.moneda} {Number(propiedad.precio).toLocaleString()}
+          <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-2xl font-bold text-[#2C3E50] sm:text-3xl">{precioPrincipal}</span>
+            {notaMantenimiento && (
+              <span className="text-sm font-semibold text-[#38B6FF]">{notaMantenimiento}</span>
+            )}
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:gap-3">

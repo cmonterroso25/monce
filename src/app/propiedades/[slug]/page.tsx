@@ -8,6 +8,7 @@ import Galeria from '@/app/dashboard/propiedades/[id]/galeria'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
 import { urlSitio } from '@/lib/url'
 import { formatearZona } from '@/lib/formato-zona'
+import { formatearPrecioRenta } from '@/lib/formato-precio'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -118,22 +119,32 @@ export default async function PropiedadPublica({
     ? REQUISITOS_RENTA[propiedad.requisitos_renta as CodigoRequisitosRenta]
     : null
 
+  const { precioPrincipal, notaMantenimiento } = formatearPrecioRenta(
+    propiedad.precio,
+    propiedad.moneda,
+    propiedad.mantenimiento,
+    propiedad.tipo_operacion
+  )
+
   const numero = numeroWhatsapp(propiedad.telefonoContacto)
   const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
   const ubicacionPropiedad = [formatearZona(propiedad.zona), propiedad.municipio?.nombre, propiedad.ciudad]
     .filter(Boolean)
     .join(', ')
-  const bloquesWhatsapp = [
-    'Hola, me interesa esta propiedad:',
-    `*${propiedad.titulo}*`,
-    `${propiedad.moneda} ${Number(propiedad.precio).toLocaleString()}`,
-    ubicacionPropiedad && `📍 ${ubicacionPropiedad}`,
-    (propiedad.dormitorios || propiedad.banos) &&
-      `🛏️ ${propiedad.dormitorios ?? '—'} hab  🛁 ${propiedad.banos ?? '—'} baños`,
-  ].filter(Boolean)
-  const mensajeWhatsapp = encodeURIComponent(
-    `${bloquesWhatsapp.join('\n\n')}\n\n${enlacePropiedad}`
-  )
+  const enlaceWhatsapp = numero
+    ? (() => {
+        const bloquesWhatsapp = [
+          'Hola, me interesa esta propiedad:',
+          `*${propiedad.titulo}*`,
+          notaMantenimiento ? `${precioPrincipal} ${notaMantenimiento}` : precioPrincipal,
+          ubicacionPropiedad && `📍 ${ubicacionPropiedad}`,
+          (propiedad.dormitorios || propiedad.banos) &&
+            `🛏️ ${propiedad.dormitorios ?? '—'} hab  🛁 ${propiedad.banos ?? '—'} baños`,
+        ].filter(Boolean)
+        const mensajeWhatsapp = encodeURIComponent(`${bloquesWhatsapp.join('\n\n')}\n\n${enlacePropiedad}`)
+        return `https://wa.me/${numero}?text=${mensajeWhatsapp}`
+      })()
+    : null
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -166,8 +177,11 @@ export default async function PropiedadPublica({
             {[formatearZona(propiedad.zona), propiedad.municipio?.nombre, propiedad.ciudad].filter(Boolean).join(', ')}
           </p>
 
-          <p className="mt-3 text-3xl font-bold text-[#2C3E50]">
-            {propiedad.moneda} {Number(propiedad.precio).toLocaleString()}
+          <p className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-3xl font-bold text-[#2C3E50]">{precioPrincipal}</span>
+            {notaMantenimiento && (
+              <span className="text-sm font-semibold text-[#38B6FF]">{notaMantenimiento}</span>
+            )}
           </p>
 
           <div className="mt-4 flex gap-6 text-sm text-slate-600">
@@ -199,13 +213,8 @@ export default async function PropiedadPublica({
             </div>
           )}
 
-          {numero && (
-            <a
-              href={`https://wa.me/${numero}?text=${mensajeWhatsapp}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-6 inline-flex items-center gap-2 rounded bg-green-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-green-700"
-            >
+          {enlaceWhatsapp && (
+            <a href={enlaceWhatsapp} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-2 rounded bg-green-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-green-700">
               <MessageCircle size={16} />
               Preguntar por esta propiedad
             </a>
