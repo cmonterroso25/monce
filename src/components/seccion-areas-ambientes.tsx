@@ -17,6 +17,8 @@ type PropiedadAreasYAmbientes = {
   habitacion_servicio?: string | null
   lavanderia?: string | null
   jardin?: string | null
+  bodega?: string | null
+  balcon?: string | null
 }
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
@@ -47,14 +49,14 @@ export default function SeccionAreasYAmbientes({
     ['Habitación de servicio', propiedad.habitacion_servicio],
     ['Lavandería', propiedad.lavanderia],
     ['Jardín', propiedad.jardin],
+    ['Bodega', propiedad.bodega === 'Si' ? 'Sí' : null],
+    ['Balcón', propiedad.balcon === 'Si' ? 'Sí' : null],
   ].filter(([, valor]) => valor)
-
   return (
     <div className={className}>
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
         {titulo}
       </h2>
-
       <div className="mb-4">
         <h3 className="mb-2 font-semibold text-[#2C3E50]">Areas</h3>
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
@@ -73,7 +75,6 @@ export default function SeccionAreasYAmbientes({
           <Dato etiqueta="Mascota" valor={propiedad.mascota} />
         </div>
       </div>
-
       {amenidades.length > 0 && (
         <div>
           <h3 className="mb-2 font-semibold text-[#2C3E50]">Ambientes</h3>

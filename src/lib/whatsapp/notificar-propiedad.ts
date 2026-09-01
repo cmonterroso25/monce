@@ -33,6 +33,8 @@ function aPropiedadMarketplace(row: any): PropiedadMarketplace & { codigo: strin
     habitacion_servicio: row.habitacion_servicio,
     lavanderia: row.lavanderia,
     jardin: row.jardin,
+    bodega: row.bodega,
+    balcon: row.balcon,
     parqueos: row.parqueos,
     extras: row.extras,
     precio: row.precio,

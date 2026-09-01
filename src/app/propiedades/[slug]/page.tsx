@@ -35,6 +35,7 @@ async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
       requisitos_renta, organization_id,
       niveles, numero_casa, medidas_terreno, extras, mantenimiento, iusi, mascota,
       sala, comedor, cocina, estudio, sala_familiar, habitacion_servicio, lavanderia, jardin,
+      bodega, balcon,
       imagenes_propiedad (id, ruta_almacenamiento, es_portada, orden),
       municipio:municipios (nombre),
       capturador:perfiles!captado_por (nombre_completo, telefono)

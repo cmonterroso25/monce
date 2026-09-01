@@ -192,6 +192,31 @@ export default async function NuevaPropiedad({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Bodega</label>
+            <select
+              name="bodega"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Selecciona</option>
+              <option value="Si">Sí</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Balcón</label>
+            <select
+              name="balcon"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Selecciona</option>
+              <option value="Si">Sí</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Parqueos</label>
             <input
               type="number"

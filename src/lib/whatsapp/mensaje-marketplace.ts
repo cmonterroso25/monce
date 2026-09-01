@@ -45,6 +45,8 @@ export type PropiedadMarketplace = {
   habitacion_servicio: string | null
   lavanderia: string | null
   jardin: string | null
+  bodega: string | null
+  balcon: string | null
   parqueos: number | null
   extras: string | null
   precio: number | null
@@ -128,6 +130,8 @@ function generarBloquesPropiedad(
     p.habitacion_servicio && '• Cuarto de servicio',
     p.lavanderia && '• Área de lavandería',
     p.jardin && '• Jardín',
+    p.bodega === 'Si' && '• Bodega',
+    p.balcon === 'Si' && '• Balcón',
     p.parqueos && `• Parqueo para ${p.parqueos} vehículo${p.parqueos > 1 ? 's' : ''} 🚗`,
   ].filter(Boolean)
 

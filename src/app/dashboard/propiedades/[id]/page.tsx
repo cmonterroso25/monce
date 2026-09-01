@@ -352,6 +352,8 @@ export default async function DetallePropiedad({
               habitacion_servicio={propiedad.habitacion_servicio}
               lavanderia={propiedad.lavanderia}
               jardin={propiedad.jardin}
+              bodega={propiedad.bodega}
+              balcon={propiedad.balcon}
               parqueos={propiedad.parqueos}
               extras={propiedad.extras}
               precio={propiedad.precio}
