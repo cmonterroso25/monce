@@ -5,6 +5,7 @@ import { BedDouble, Bath, Ruler, MapPin, MessageCircle } from 'lucide-react'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import Galeria from '@/app/dashboard/propiedades/[id]/galeria'
+import MapaUbicacion from '@/components/mapa-ubicacion'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
 import { urlSitio } from '@/lib/url'
 import { formatearZona } from '@/lib/formato-zona'
@@ -38,7 +39,8 @@ async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
       bodega, balcon,
       imagenes_propiedad (id, ruta_almacenamiento, es_portada, orden),
       municipio:municipios (nombre),
-      capturador:perfiles!captado_por (nombre_completo, telefono)
+      capturador:perfiles!captado_por (nombre_completo, telefono),
+      ubicacion:ubicaciones (nombre, google_maps_url, waze_url, latitud, longitud)
     `
     )
     .eq('slug', slug)
@@ -147,6 +149,9 @@ export default async function PropiedadPublica({
       })()
     : null
 
+  const ubicacion = propiedad.ubicacion
+  const tieneCoordenadas = ubicacion?.latitud != null && ubicacion?.longitud != null
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white px-6 py-4">
@@ -207,6 +212,17 @@ export default async function PropiedadPublica({
           )}
 
           <SeccionAreasYAmbientes propiedad={propiedad} titulo="Detalles de propiedad" className="mt-6" />
+
+          {tieneCoordenadas && (
+            <div className="mt-6">
+              <MapaUbicacion
+                latitud={ubicacion.latitud}
+                longitud={ubicacion.longitud}
+                googleMapsUrl={ubicacion.google_maps_url}
+                wazeUrl={ubicacion.waze_url}
+              />
+            </div>
+          )}
 
           {requisitosRenta && (
             <div className="mt-6">

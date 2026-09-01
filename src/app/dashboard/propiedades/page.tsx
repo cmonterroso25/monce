@@ -21,6 +21,7 @@ const coloresModalidad: Record<string, string> = {
 
 const ESTADOS = ['disponible', 'reservada', 'vendida', 'rentada', 'inactiva']
 const MODALIDADES = ['Directo', 'Compartida']
+const TIPOS_OPERACION = ['venta', 'renta']
 
 function urlImagen(ruta: string) {
   if (ruta.startsWith('http')) return ruta
@@ -36,6 +37,7 @@ export default async function ListadoPropiedades({
   searchParams: Promise<{
     estado?: string
     tipo?: string
+    tipo_operacion?: string
     zona?: string
     municipio_id?: string
     colega_id?: string
@@ -85,6 +87,7 @@ export default async function ListadoPropiedades({
 
   if (params.estado) query = query.eq('estado', params.estado)
   if (params.tipo) query = query.eq('tipo_propiedad', params.tipo)
+  if (params.tipo_operacion) query = query.eq('tipo_operacion', params.tipo_operacion)
   if (params.zona) query = query.ilike('zona', `%${params.zona}%`)
   if (params.municipio_id) query = query.eq('municipio_id', params.municipio_id)
   if (params.colega_id) query = query.eq('colega_id', params.colega_id)
@@ -118,6 +121,7 @@ export default async function ListadoPropiedades({
       <FiltrosPropiedades
         estados={ESTADOS}
         tipos={tipos}
+        tiposOperacion={TIPOS_OPERACION}
         municipios={municipios ?? []}
         colegas={colegas ?? []}
         agentes={agentes}

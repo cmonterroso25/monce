@@ -9,9 +9,15 @@ type Opcion = { id: string; nombre: string }
 const campoBase =
   'h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-[#2C3E50] transition-colors focus:border-[#38B6FF] focus:outline-none focus:ring-1 focus:ring-[#38B6FF]'
 
+const ETIQUETAS_TIPO_OPERACION: Record<string, string> = {
+  venta: 'Venta',
+  renta: 'Renta',
+}
+
 export default function FiltrosPropiedades({
   estados,
   tipos,
+  tiposOperacion,
   municipios,
   colegas,
   agentes,
@@ -19,6 +25,7 @@ export default function FiltrosPropiedades({
 }: {
   estados: string[]
   tipos: string[]
+  tiposOperacion: string[]
   municipios: Opcion[]
   colegas: Opcion[]
   agentes: Opcion[]
@@ -83,6 +90,7 @@ export default function FiltrosPropiedades({
   const totalFiltrosActivos = [
     searchParams.get('estado'),
     searchParams.get('tipo'),
+    searchParams.get('tipo_operacion'),
     searchParams.get('municipio_id'),
     searchParams.get('colega_id'),
     searchParams.get('captado_por'),
@@ -106,6 +114,19 @@ export default function FiltrosPropiedades({
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         {/* Selects rápidos */}
+        <select
+          defaultValue={searchParams.get('tipo_operacion') || ''}
+          onChange={(e) => actualizarFiltro('tipo_operacion', e.target.value)}
+          className={`${campoBase} pr-7`}
+        >
+          <option value="">Renta / Venta</option>
+          {tiposOperacion.map((op) => (
+            <option key={op} value={op}>
+              {ETIQUETAS_TIPO_OPERACION[op] ?? op}
+            </option>
+          ))}
+        </select>
+
         <select
           defaultValue={searchParams.get('estado') || ''}
           onChange={(e) => actualizarFiltro('estado', e.target.value)}
