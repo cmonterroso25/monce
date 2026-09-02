@@ -15,7 +15,7 @@ const EMOJI_TIPO: Record<string, string> = {
 // Umbral (en caracteres) que decide la estructura del texto en
 // "Copiar para Marketplace": por debajo, se agrega la descripción a la
 // estructura completa; en o por encima, se usa la estructura reducida
-// (Título, Código, Descripción, Requisitos).
+// (Título, Código, Descripción, Requisitos, Precio).
 const UMBRAL_DESCRIPCION_CORTA = 50
 
 export type PropiedadMarketplace = {
@@ -82,6 +82,27 @@ function lineasRequisitos(p: PropiedadMarketplace): string[] {
   ]
 }
 
+// Nota de mantenimiento integrada a la línea de precio, SOLO para renta
+// (mismo criterio que formatearPrecioRenta en src/lib/formato-precio.ts):
+// si no hay monto de mantenimiento (null/vacío/0) se asume incluido en el
+// precio; si hay monto > 0, se muestra aparte. El monto de mantenimiento
+// SIEMPRE se expresa en quetzales (Q), sin importar la moneda del precio
+// de renta (que puede ser GTQ o USD).
+function notaMantenimientoRenta(p: PropiedadMarketplace): string | null {
+  if (p.tipo_operacion !== 'renta') return null
+  const monto = p.mantenimiento ? Number(p.mantenimiento) : 0
+  if (!monto || monto <= 0) return '(mantenimiento incluido)'
+  return `+ Q${monto.toLocaleString()} de mantenimiento`
+}
+
+// Línea de precio, compartida entre la estructura completa y la reducida.
+// `negocio` ya viene en mayúsculas ("VENTA" | "RENTA").
+function lineaPrecio(p: PropiedadMarketplace, negocio: string): string | false {
+  if (!p.precio) return false
+  const nota = notaMantenimientoRenta(p)
+  return `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'}${Number(p.precio).toLocaleString()}${nota ? ` ${nota}` : ''}`
+}
+
 // Núcleo compartido. "codigo" es opcional a propósito: cuando no se pasa,
 // no aparece esa fila. `incluirDescripcion` solo lo activa la rama de
 // descripción corta de generarTextoMarketplace(). `incluirRequisitos`
@@ -135,12 +156,17 @@ function generarBloquesPropiedad(
     p.parqueos && `• Parqueo para ${p.parqueos} vehículo${p.parqueos > 1 ? 's' : ''} 🚗`,
   ].filter(Boolean)
 
-  // El mantenimiento siempre se muestra en quetzales, sin importar la
-  // moneda configurada para precio/IUSI de la propiedad.
+  // Línea de mantenimiento aparte: SOLO para venta (ej. cuota de
+  // condominio). En renta, la nota de mantenimiento ahora va integrada a
+  // la línea de precio (ver notaMantenimientoRenta/lineaPrecio), para no
+  // duplicar la información. El mantenimiento siempre se muestra en
+  // quetzales, sin importar la moneda del precio/IUSI de la propiedad.
   const textoMantenimiento =
-    !p.mantenimiento || Number(p.mantenimiento) === 0
-      ? '🛠️ Mantenimiento incluido'
-      : `🛠️ Mantenimiento: Q${Number(p.mantenimiento).toLocaleString()}`
+    p.tipo_operacion === 'renta'
+      ? null
+      : !p.mantenimiento || Number(p.mantenimiento) === 0
+        ? '🛠️ Mantenimiento incluido'
+        : `🛠️ Mantenimiento: Q${Number(p.mantenimiento).toLocaleString()}`
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
@@ -157,17 +183,20 @@ function generarBloquesPropiedad(
     p.extras && `✨ Extras:\n${p.extras}`,
     textoMascota,
     requisitos.length > 0 && requisitos.join('\n'),
-    p.precio ? `💰 PRECIO DE ${negocio}: ${p.moneda ?? 'Q'}${Number(p.precio).toLocaleString()}` : false,
+    lineaPrecio(p, negocio),
     p.iusi ? `📑 IUSI: ${p.moneda ?? 'Q'}${Number(p.iusi).toLocaleString()}` : false,
     textoMantenimiento,
   ]
 }
 
 // Estructura reducida: Título, Código, Descripción, Requisitos para
-// aplicar. Se usa cuando la descripción ya trae suficiente detalle
+// aplicar, Precio. Se usa cuando la descripción ya trae suficiente detalle
 // (>= UMBRAL_DESCRIPCION_CORTA caracteres), para no duplicar información.
 // Solo la usa "Copiar para Marketplace" (nunca la notificación automática).
+// El precio SIEMPRE se incluye (venta o renta), con la nota de
+// mantenimiento integrada cuando aplica (ver lineaPrecio).
 function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
+  const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const requisitos = lineasRequisitos(p)
 
   return [
@@ -175,6 +204,7 @@ function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)
     p.codigo ? `📌 Código: ${p.codigo}` : null,
     p.descripcion ?? null,
     requisitos.length > 0 && requisitos.join('\n'),
+    lineaPrecio(p, negocio),
   ]
 }
 

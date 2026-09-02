@@ -1,15 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { BedDouble, Bath, Ruler, MapPin, MessageCircle } from 'lucide-react'
+import { BedDouble, Bath, Ruler, MapPin } from 'lucide-react'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import Galeria from '@/app/dashboard/propiedades/[id]/galeria'
 import MapaUbicacion from '@/components/mapa-ubicacion'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '@/app/dashboard/propiedades/requisitos-renta'
-import { urlSitio } from '@/lib/url'
 import { formatearZona } from '@/lib/formato-zona'
 import { formatearPrecioRenta } from '@/lib/formato-precio'
+import { registrarVistaPublica } from '@/lib/analitica/registrar-vista'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -18,14 +18,12 @@ function urlImagen(ruta: string) {
   return `${R2_PUBLIC_URL}/${ruta}`
 }
 
-function numeroWhatsapp(telefono: string | null | undefined) {
-  if (!telefono) return null
-  const soloDigitos = telefono.replace(/\D/g, '')
-  if (soloDigitos.length === 8) return `502${soloDigitos}`
-  return soloDigitos
-}
-
-async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
+// Ficha pública sin marca ni contacto directo: se removió el logo/nombre
+// de la inmobiliaria y el botón de WhatsApp hacia el agente/organización
+// a propósito, para que agentes de OTRAS inmobiliarias puedan compartir
+// este enlace (modalidad "Compartida") sin que el cliente termine
+// contactando directamente a esta organización en vez de a ellos.
+async function obtenerPropiedad(slug: string) {
   const supabase = await createClient()
   const { data } = await supabase
     .from('propiedades')
@@ -39,7 +37,6 @@ async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
       bodega, balcon,
       imagenes_propiedad (id, ruta_almacenamiento, es_portada, orden),
       municipio:municipios (nombre),
-      capturador:perfiles!captado_por (nombre_completo, telefono),
       ubicacion:ubicaciones (nombre, google_maps_url, waze_url, latitud, longitud)
     `
     )
@@ -49,23 +46,7 @@ async function obtenerPropiedad(slug: string, agenteCompartioId?: string) {
 
   if (!data) return null
 
-  const propiedadData = data as any
-  let telefonoContacto: string | null = propiedadData.capturador?.telefono ?? null
-
-  if (agenteCompartioId) {
-    const { data: agenteCompartio } = await supabase
-      .from('perfiles')
-      .select('telefono')
-      .eq('id', agenteCompartioId)
-      .eq('organization_id', data.organization_id)
-      .eq('activo', true)
-      .maybeSingle()
-    if (agenteCompartio?.telefono) {
-      telefonoContacto = agenteCompartio.telefono
-    }
-  }
-
-  return { ...propiedadData, telefonoContacto } as any
+  return data as any
 }
 
 export async function generateMetadata({
@@ -75,7 +56,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const propiedad = await obtenerPropiedad(slug)
-  if (!propiedad) return { title: 'Propiedad no encontrada — Monce Inmobiliaria' }
+  if (!propiedad) return { title: 'Propiedad no encontrada' }
 
   const portada =
     propiedad.imagenes_propiedad?.find((img: any) => img.es_portada) ??
@@ -89,7 +70,7 @@ export async function generateMetadata({
     .join(', ')}`
 
   return {
-    title: `${propiedad.titulo} — Monce Inmobiliaria`,
+    title: propiedad.titulo,
     description: descripcionCorta,
     openGraph: {
       title: propiedad.titulo,
@@ -109,8 +90,14 @@ export default async function PropiedadPublica({
 }) {
   const { slug } = await params
   const { agente } = await searchParams
-  const propiedad = await obtenerPropiedad(slug, agente)
+  const propiedad = await obtenerPropiedad(slug)
   if (!propiedad) notFound()
+
+  // Registro de analítica de tráfico (no bloqueante): se dispara en cada
+  // carga de la ficha pública, con el agente atribuido si vino de un
+  // enlace compartido (?agente=<id>). Ver registrarVistaPublica: nunca
+  // lanza, así que un fallo aquí no puede romper el render de la página.
+  await registrarVistaPublica(propiedad.id, propiedad.organization_id, agente ?? null)
 
   const imagenes = [...(propiedad.imagenes_propiedad ?? [])].sort((a: any, b: any) => {
     if (a.es_portada && !b.es_portada) return -1
@@ -129,39 +116,11 @@ export default async function PropiedadPublica({
     propiedad.tipo_operacion
   )
 
-  const numero = numeroWhatsapp(propiedad.telefonoContacto)
-  const enlacePropiedad = urlSitio(`/propiedades/${propiedad.slug}`)
-  const ubicacionPropiedad = [formatearZona(propiedad.zona), propiedad.municipio?.nombre, propiedad.ciudad]
-    .filter(Boolean)
-    .join(', ')
-  const enlaceWhatsapp = numero
-    ? (() => {
-        const bloquesWhatsapp = [
-          'Hola, me interesa esta propiedad:',
-          `*${propiedad.titulo}*`,
-          notaMantenimiento ? `${precioPrincipal} ${notaMantenimiento}` : precioPrincipal,
-          ubicacionPropiedad && `📍 ${ubicacionPropiedad}`,
-          (propiedad.dormitorios || propiedad.banos) &&
-            `🛏️ ${propiedad.dormitorios ?? '—'} hab  🛁 ${propiedad.banos ?? '—'} baños`,
-        ].filter(Boolean)
-        const mensajeWhatsapp = encodeURIComponent(`${bloquesWhatsapp.join('\n\n')}\n\n${enlacePropiedad}`)
-        return `https://wa.me/${numero}?text=${mensajeWhatsapp}`
-      })()
-    : null
-
   const ubicacion = propiedad.ubicacion
   const tieneCoordenadas = ubicacion?.latitud != null && ubicacion?.longitud != null
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <a href="/" className="flex items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-monce.png" alt="Monce Inmobiliaria" className="h-8 w-8 rounded" />
-          <span className="text-sm font-semibold text-[#2C3E50]">Monce Inmobiliaria</span>
-        </a>
-      </header>
-
       <main className="mx-auto max-w-4xl p-6">
         <div className="mb-6">
           <Galeria
@@ -228,13 +187,6 @@ export default async function PropiedadPublica({
             <div className="mt-6">
               <DetalleRequisitosRenta paquete={requisitosRenta} />
             </div>
-          )}
-
-          {enlaceWhatsapp && (
-            <a href={enlaceWhatsapp} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-2 rounded bg-green-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-green-700">
-              <MessageCircle size={16} />
-              Preguntar por esta propiedad
-            </a>
           )}
         </div>
       </main>

@@ -9,9 +9,12 @@ import CompartirMarketplace from './compartir-marketplace'
 import CambiarEstado from './cambiar-estado'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
+import AnaliticaPropiedad from './analitica-propiedad'
+import { obtenerAnaliticaVistas } from './acciones'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 import { formatearZona } from '@/lib/formato-zona'
 import { formatearPrecioRenta } from '@/lib/formato-precio'
+import { formatearFechaLargaGT } from '@/lib/fecha-gt'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -58,6 +61,10 @@ export default async function DetallePropiedad({
     data: { user },
   } = await supabase.auth.getUser()
 
+  const { data: miPerfil } = user
+    ? await supabase.from('perfiles').select('rol').eq('id', user.id).maybeSingle()
+    : { data: null }
+
   const { data: propiedad, error } = await supabase
     .from('propiedades')
     .select(
@@ -97,6 +104,25 @@ export default async function DetallePropiedad({
 
   const visibleEnPortal = propiedad.slug && ESTADOS_VISIBLES_PORTAL.includes(propiedad.estado)
 
+  // La analítica de visitas solo se muestra a quien la RLS de
+  // eventos_analitica ya permite ver (captador de la propiedad o admin).
+  // Se decide aquí explícitamente en vez de confiar en el resultado de la
+  // consulta, porque un agente sin permiso simplemente recibiría 0 filas
+  // (no un error), lo que mostraría "0 visitas" en vez de ocultar el
+  // bloque para quien no debe verlo.
+  const puedeVerAnalitica =
+    miPerfil?.rol === 'administrador' || (user && propiedad.captado_por === user.id)
+
+  let analiticaInicial = null
+  if (puedeVerAnalitica) {
+    const hasta = new Date()
+    hasta.setHours(23, 59, 59, 999)
+    const desde = new Date()
+    desde.setDate(desde.getDate() - 30)
+    desde.setHours(0, 0, 0, 0)
+    analiticaInicial = await obtenerAnaliticaVistas(propiedad.id, desde.toISOString(), hasta.toISOString())
+  }
+
   const hayInformacionPrivada =
     propiedad.modalidad_captacion ||
     propiedad.comision ||
@@ -106,7 +132,9 @@ export default async function DetallePropiedad({
     propiedad.comentarios ||
     propiedad.propietario ||
     propiedad.capturador ||
-    propiedad.colega
+    propiedad.colega ||
+    propiedad.creado_en ||
+    puedeVerAnalitica
 
   const ubicacion = propiedad.ubicacion
   const tieneCoordenadas = ubicacion?.latitud != null && ubicacion?.longitud != null
@@ -277,6 +305,7 @@ export default async function DetallePropiedad({
                   valor={propiedad.valor_hipoteca ? Number(propiedad.valor_hipoteca).toLocaleString() : null}
                 />
                 <Dato etiqueta="Acceso coordinar con" valor={propiedad.acceso} />
+                <Dato etiqueta="Publicada en el CRM" valor={formatearFechaLargaGT(propiedad.creado_en)} />
               </div>
 
               {(propiedad.propietario || propiedad.capturador || propiedad.colega) && (
@@ -310,6 +339,10 @@ export default async function DetallePropiedad({
                   <p className="mb-1 text-sm font-medium text-slate-700">Comentarios internos</p>
                   <p className="whitespace-pre-line text-sm text-slate-600">{propiedad.comentarios}</p>
                 </div>
+              )}
+
+              {puedeVerAnalitica && analiticaInicial && (
+                <AnaliticaPropiedad propiedadId={propiedad.id} datosIniciales={analiticaInicial} />
               )}
             </div>
           )}
