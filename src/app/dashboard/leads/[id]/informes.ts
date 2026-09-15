@@ -178,6 +178,11 @@ export async function finalizarInforme(
       id_relacionado: informe.lead_id,
       ruta_almacenamiento: doc.key,
       tipo_documento: `informe_${doc.tipo}`,
+      // Vincula el documento a ESTE informe en particular (agregado
+      // 14/09/2026), para poder listar/descargar exactamente los
+      // documentos usados en una evaluación cuando el mismo lead tiene
+      // varios informes generados en momentos distintos.
+      informe_id: informe.id,
     })
   }
 
@@ -242,4 +247,31 @@ export async function obtenerUltimoInforme(leadId: string) {
     ...data,
     ruta_pdf: data.ruta_pdf ? await obtenerUrlFirmada(data.ruta_pdf, 900) : null,
   }
+}
+
+// Trae los documentos vinculados a un informe específico (vía informe_id,
+// agregado 14/09/2026) con URL firmada de descarga, para mostrarlos en
+// EstadoInforme una vez generado el informe.
+export async function obtenerDocumentosInforme(informeId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('documentos')
+    .select('id, tipo_documento, ruta_almacenamiento')
+    .eq('informe_id', informeId)
+
+  if (error || !data) return []
+
+  const documentos = await Promise.all(
+    data.map(async (doc) => {
+      const tipo = (doc.tipo_documento ?? '').replace(/^informe_/, '')
+      const campo = CAMPOS_DOCUMENTOS_INFORME.find((c) => c.key === tipo)
+      return {
+        id: doc.id as string,
+        label: campo?.label ?? tipo,
+        url: await obtenerUrlFirmada(doc.ruta_almacenamiento as string, 900),
+      }
+    })
+  )
+
+  return documentos
 }

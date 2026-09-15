@@ -151,7 +151,7 @@ export default function GenerarInforme({
                     <input
                       name={campo.key}
                       type="file"
-                      multiple={campo.key.includes('estados_cuenta') || campo.key.includes('dpi')}
+                      multiple
                       accept="application/pdf,image/*"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs file:mr-2 file:rounded file:border-0 file:bg-[#2C3E50] file:px-2 file:py-1 file:text-xs file:font-medium file:text-white hover:file:bg-[#38B6FF]"
                     />
@@ -167,7 +167,7 @@ export default function GenerarInforme({
                     <input
                       name={campo.key}
                       type="file"
-                      multiple={campo.key.includes('estados_cuenta') || campo.key.includes('dpi')}
+                      multiple
                       accept="application/pdf,image/*"
                       className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs file:mr-2 file:rounded file:border-0 file:bg-[#2C3E50] file:px-2 file:py-1 file:text-xs file:font-medium file:text-white hover:file:bg-[#38B6FF]"
                     />

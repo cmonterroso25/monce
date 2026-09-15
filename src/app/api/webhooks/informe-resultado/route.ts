@@ -129,11 +129,21 @@ async function generarPdfInforme(datos: {
   lineaDato('Fecha de evaluación:', datos.fechaEvaluacion)
   y -= 4
 
+  // Badge de recomendación: solo la etiqueta (Recomendado / Con reservas /
+  // No recomendado), sin el número de puntaje (quitado 14/09/2026 a
+  // pedido del usuario). El puntaje sigue calculándose internamente
+  // (colorRecomendacion lo usa para elegir color y etiqueta), solo se
+  // dejó de imprimir en el PDF.
   const { fondo, texto, etiqueta } = colorRecomendacion(datos.puntaje)
   page.drawRectangle({ x: margenX, y: y - 22, width: anchoUtil, height: 30, color: fondo })
-  page.drawText(`Puntaje: ${datos.puntaje}/100`, { x: margenX + 12, y: y - 12, size: 12, font: fuenteBold, color: texto })
-  const anchoEtiqueta = fuenteBold.widthOfTextAtSize(etiqueta, 12)
-  page.drawText(etiqueta, { x: margenX + anchoUtil - anchoEtiqueta - 12, y: y - 12, size: 12, font: fuenteBold, color: texto })
+  const anchoEtiqueta = fuenteBold.widthOfTextAtSize(etiqueta, 13)
+  page.drawText(etiqueta, {
+    x: margenX + (anchoUtil - anchoEtiqueta) / 2,
+    y: y - 12,
+    size: 13,
+    font: fuenteBold,
+    color: texto,
+  })
   y -= 45
 
   if (datos.criterios && Object.keys(datos.criterios).length > 0) {

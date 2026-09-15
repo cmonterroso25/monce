@@ -1,12 +1,15 @@
 'use client'
-import { useEffect } from 'react'
-import { FileCheck2, FileWarning, Loader2 } from 'lucide-react'
-import { obtenerEstadoInforme } from './informes'
+import { useEffect, useState } from 'react'
+import { FileCheck2, FileWarning, Loader2, Download } from 'lucide-react'
+import { obtenerEstadoInforme, obtenerDocumentosInforme } from './informes'
 import { useInforme } from './contexto-informe'
 import { etiquetaCriterio } from '@/lib/informes/etiquetas-criterios'
 
+type DocumentoInforme = { id: string; label: string; url: string }
+
 export default function EstadoInforme() {
   const { informe, setInforme } = useInforme()
+  const [documentos, setDocumentos] = useState<DocumentoInforme[]>([])
 
   useEffect(() => {
     if (!informe || informe.estado !== 'procesando') return
@@ -16,6 +19,14 @@ export default function EstadoInforme() {
     }, 8000)
     return () => clearInterval(intervalo)
   }, [informe, setInforme])
+
+  useEffect(() => {
+    if (!informe) {
+      setDocumentos([])
+      return
+    }
+    obtenerDocumentosInforme(informe.id).then(setDocumentos)
+  }, [informe?.id])
 
   if (!informe) return null
 
@@ -38,6 +49,7 @@ export default function EstadoInforme() {
   }
 
   const enlaceDescarga = informe.ruta_pdf
+  const linkDocClass = 'inline-flex items-center gap-1 text-green-800 underline hover:text-green-900'
 
   return (
     <div className="mb-6 space-y-1.5 rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
@@ -65,6 +77,21 @@ export default function EstadoInforme() {
               {valor.detalle && <p className="mt-0.5 text-green-700">{valor.detalle}</p>}
             </div>
           ))}
+        </div>
+      )}
+      {documentos.length > 0 && (
+        <div className="space-y-1 pt-1">
+          <p className="font-medium text-green-900">Documentos utilizados</p>
+          <ul className="space-y-1">
+            {documentos.map((doc) => (
+              <li key={doc.id}>
+                <a href={doc.url} target="_blank" rel="noopener noreferrer" className={linkDocClass}>
+                  <Download size={12} />
+                  {doc.label}
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {enlaceDescarga && (
