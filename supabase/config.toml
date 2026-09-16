@@ -421,3 +421,6 @@ verify_jwt = false
 
 [functions.generar-informe]
 verify_jwt = false
+
+[functions.scrapear-propiedades-externas]
+verify_jwt = false

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { BedDouble, Bath, Ruler, MapPin, Pencil } from 'lucide-react'
+import TabsPropiedades from './tabs-propiedades'
 import FiltrosPropiedades from './filtros-propiedades'
 import BotonEliminarPropiedad from './boton-eliminar'
 
@@ -117,6 +118,8 @@ export default async function ListadoPropiedades({
           + Nueva propiedad
         </Link>
       </div>
+
+      <TabsPropiedades />
 
       <FiltrosPropiedades
         estados={ESTADOS}

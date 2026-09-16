@@ -10,6 +10,8 @@ type DocumentoInforme = { id: string; label: string; url: string }
 export default function EstadoInforme() {
   const { informe, setInforme } = useInforme()
   const [documentos, setDocumentos] = useState<DocumentoInforme[]>([])
+  const [descargandoZip, setDescargandoZip] = useState(false)
+  const [errorZip, setErrorZip] = useState<string | null>(null)
 
   useEffect(() => {
     if (!informe || informe.estado !== 'procesando') return
@@ -49,7 +51,39 @@ export default function EstadoInforme() {
   }
 
   const enlaceDescarga = informe.ruta_pdf
-  const linkDocClass = 'inline-flex items-center gap-1 text-green-800 underline hover:text-green-900'
+
+  // Descarga en un solo ZIP todos los documentos del informe (agregado
+  // 15/09/2026 a pedido del usuario, reemplaza los links de descarga
+  // individuales por documento).
+  async function descargarDocumentosZip() {
+    if (!informe) return
+    setErrorZip(null)
+    setDescargandoZip(true)
+    try {
+      const respuesta = await fetch('/api/descargar-documentos-informe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ informeId: informe.id }),
+      })
+      if (!respuesta.ok) {
+        const data = await respuesta.json().catch(() => null)
+        throw new Error(data?.error || 'No se pudo descargar el ZIP.')
+      }
+      const blob = await respuesta.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `documentos-informe-${informe.id}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setErrorZip(err instanceof Error ? err.message : 'No se pudo descargar el ZIP.')
+    } finally {
+      setDescargandoZip(false)
+    }
+  }
 
   return (
     <div className="mb-6 space-y-1.5 rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
@@ -81,17 +115,24 @@ export default function EstadoInforme() {
       )}
       {documentos.length > 0 && (
         <div className="space-y-1 pt-1">
-          <p className="font-medium text-green-900">Documentos utilizados</p>
-          <ul className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-medium text-green-900">Documentos utilizados ({documentos.length})</p>
+            <button
+              type="button"
+              onClick={descargarDocumentosZip}
+              disabled={descargandoZip}
+              className="inline-flex items-center gap-1 rounded bg-green-700 px-2 py-1 text-[11px] font-medium text-white hover:bg-green-800 disabled:opacity-60"
+            >
+              {descargandoZip ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              {descargandoZip ? 'Preparando ZIP...' : 'Descargar todos (ZIP)'}
+            </button>
+          </div>
+          <ul className="list-disc space-y-0.5 pl-4 text-green-700">
             {documentos.map((doc) => (
-              <li key={doc.id}>
-                <a href={doc.url} target="_blank" rel="noopener noreferrer" className={linkDocClass}>
-                  <Download size={12} />
-                  {doc.label}
-                </a>
-              </li>
+              <li key={doc.id}>{doc.label}</li>
             ))}
           </ul>
+          {errorZip && <p className="text-red-700">{errorZip}</p>}
         </div>
       )}
       {enlaceDescarga && (

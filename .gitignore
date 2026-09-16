@@ -6,3 +6,4 @@ tsconfig.tsbuildinfo
 .vercel
 .env*
 .DS_Store
+supabase/.env.local
