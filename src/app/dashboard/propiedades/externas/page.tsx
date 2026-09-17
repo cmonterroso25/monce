@@ -24,7 +24,7 @@ const coloresSeguimiento: Record<string, string> = {
   nuevo_colega: 'bg-blue-100 text-blue-700',
 }
 
-const GRID_COLS = 'grid-cols-[2.3fr_1fr_1.2fr_110px_120px_130px_90px]'
+const GRID_COLS = 'grid-cols-[2fr_1fr_1.1fr_100px_110px_120px_130px_120px_90px]'
 
 export default async function ListadoPropiedadesExternas({
   searchParams,
@@ -50,6 +50,21 @@ export default async function ListadoPropiedadesExternas({
     new Set(fuentesData?.map((f) => f.fuente_portal).filter(Boolean))
   ) as string[]
 
+  // Nombre del usuario logueado, para mostrarlo en el panel de Acciones
+  // como quién quedará registrado en "Contactado por" al guardar.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  let agenteActualNombre: string | null = null
+  if (user) {
+    const { data: miPerfil } = await supabase
+      .from('perfiles')
+      .select('nombre_completo')
+      .eq('id', user.id)
+      .single()
+    agenteActualNombre = miPerfil?.nombre_completo ?? null
+  }
+
   let query = supabase
     .from('propiedades_externas')
     .select('*, colega:colegas(nombre)')
@@ -64,6 +79,29 @@ export default async function ListadoPropiedadesExternas({
 
   const { data: propiedadesExternas } = await query
   const total = propiedadesExternas?.length ?? 0
+
+  // Se resuelve "Contactado por" con una consulta aparte a perfiles (no
+  // se usa el embed de Supabase perfiles!agente_que_contacto porque no
+  // está confirmado que exista esa FK en el esquema; así se evita un
+  // fallo de query por una relación no verificada).
+  const idsAgentes = Array.from(
+    new Set(
+      (propiedadesExternas ?? [])
+        .map((p) => p.agente_que_contacto)
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+
+  let mapaAgentes = new Map<string, string>()
+  if (idsAgentes.length > 0) {
+    const { data: perfilesAgentes } = await supabase
+      .from('perfiles')
+      .select('id, nombre_completo')
+      .in('id', idsAgentes)
+    mapaAgentes = new Map(
+      (perfilesAgentes ?? []).map((p) => [p.id as string, p.nombre_completo as string])
+    )
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -90,7 +128,7 @@ export default async function ListadoPropiedadesExternas({
 
       {propiedadesExternas && propiedadesExternas.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="min-w-[1000px]">
+          <div className="min-w-[1250px]">
             <div
               className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
             >
@@ -100,6 +138,8 @@ export default async function ListadoPropiedadesExternas({
               <div className="text-right">Precio</div>
               <div>Publicación</div>
               <div>Seguimiento</div>
+              <div>Contactado por</div>
+              <div>Colega</div>
               <div className="text-center">Acciones</div>
             </div>
 
@@ -175,9 +215,14 @@ export default async function ListadoPropiedadesExternas({
                   >
                     {p.estado_seguimiento.replace('_', ' ')}
                   </span>
-                  {p.colega?.nombre && (
-                    <p className="mt-0.5 truncate text-[10px] text-slate-400">→ {p.colega.nombre}</p>
-                  )}
+                </div>
+
+                <div className="min-w-0 truncate text-sm text-slate-600">
+                  {p.agente_que_contacto ? mapaAgentes.get(p.agente_que_contacto) ?? '—' : '—'}
+                </div>
+
+                <div className="min-w-0 truncate text-sm text-slate-600">
+                  {p.colega?.nombre ?? '—'}
                 </div>
 
                 <div className="flex justify-center">
@@ -188,6 +233,7 @@ export default async function ListadoPropiedadesExternas({
                     colegaIdActual={p.colega_id}
                     colegas={colegas ?? []}
                     estadosSeguimiento={ESTADOS_SEGUIMIENTO}
+                    agenteActualNombre={agenteActualNombre}
                   />
                 </div>
               </div>

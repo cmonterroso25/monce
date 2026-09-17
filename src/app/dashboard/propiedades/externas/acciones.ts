@@ -23,10 +23,6 @@ export async function actualizarSeguimientoExterna(formData: FormData): Promise<
   let colegaId = (formData.get('colega_id') as string) || null
   if (colegaId === '') colegaId = null
 
-  if (estadoSeguimiento === 'nuevo_colega' && !colegaId) {
-    return { ok: false, mensaje: 'Debes seleccionar o crear un colega para marcar "nuevo colega".' }
-  }
-
   if (colegaId === '__nuevo__') {
     const nombreNuevo = formData.get('colega_nombre_nuevo') as string
     if (!nombreNuevo || nombreNuevo.trim() === '') {
@@ -60,12 +56,16 @@ export async function actualizarSeguimientoExterna(formData: FormData): Promise<
     colegaId = nuevoColega.id as string
   }
 
+  // "Contactado por" no es un campo que el usuario elija: se fija
+  // automáticamente al usuario logueado en cada guardado de esta
+  // pantalla, independientemente del estado de seguimiento o si se
+  // asignó un colega.
   const { error } = await supabase
     .from('propiedades_externas')
     .update({
       estado_seguimiento: estadoSeguimiento,
       notas_agente: notasAgente,
-      colega_id: estadoSeguimiento === 'nuevo_colega' ? colegaId : null,
+      colega_id: colegaId,
       agente_que_contacto: user.id,
     })
     .eq('id', id)

@@ -22,6 +22,7 @@ export default function FilaSeguimiento({
   colegaIdActual,
   colegas,
   estadosSeguimiento,
+  agenteActualNombre,
 }: {
   propiedadExternaId: string
   estadoSeguimientoActual: string
@@ -29,6 +30,7 @@ export default function FilaSeguimiento({
   colegaIdActual: string | null
   colegas: Colega[]
   estadosSeguimiento: string[]
+  agenteActualNombre: string | null
 }) {
   const [abierto, setAbierto] = useState(false)
   const [estado, setEstado] = useState(estadoSeguimientoActual)
@@ -43,11 +45,7 @@ export default function FilaSeguimiento({
   function guardar() {
     setError(null)
 
-    if (estado === 'nuevo_colega' && !colegaId) {
-      setError('Selecciona un colega o crea uno nuevo.')
-      return
-    }
-    if (estado === 'nuevo_colega' && colegaId === '__nuevo__' && !colegaNuevoNombre.trim()) {
+    if (colegaId === '__nuevo__' && !colegaNuevoNombre.trim()) {
       setError('El nombre del nuevo colega es obligatorio.')
       return
     }
@@ -56,7 +54,9 @@ export default function FilaSeguimiento({
     formData.set('id', propiedadExternaId)
     formData.set('estado_seguimiento', estado)
     formData.set('notas_agente', notas)
-    formData.set('colega_id', estado === 'nuevo_colega' ? colegaId : '')
+    // El colega ya no depende del estado de seguimiento: se guarda lo
+    // que esté seleccionado (o vacío si no se eligió ninguno).
+    formData.set('colega_id', colegaId)
     if (colegaId === '__nuevo__') {
       formData.set('colega_nombre_nuevo', colegaNuevoNombre)
       formData.set('colega_telefono_nuevo', colegaNuevoTelefono)
@@ -101,51 +101,47 @@ export default function FilaSeguimiento({
             ))}
           </select>
 
-          {estado === 'nuevo_colega' && (
-            <>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Colega
-              </p>
-              <select
-                value={colegaId}
-                onChange={(e) => setColegaId(e.target.value)}
-                className={`${campoBase} mb-3`}
-              >
-                <option value="">Selecciona…</option>
-                {colegas.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
-                <option value="__nuevo__">+ Nuevo colega</option>
-              </select>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Colega
+          </p>
+          <select
+            value={colegaId}
+            onChange={(e) => setColegaId(e.target.value)}
+            className={`${campoBase} mb-3`}
+          >
+            <option value="">Sin colega</option>
+            {colegas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+            <option value="__nuevo__">+ Nuevo colega</option>
+          </select>
 
-              {colegaId === '__nuevo__' && (
-                <div className="mb-3 space-y-2">
-                  <input
-                    type="text"
-                    value={colegaNuevoNombre}
-                    onChange={(e) => setColegaNuevoNombre(e.target.value)}
-                    placeholder="Nombre del colega"
-                    className={campoBase}
-                  />
-                  <input
-                    type="text"
-                    value={colegaNuevoTelefono}
-                    onChange={(e) => setColegaNuevoTelefono(e.target.value)}
-                    placeholder="Teléfono (opcional)"
-                    className={campoBase}
-                  />
-                  <input
-                    type="text"
-                    value={colegaNuevoInmobiliaria}
-                    onChange={(e) => setColegaNuevoInmobiliaria(e.target.value)}
-                    placeholder="Inmobiliaria (opcional)"
-                    className={campoBase}
-                  />
-                </div>
-              )}
-            </>
+          {colegaId === '__nuevo__' && (
+            <div className="mb-3 space-y-2">
+              <input
+                type="text"
+                value={colegaNuevoNombre}
+                onChange={(e) => setColegaNuevoNombre(e.target.value)}
+                placeholder="Nombre del colega"
+                className={campoBase}
+              />
+              <input
+                type="text"
+                value={colegaNuevoTelefono}
+                onChange={(e) => setColegaNuevoTelefono(e.target.value)}
+                placeholder="Teléfono (opcional)"
+                className={campoBase}
+              />
+              <input
+                type="text"
+                value={colegaNuevoInmobiliaria}
+                onChange={(e) => setColegaNuevoInmobiliaria(e.target.value)}
+                placeholder="Inmobiliaria (opcional)"
+                className={campoBase}
+              />
+            </div>
           )}
 
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -158,6 +154,13 @@ export default function FilaSeguimiento({
             placeholder="Notas del contacto con el anunciante…"
             className={`${campoBase} mb-3 resize-none`}
           />
+
+          <p className="mb-3 text-xs text-slate-400">
+            Al guardar quedará registrado como contactado por:{' '}
+            <span className="font-medium text-slate-500">
+              {agenteActualNombre ?? 'tu usuario'}
+            </span>
+          </p>
 
           {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
 
