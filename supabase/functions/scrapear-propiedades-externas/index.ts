@@ -12,12 +12,25 @@
 // scheduler, no el usuario final.
 //
 // ESTADO DE CADA ADAPTADOR (actualizado con pruebas reales, no supuestos):
-//   - encuentra24: IMPLEMENTADO Y VERIFICADO contra HTML real (16 sept
-//     2026) y contra ejecución real del parser (20 anuncios únicos, sin
-//     duplicados, specs coherentes). Solo cubre "casas en alquiler, San
-//     José Pinula" por ahora — ver ENCUENTRA24_ENDPOINTS para agregar más
-//     combinaciones tipo/operación/zona, cada una debe verificarse con
-//     fetch real antes de agregarse, no adivinarse por analogía de URL.
+//   - encuentra24: IMPLEMENTADO, expandido el 16 sept 2026 para cubrir
+//     venta + renta, varios tipos de propiedad, solo San José Pinula.
+//     Cobertura por endpoint (ver ENCUENTRA24_ENDPOINTS):
+//       - renta-casas: VERIFICADO end-to-end con node script contra HTML
+//         real (16 sept 2026, 20 anuncios, specs coherentes).
+//       - renta-apartamentos, renta-comercios, venta-casas,
+//         venta-apartamentos, venta-terrenos, venta-comercios: URLs
+//         confirmadas reales (fetch/búsqueda con contenido genuino de
+//         San José Pinula), pero el parseo por regex (card_price/
+//         card_spec/card_title) NO se ha corrido contra el HTML crudo de
+//         estas categorías específicas — se asume que reutilizan el
+//         mismo componente de tarjeta que renta-casas (mismo dominio,
+//         mismo diseño), pero eso es una inferencia, no una verificación
+//         directa. CORRER scripts/probar-parseo-encuentra24.mjs contra
+//         cada endpoint antes de confiar en los datos que produzcan.
+//       - fincas, oficinas (venta y renta), lotes-y-terrenos en renta:
+//         NO incluidos. Solo se vieron como links de navegación lateral,
+//         nunca se confirmó contenido real filtrado a San José Pinula.
+//         No agregar sin verificar con fetch real primero.
 //   - mapainmueble: BLOQUEADO. Confirmado con fetch real: Cloudflare
 //     Managed Challenge (cf-mitigated: challenge, HTML "Just a moment...").
 //     Un fetch() simple nunca pasa esto. Se deja la función pero retorna
@@ -25,6 +38,13 @@
 //     Cloudflare Browser Rendering u otro navegador headless — fuera del
 //     alcance de esta Edge Function.
 //   - citymax, bienesonline, mappi: NO VERIFICADOS. Sin lógica de parseo.
+//
+// CLASIFICACIÓN DE TIPO EN CATEGORÍAS MIXTAS ("comercios"):
+//   Encuentra24 agrupa bodega, ofibodega y local comercial bajo una sola
+//   categoría ("Locales comerciales y bodegas"). No hay forma de separar
+//   por slug de URL, así que se clasifica por texto del título con
+//   clasificarTipoComercio(). Si el título no menciona ninguna palabra
+//   reconocible, la propiedad se descarta (no se adivina el tipo).
 //
 // LÓGICA DE PERSISTENCIA (guardarPropiedades):
 //   - precio_anterior: antes de sobreescribir `precio`, se consulta el
@@ -49,6 +69,12 @@
 //   día), guardarPropiedades no corre la detección de bajas para ese
 //   portal — devuelve 0 de inmediato. Se prefiere no marcar todo el
 //   inventario de un portal como baja ante un fetch vacío ambiguo.
+//   IMPORTANTE: esta detección de bajas es POR PORTAL, no por endpoint.
+//   Si un solo endpoint de Encuentra24 (ej. venta-terrenos) falla pero
+//   los demás endpoints del mismo portal sí traen datos, las
+//   propiedades de ese endpoint fallido NO se marcarán como posible_baja
+//   en esta corrida, porque `conFuenteId` mezcla resultados de todos los
+//   endpoints del portal antes de comparar contra lo existente.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -101,10 +127,11 @@ type ResultadoPortal = {
 }
 
 // ---------------------------------------------------------------------
-// Adaptador: Encuentra24 (implementado y verificado contra HTML real)
+// Adaptador: Encuentra24
 // ---------------------------------------------------------------------
 //
-// Estructura real confirmada (16 sept 2026) por tarjeta de anuncio:
+// Estructura real confirmada (16 sept 2026) por tarjeta de anuncio, en
+// la categoría alquiler-casas:
 //   href="/guatemala-es/bienes-raices-<slug>/<titulo-slug>/<id-numerico>"
 //   <span class="card_price ...">Q<!-- --> <!-- -->6,000</span>
 //   <p class="card_subtitle ...">Guatemala, San José Pinula</p>
@@ -116,32 +143,82 @@ type ResultadoPortal = {
 // No se vio ícono de parqueos en las tarjetas de listado — queda null
 // salvo que aparezca en algún caso; no se adivina.
 //
-// Verificado con node scripts/probar-parseo-encuentra24.mjs (16 sept
-// 2026): 20 anuncios, IDs todos distintos (sin duplicados por tarjeta
-// mal cortada), specs coherentes con el patrón documentado.
+// Para categorías distintas a alquiler-casas (apartamentos, comercios,
+// terrenos, venta-*): se asume el mismo componente de tarjeta por ser
+// el mismo dominio/diseño, PERO esto no se ha corrido contra HTML real
+// de esas categorías específicas. Verificar con
+// scripts/probar-parseo-encuentra24.mjs antes de confiar en los datos.
 
 type EndpointEncuentra24 = {
   url: string
   tipoOperacion: TipoOperacion
-  tipoPropiedad: TipoPropiedad
+  // null = categoría mixta (ej. "comercios" agrupa bodega/ofibodega/local),
+  // se clasifica por título con clasificarTipoComercio(). Si no matchea,
+  // la propiedad se descarta en vez de adivinar el tipo.
+  tipoPropiedad: TipoPropiedad | null
   zonaMunicipio: string
 }
 
-// Solo se agregan aquí endpoints YA VERIFICADOS con fetch real.
+// Solo se agregan aquí endpoints con URL confirmada por fetch/búsqueda
+// real (contenido genuino de San José Pinula, no adivinado por analogía
+// de slug). Ver comentario de cabecera para el detalle de qué se
+// verificó end-to-end (parseo) vs. solo la existencia de la URL.
 const ENCUENTRA24_ENDPOINTS: EndpointEncuentra24[] = [
+  // --- Renta / Alquiler ---
   {
     url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-alquiler-casas/guatemala-san-jose-pinula',
     tipoOperacion: 'renta',
     tipoPropiedad: 'casa',
     zonaMunicipio: 'San José Pinula',
   },
-  // TODO (verificar antes de agregar, no adivinar el slug):
-  // - venta de casas en San José Pinula
-  // - apartamentos (venta/renta) en San José Pinula
-  // - terrenos, bodegas/ofibodegas, oficinas, fincas, granjas, locales
-  // - Fraijanes y Carretera a El Salvador (puede que compartan slug de
-  //   municipio con San José Pinula si "Carretera a El Salvador" es un
-  //   sector dentro del mismo municipio — confirmar, no asumir)
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-alquiler-apartamentos/guatemala-san-jose-pinula',
+    tipoOperacion: 'renta',
+    tipoPropiedad: 'apartamento',
+    zonaMunicipio: 'San José Pinula',
+  },
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-alquiler-comercios/guatemala-san-jose-pinula',
+    tipoOperacion: 'renta',
+    tipoPropiedad: null,
+    zonaMunicipio: 'San José Pinula',
+  },
+
+  // --- Venta ---
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-venta-de-propiedades-casas/guatemala-san-jose-pinula',
+    tipoOperacion: 'venta',
+    tipoPropiedad: 'casa',
+    zonaMunicipio: 'San José Pinula',
+  },
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-venta-de-propiedades-apartamentos/guatemala-san-jose-pinula',
+    tipoOperacion: 'venta',
+    tipoPropiedad: 'apartamento',
+    zonaMunicipio: 'San José Pinula',
+  },
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-venta-de-propiedades-lotes-y-terrenos/guatemala-san-jose-pinula',
+    tipoOperacion: 'venta',
+    tipoPropiedad: 'terreno',
+    zonaMunicipio: 'San José Pinula',
+  },
+  {
+    url: 'https://www.encuentra24.com/guatemala-es/bienes-raices-venta-de-propiedades-comercios/guatemala-san-jose-pinula',
+    tipoOperacion: 'venta',
+    tipoPropiedad: null,
+    zonaMunicipio: 'San José Pinula',
+  },
+
+  // TODO (verificar con fetch real antes de agregar, no adivinar):
+  // - bienes-raices-venta-de-propiedades-fincas/guatemala-san-jose-pinula
+  // - bienes-raices-venta-de-propiedades-oficinas/guatemala-san-jose-pinula
+  // - bienes-raices-alquiler-lotes-y-terrenos/guatemala-san-jose-pinula
+  //   (la categoria general "alquiler-lotes-y-terrenos" existe y trae
+  //   resultados de SJP mezclados con otros municipios, pero no se
+  //   confirmo la URL filtrada especificamente a San Jose Pinula)
+  // - bienes-raices-alquiler-fincas y bienes-raices-alquiler-oficinas
+  //   (no confirmados en absoluto)
 ]
 
 function limpiarTextoConComentariosReact(texto: string): string {
@@ -176,15 +253,35 @@ function extraerSpecs(tarjeta: string): {
     const idxCierreSvg = contenido.lastIndexOf('</svg>')
     if (idxCierreSvg === -1) continue
     const textoTrasIcono = contenido.slice(idxCierreSvg + 6).trim()
-    const matchNumero = textoTrasIcono.match(/^([\d.]+)/)
+    // Incluye la coma de miles en el match (ej. "80,000 m2"); se limpia
+    // antes de convertir a numero. Sin esto, terrenos con area >= 1000
+    // se truncaban en la primera coma (bug detectado el 16 sept 2026
+    // via scripts/probar-parseo-encuentra24.mjs: "80,000 m2" -> 80).
+    const matchNumero = textoTrasIcono.match(/^([\d,]+(?:\.\d+)?)/)
     if (!matchNumero) continue
+    const valorLimpio = matchNumero[1].replace(/,/g, '')
 
-    if (contenido.includes('lucide-bed')) dormitorios = matchNumero[1]
-    else if (contenido.includes('lucide-bath')) banos = matchNumero[1]
-    else if (contenido.includes('lucide-maximize')) area_m2 = parseFloat(matchNumero[1])
+    if (contenido.includes('lucide-bed')) dormitorios = valorLimpio
+    else if (contenido.includes('lucide-bath')) banos = valorLimpio
+    else if (contenido.includes('lucide-maximize')) area_m2 = parseFloat(valorLimpio)
   }
 
   return { dormitorios, banos, area_m2 }
+}
+
+// Clasifica el tipo de propiedad para la categoría mixta "comercios"
+// (Locales comerciales y bodegas). No adivina: si el título no
+// menciona ninguna palabra reconocible, retorna null y la propiedad
+// se descarta en el llamador.
+function clasificarTipoComercio(titulo: string): TipoPropiedad | null {
+  const t = titulo.toLowerCase()
+  // "Ofi Bodega En Renta..." (con espacio) tambien cuenta como ofibodega -
+  // encontrado el 16 sept 2026 via probar-parseo-encuentra24.mjs, se
+  // estaba clasificando como 'bodega' a secas.
+  if (t.includes('ofibodega') || t.includes('ofi bodega')) return 'ofibodega'
+  if (t.includes('bodega')) return 'bodega'
+  if (t.includes('local')) return 'local'
+  return null
 }
 
 async function scrapearEncuentra24(): Promise<PropiedadExternaCruda[]> {
@@ -197,7 +294,6 @@ async function scrapearEncuentra24(): Promise<PropiedadExternaCruda[]> {
       continue
     }
     const html = await res.text()
-
     const enlaces = [...html.matchAll(/href="(\/guatemala-es\/bienes-raices-[^"]*\/(\d{6,9}))"/g)]
 
     for (let i = 0; i < enlaces.length; i++) {
@@ -212,12 +308,35 @@ async function scrapearEncuentra24(): Promise<PropiedadExternaCruda[]> {
       const matchTitulo = tarjeta.match(/class="card_title[^"]*">([\s\S]*?)<\/h3>/)
       const titulo = matchTitulo ? limpiarTextoConComentariosReact(matchTitulo[1]) : hrefRelativo
 
+      // El filtro de municipio de Encuentra24 no es estricto: devuelve
+      // anuncios "similares" de municipios cercanos (Santa Catarina
+      // Pinula, Muxbal, Zona 10, etc.) aunque la URL este filtrada a
+      // San Jose Pinula. Se descarta cualquier tarjeta cuyo subtitulo de
+      // ubicacion no mencione la zona esperada, en vez de guardar
+      // propiedades fuera de la zona de interes con la etiqueta
+      // incorrecta.
+      const matchSubtitulo = tarjeta.match(/class="card_subtitle[^"]*">([\s\S]*?)<\/p>/)
+      const subtitulo = matchSubtitulo ? limpiarTextoConComentariosReact(matchSubtitulo[1]) : ''
+      if (!normalizarTexto(subtitulo).includes(normalizarTexto(endpoint.zonaMunicipio))) {
+        continue
+      }
+
+      let tipoPropiedad: TipoPropiedad | null = endpoint.tipoPropiedad
+      if (tipoPropiedad === null) {
+        tipoPropiedad = clasificarTipoComercio(titulo)
+        if (tipoPropiedad === null) {
+          // No se pudo determinar el tipo con certeza — se descarta en
+          // vez de adivinar (misma disciplina que el resto del proyecto).
+          continue
+        }
+      }
+
       resultados.push({
         fuente_portal: 'encuentra24',
         fuente_id: fuenteId,
         fuente_url: `https://www.encuentra24.com${hrefRelativo}`,
         tipo_operacion: endpoint.tipoOperacion,
-        tipo_propiedad: endpoint.tipoPropiedad,
+        tipo_propiedad: tipoPropiedad,
         titulo,
         precio,
         moneda,
