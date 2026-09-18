@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Pencil, Phone, ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { Pencil, Phone, ArrowLeft, ArrowUpRight, ExternalLink } from 'lucide-react'
 import CambiarEstadoContacto from './cambiar-estado'
-import { BuscarCoincidencias, MarcarNotificada } from '../buscar-coincidencias'
+import { BuscarCoincidencias, MarcarNotificada, MarcarNotificadaExterna } from '../buscar-coincidencias'
 import { CompartirPropiedad } from '../compartir-propiedad'
 import BotonEliminarContacto from '../boton-eliminar-contacto'
 import { ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
@@ -49,6 +49,16 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
     .order('puntaje_coincidencia', { ascending: false })
 
   const coincidencias = (coincidenciasData ?? []) as any[]
+
+  const { data: coincidenciasExternasData } = await supabase
+    .from('coincidencias_propiedad_externa')
+    .select(
+      'id, puntaje_coincidencia, notificado, propiedad_externa:propiedades_externas(id, titulo, precio, moneda, zona_municipio, condominio_sector, dormitorios, banos, fuente_portal, fuente_url)'
+    )
+    .eq('contacto_id', id)
+    .order('puntaje_coincidencia', { ascending: false })
+
+  const coincidenciasExternas = (coincidenciasExternasData ?? []) as any[]
 
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
@@ -141,80 +151,136 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Propiedades sugeridas</h2>
           <BuscarCoincidencias contactoId={id} />
         </div>
 
-        {coincidencias.length === 0 && (
+        {coincidencias.length === 0 && coincidenciasExternas.length === 0 && (
           <p className="text-sm text-slate-400">
             Aún no se ha buscado ninguna coincidencia para este contacto.
           </p>
         )}
 
-        <div className="space-y-2">
-          {coincidencias.map((c) => {
-            const propiedad = c.propiedad
-            if (!propiedad) return null
-            const portada = propiedad.imagenes_propiedad?.find((img: any) => img.es_portada)
-              ?? propiedad.imagenes_propiedad?.[0]
+        {coincidencias.length > 0 && (
+          <div className="mb-4 space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Inventario propio</p>
+            {coincidencias.map((c) => {
+              const propiedad = c.propiedad
+              if (!propiedad) return null
+              const portada = propiedad.imagenes_propiedad?.find((img: any) => img.es_portada)
+                ?? propiedad.imagenes_propiedad?.[0]
 
-            return (
-              <div
-                key={c.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-100 px-3 py-2 text-sm"
-              >
-                <Link
-                  href={`/dashboard/propiedades/${propiedad.id}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 hover:text-[#38B6FF]"
+              return (
+                <div
+                  key={c.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-100 px-3 py-2 text-sm"
                 >
-                  <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-slate-100">
-                    {portada ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={urlImagen(portada.ruta_almacenamiento)}
-                        alt={propiedad.titulo}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-[#2C3E50]">{propiedad.titulo}</p>
-                    <p className="text-xs text-slate-500">
-                      {propiedad.moneda} {Number(propiedad.precio ?? 0).toLocaleString()}
-                    </p>
-                  </div>
-                </Link>
+                  <Link
+                    href={"/dashboard/propiedades/" + propiedad.id}
+                    className="flex min-w-0 flex-1 items-center gap-3 hover:text-[#38B6FF]"
+                  >
+                    <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-slate-100">
+                      {portada ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={urlImagen(portada.ruta_almacenamiento)}
+                          alt={propiedad.titulo}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[#2C3E50]">{propiedad.titulo}</p>
+                      <p className="text-xs text-slate-500">
+                        {propiedad.moneda} {Number(propiedad.precio ?? 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </Link>
 
-                <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:w-auto">
-                  <span className="rounded-full bg-[#38B6FF]/10 px-2 py-0.5 text-[10px] font-medium text-[#38B6FF]">
-                    {c.puntaje_coincidencia}%
-                  </span>
-                  {propiedad.slug && (
-                    <CompartirPropiedad
-                      slug={propiedad.slug}
-                      titulo={propiedad.titulo}
-                      precio={propiedad.precio}
-                      moneda={propiedad.moneda}
-                      zona={propiedad.zona}
-                      municipio={propiedad.municipio?.nombre ?? null}
-                      ciudad={propiedad.ciudad}
-                      dormitorios={propiedad.dormitorios}
-                      banos={propiedad.banos}
-                      telefonoContacto={contacto.telefono}
-                    />
-                  )}
-                  {c.notificado ? (
-                    <span className="text-xs text-green-600">Notificado</span>
-                  ) : (
-                    <MarcarNotificada coincidenciaId={c.id} contactoId={id} />
-                  )}
+                  <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:w-auto">
+                    <span className="rounded-full bg-[#38B6FF]/10 px-2 py-0.5 text-[10px] font-medium text-[#38B6FF]">
+                      {c.puntaje_coincidencia}%
+                    </span>
+                    {propiedad.slug && (
+                      <CompartirPropiedad
+                        slug={propiedad.slug}
+                        titulo={propiedad.titulo}
+                        precio={propiedad.precio}
+                        moneda={propiedad.moneda}
+                        zona={propiedad.zona}
+                        municipio={propiedad.municipio?.nombre ?? null}
+                        ciudad={propiedad.ciudad}
+                        dormitorios={propiedad.dormitorios}
+                        banos={propiedad.banos}
+                        telefonoContacto={contacto.telefono}
+                      />
+                    )}
+                    {c.notificado ? (
+                      <span className="text-xs text-green-600">Notificado</span>
+                    ) : (
+                      <MarcarNotificada coincidenciaId={c.id} contactoId={id} />
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
+
+        {coincidenciasExternas.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Inventario externo (terceros)</p>
+            {coincidenciasExternas.map((c) => {
+              const propiedadExterna = c.propiedad_externa
+              if (!propiedadExterna) return null
+
+              return (
+                <div
+                  key={c.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-100 bg-slate-50/50 px-3 py-2 text-sm"
+                >
+                  <a
+                    href={propiedadExterna.fuente_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 flex-1 items-center gap-2 hover:text-[#38B6FF]"
+                  >
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1 truncate font-medium text-[#2C3E50]">
+                        <span className="truncate">{propiedadExterna.titulo}</span>
+                        <ExternalLink size={11} className="flex-shrink-0 text-slate-400" />
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {propiedadExterna.moneda} {Number(propiedadExterna.precio ?? 0).toLocaleString()}
+                        {' · '}
+                        {propiedadExterna.condominio_sector ? propiedadExterna.condominio_sector + ', ' : ''}
+                        {propiedadExterna.zona_municipio}
+                        {' · '}
+                        {propiedadExterna.fuente_portal}
+                      </p>
+                    </div>
+                  </a>
+
+                  <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:w-auto">
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                      externo
+                    </span>
+                    <span className="rounded-full bg-[#38B6FF]/10 px-2 py-0.5 text-[10px] font-medium text-[#38B6FF]">
+                      {c.puntaje_coincidencia}%
+                    </span>
+                    {c.notificado ? (
+                      <span className="text-xs text-green-600">Notificado</span>
+                    ) : (
+                      <MarcarNotificadaExterna coincidenciaId={c.id} contactoId={id} />
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

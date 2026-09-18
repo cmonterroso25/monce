@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from 'react'
 import { Search, Check } from 'lucide-react'
-import { buscarCoincidencias, marcarCoincidenciaNotificada } from './coincidencias'
+import {
+  buscarCoincidencias,
+  marcarCoincidenciaNotificada,
+  marcarCoincidenciaExternaNotificada,
+} from './coincidencias'
 
 export function BuscarCoincidencias({ contactoId }: { contactoId: string }) {
   const [isPending, startTransition] = useTransition()
@@ -12,10 +16,12 @@ export function BuscarCoincidencias({ contactoId }: { contactoId: string }) {
     setMensaje(null)
     startTransition(async () => {
       const resultado = await buscarCoincidencias(contactoId)
+      if (!resultado.ok) {
+        setMensaje(resultado.mensaje || 'Error al buscar')
+        return
+      }
       setMensaje(
-        resultado.ok
-          ? `${resultado.total} coincidencia(s) encontrada(s).`
-          : resultado.mensaje || 'Error al buscar'
+        `${resultado.totalInterno ?? resultado.total} interna(s), ${resultado.totalExterno ?? 0} externa(s).`
       )
     })
   }
@@ -55,6 +61,35 @@ export function MarcarNotificada({
       onClick={() =>
         startTransition(async () => {
           const r = await marcarCoincidenciaNotificada(coincidenciaId, contactoId)
+          if (r.ok) setHecho(true)
+        })
+      }
+      className="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-500 hover:border-[#38B6FF] hover:text-[#38B6FF] disabled:opacity-50"
+    >
+      <Check size={12} /> Marcar notificado
+    </button>
+  )
+}
+
+export function MarcarNotificadaExterna({
+  coincidenciaId,
+  contactoId,
+}: {
+  coincidenciaId: string
+  contactoId: string
+}) {
+  const [hecho, setHecho] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  if (hecho) return <span className="text-xs text-green-600">Notificado</span>
+
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={() =>
+        startTransition(async () => {
+          const r = await marcarCoincidenciaExternaNotificada(coincidenciaId, contactoId)
           if (r.ok) setHecho(true)
         })
       }
