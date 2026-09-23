@@ -34,7 +34,7 @@ async function obtenerPropiedad(slug: string) {
       requisitos_renta, organization_id,
       niveles, numero_casa, medidas_terreno, extras, mantenimiento, iusi, mascota,
       sala, comedor, cocina, estudio, sala_familiar, habitacion_servicio, lavanderia, jardin,
-      bodega, balcon,
+      bodega, balcon, amenidades,
       imagenes_propiedad (id, ruta_almacenamiento, es_portada, orden),
       municipio:municipios (nombre),
       ubicacion:ubicaciones (nombre, google_maps_url, waze_url, latitud, longitud)

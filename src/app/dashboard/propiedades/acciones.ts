@@ -1,6 +1,6 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
-import { subirImagen, eliminarImagenR2 } from '@/lib/r2/subir-imagen'
+import { subirImagen, eliminarImagenR2, copiarImagenR2 } from '@/lib/r2/subir-imagen'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { urlSitio } from '@/lib/url'
@@ -565,4 +565,153 @@ export async function eliminarPropiedad(propiedadId: string) {
   }
 
   revalidatePath('/dashboard/propiedades')
+}
+
+// ============================================================
+// Duplicar propiedad para la operación alterna (venta<->renta)
+// cuando el texto pegado en el extractor de IA describe ambas.
+// Se copian todos los campos de la propiedad recién guardada
+// (misma ubicación, municipio, colega, m², descripción, etc.) y
+// solo se sobreescriben los campos que realmente cambian entre
+// un anuncio de venta y uno de renta. Las fotos se copian en R2
+// (no se vuelven a subir desde el navegador).
+// ============================================================
+
+export type DatosOperacionAlterna = {
+  tipo_operacion: string
+  precio: number
+  moneda: string
+  mantenimiento: number | null
+  // Comisión propia de la operación alterna: NO se copia de la propiedad
+  // origen porque venta y renta suelen tener comisiones distintas. Si el
+  // agente no la selecciona (vía el campo "Comisión" de Información
+  // interna, cambiando de pestaña venta/renta), queda null y debe
+  // completarse luego editando esa propiedad.
+  comision: string | null
+  // Requisitos de renta propios de la operación alterna, con el mismo
+  // criterio que comisión: solo aplica si la alterna es renta, y se toma
+  // de lo que el agente seleccionó en "Requisitos de renta" mientras esa
+  // pestaña estuvo activa (no se hereda de la propiedad origen).
+  requisitos_renta: string | null
+}
+
+export async function duplicarPropiedadOperacionAlterna(
+  propiedadIdOrigen: string,
+  datos: DatosOperacionAlterna
+): Promise<{ ok: boolean; mensaje?: string; propiedadId?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return { ok: false, mensaje: 'No autenticado.' }
+  }
+
+  const { data: origen, error: errorOrigen } = await supabase
+    .from('propiedades')
+    .select('*')
+    .eq('id', propiedadIdOrigen)
+    .single()
+
+  if (errorOrigen || !origen) {
+    return { ok: false, mensaje: errorOrigen?.message ?? 'No se encontró la propiedad original.' }
+  }
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  const slug = generarSlug(origen.titulo as string)
+
+  // Se excluyen: id/creado_en (los genera la base), slug (se recalcula),
+  // codigo (lo asigna un trigger propio, debe ser único por propiedad),
+  // notificado_nueva_propiedad (debe arrancar en false para la nueva fila).
+  const {
+    id: _id,
+    creado_en: _creadoEn,
+    slug: _slugOrigen,
+    codigo: _codigo,
+    notificado_nueva_propiedad: _notificado,
+    ...resto
+  } = origen as Record<string, unknown>
+
+  const { data: nuevaPropiedad, error: errorInsert } = await supabase
+    .from('propiedades')
+    .insert({
+      ...resto,
+      slug,
+      tipo_operacion: datos.tipo_operacion,
+      precio: datos.precio,
+      moneda: datos.moneda,
+      mantenimiento: datos.mantenimiento,
+      // Se sobreescriben explícitamente (no se heredan de `resto`, que trae
+      // los valores de la propiedad origen): venta y renta cobran comisión
+      // distinta y solo renta lleva requisitos, así que cada operación debe
+      // declarar los suyos en vez de heredar los de la propiedad origen.
+      comision: datos.comision,
+      requisitos_renta: datos.tipo_operacion === 'renta' ? (datos.requisitos_renta ?? null) : null,
+    })
+    .select()
+    .single()
+
+  if (errorInsert) {
+    console.error('--- ERROR AL DUPLICAR PROPIEDAD (operación alterna) ---', errorInsert)
+    return { ok: false, mensaje: errorInsert.message }
+  }
+
+  const nuevoId = nuevaPropiedad.id as string
+
+  const { data: imagenesOrigen } = await supabase
+    .from('imagenes_propiedad')
+    .select('ruta_almacenamiento, es_portada, orden')
+    .eq('propiedad_id', propiedadIdOrigen)
+    .order('orden', { ascending: true })
+
+  let urlPortadaNueva: string | undefined
+
+  for (const imagen of imagenesOrigen ?? []) {
+    try {
+      const nuevaRuta = await copiarImagenR2(imagen.ruta_almacenamiento, nuevoId)
+      await supabase.from('imagenes_propiedad').insert({
+        propiedad_id: nuevoId,
+        ruta_almacenamiento: nuevaRuta,
+        es_portada: imagen.es_portada,
+        orden: imagen.orden,
+      })
+      if (imagen.es_portada) urlPortadaNueva = nuevaRuta
+    } catch (err) {
+      console.error('No se pudo copiar una imagen a la propiedad duplicada (se continúa con el resto):', err)
+    }
+  }
+
+  if (miPerfil?.organization_id) {
+    const { data: gano, error: errorFlag } = await supabase
+      .from('propiedades')
+      .update({ notificado_nueva_propiedad: true })
+      .eq('id', nuevoId)
+      .eq('notificado_nueva_propiedad', false)
+      .select('id')
+      .maybeSingle()
+
+    if (!errorFlag && gano) {
+      try {
+        await notificarFichaPropiedad(
+          supabase,
+          nuevoId,
+          miPerfil.organization_id,
+          user.id,
+          '🆕 Nueva propiedad publicada',
+          'nueva_propiedad',
+          urlPortadaNueva
+        )
+      } catch (errNotif) {
+        console.error(`--- ERROR AL NOTIFICAR WHATSAPP (propiedad duplicada ${nuevoId}) ---`, errNotif)
+      }
+    }
+  }
+
+  revalidatePath('/dashboard/propiedades')
+  return { ok: true, propiedadId: nuevoId }
 }

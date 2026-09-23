@@ -19,6 +19,10 @@ type PropiedadAreasYAmbientes = {
   jardin?: string | null
   bodega?: string | null
   balcon?: string | null
+  // Amenidades del edificio/condominio donde está la propiedad (piscina,
+  // gimnasio, seguridad, etc.) — no confundir con la lista de ambientes
+  // (sala, comedor, jardín...) que se arma más abajo en este componente.
+  amenidades?: string | null
 }
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
@@ -40,7 +44,7 @@ export default function SeccionAreasYAmbientes({
   titulo?: string
   className?: string
 }) {
-  const amenidades = [
+  const listaAmbientes = [
     ['Sala', propiedad.sala],
     ['Comedor', propiedad.comedor],
     ['Cocina', propiedad.cocina],
@@ -75,14 +79,22 @@ export default function SeccionAreasYAmbientes({
           <Dato etiqueta="Mascota" valor={propiedad.mascota} />
         </div>
       </div>
-      {amenidades.length > 0 && (
-        <div>
+      {listaAmbientes.length > 0 && (
+        <div className={propiedad.amenidades ? 'mb-4' : ''}>
           <h3 className="mb-2 font-semibold text-[#2C3E50]">Ambientes</h3>
           <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-            {amenidades.map(([etiqueta, valor]) => (
+            {listaAmbientes.map(([etiqueta, valor]) => (
               <Dato key={etiqueta as string} etiqueta={etiqueta as string} valor={valor as string} />
             ))}
           </div>
+        </div>
+      )}
+      {propiedad.amenidades && (
+        <div>
+          <h3 className="mb-2 font-semibold text-[#2C3E50]">Amenidades del condominio</h3>
+          <p className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
+            {propiedad.amenidades}
+          </p>
         </div>
       )}
     </div>

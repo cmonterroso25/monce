@@ -1,17 +1,22 @@
 'use client'
 
-import { useState } from 'react'
 import { OPCIONES_REQUISITOS_RENTA, REQUISITOS_RENTA, type CodigoRequisitosRenta } from './requisitos-renta'
 
 type Seleccion = CodigoRequisitosRenta | ''
 
+// Componente totalmente controlado: no guarda su propia selección en
+// estado interno (useState), para que nunca se pierda al desmontarse
+// (cuando el padre lo oculta con {esRenta && ...} al cambiar de pestaña
+// venta/renta). El padre es la única fuente de verdad: le pasa `value` y
+// recibe cada cambio por `onChange`.
 export default function SelectorRequisitosRenta({
-  defaultValue = '',
+  value,
+  onChange,
 }: {
-  defaultValue?: Seleccion
+  value: Seleccion
+  onChange: (valor: Seleccion) => void
 }) {
-  const [seleccion, setSeleccion] = useState<Seleccion>(defaultValue)
-  const paquete = seleccion ? REQUISITOS_RENTA[seleccion] : null
+  const paquete = value ? REQUISITOS_RENTA[value] : null
 
   return (
     <div>
@@ -23,8 +28,8 @@ export default function SelectorRequisitosRenta({
             type="radio"
             name="requisitos_renta"
             value=""
-            checked={seleccion === ''}
-            onChange={() => setSeleccion('')}
+            checked={value === ''}
+            onChange={() => onChange('')}
             className="h-4 w-4"
           />
           Ninguno
@@ -35,8 +40,8 @@ export default function SelectorRequisitosRenta({
               type="radio"
               name="requisitos_renta"
               value={codigo}
-              checked={seleccion === codigo}
-              onChange={() => setSeleccion(codigo)}
+              checked={value === codigo}
+              onChange={() => onChange(codigo)}
               className="h-4 w-4"
             />
             {REQUISITOS_RENTA[codigo].etiqueta}

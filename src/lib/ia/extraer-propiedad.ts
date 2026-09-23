@@ -60,8 +60,12 @@ export type PropiedadExtraida = {
   area_construccion_m2: number | null
   area_terreno_m2: number | null
   medidas_terreno: string | null
+  amenidades: string | null
   extras: string | null
   mascota: string | null
+  // Texto del anuncio, reescrito por la IA sin datos de contacto de
+  // asesores (nombres, teléfonos, correos, usuarios de WhatsApp). Ver la
+  // regla de "descripcion" en armarPrompt.
   descripcion: string | null
 }
 
@@ -107,11 +111,14 @@ Reglas importantes:
 - "tipo_propiedad" debe ser EXACTAMENTE uno de estos valores: ${tiposValidos}. Si no estás seguro, usa "casa".
 - "zona" solo debe llenarse si el texto menciona una zona numerada de Ciudad de Guatemala (ej. "Zona 16" -> zona: "16", solo el número, sin la palabra "Zona"). Si la ubicación es un municipio como Fraijanes, San José Pinula, Carretera a El Salvador, etc., NO uses este campo — usa "municipio_texto" en su lugar.
 - "municipio_texto" es el nombre del municipio si se menciona uno explícitamente (ej. "Fraijanes"). Si no se menciona, deja null.
-- "condominio" es el nombre del residencial/condominio si el texto lo menciona (ej. "Villas de Entre Verdes", "Edificio Lirios Cayalá 1").
+- "condominio" es el nombre del residencial/condominio si el texto lo menciona. Si "tipo_propiedad" es "apartamento", antepone SIEMPRE "Edificio " al nombre (ej. si el texto dice "Nogales 1", condominio debe ser "Edificio Nogales 1"). Si el texto ya menciona la palabra "Edificio" pegada al nombre, no la dupliques (ej. "Edificio Lirios Cayalá 1" se queda igual). Para otros tipos de propiedad, usa el nombre tal como aparece en el texto (ej. "Villas de Entre Verdes"), sin anteponer "Edificio".
 - "mantenimiento" SIEMPRE se expresa en quetzales (Q) en este mercado, sin importar la moneda del precio de venta/renta. Extrae solo el número, sin el símbolo.
+- Si el texto dice "mantenimiento incluido", "incluye mantenimiento" o similar SIN dar un monto exacto, usa mantenimiento: 0 en vez de null.
 - "bodega" y "balcon" deben ser exactamente "Si", "No", o null si el texto no lo menciona.
-- "extras" debe resumir amenidades y extras mencionados (piscina, gimnasio, seguridad, amueblada, etc.) como una sola cadena separada por comas.
-- "descripcion" es un párrafo breve y limpio (no una lista con viñetas) que resuma la propiedad, en español neutro, para mostrar en un portal público.
+- "amenidades" debe resumir SOLO las amenidades del condominio/edificio/residencial mencionadas (piscina, gimnasio, salón de eventos, seguridad 24h, cancha, área de juegos, garita, etc.), como una sola cadena separada por comas. Si no se menciona ninguna, usa null.
+- "extras" debe resumir otras características o adicionales de la propiedad que NO sean amenidades del condominio (ej. amueblada, aire acondicionado, paneles solares, cisterna, etc.), como una sola cadena separada por comas. No repitas en "extras" lo que ya pusiste en "amenidades".
+- Si el texto menciona el área en m² del jardín (ej. "jardín de 20m2", "jardin 15 m2"), guarda esa medida como texto en el campo "jardin" (ej. "20 m²"). Si el jardín se menciona sin área, describe brevemente ahí lo que diga el texto.
+- "descripcion" es el texto del anuncio reescrito TAL CUAL (no lo resumas, no lo reinterpretes, no cambies el orden ni el tono), PERO eliminando cualquier nombre de persona, número de teléfono, usuario de WhatsApp, correo electrónico u otro dato de contacto de asesores/agentes que aparezca en el texto (por ejemplo firmas al final del mensaje, "Contactar a Juan Pérez al 5555-5555", "Whatsapp: ...", etc.). Si el texto no contiene ningún dato de contacto de ese tipo, "descripcion" debe ser el texto original completo, sin modificar.
 - Si el texto menciona precio de VENTA y precio de RENTA por separado con montos distintos (ej. "PRECIO VENTA US395 mil" y "Renta us1350 incluye mant"), debes devolver DOS objetos en el arreglo "propiedades": uno con tipo_operacion "venta" y su precio, otro con tipo_operacion "renta" y su precio — el resto de los campos (dormitorios, baños, área, amenidades, etc.) se repiten igual en ambos porque es la misma propiedad física.
 - Si solo se menciona una operación, devuelve un solo objeto en el arreglo.
 - Cualquier campo que no puedas determinar con confianza del texto: usa null. No inventes datos.
@@ -147,6 +154,7 @@ Responde ÚNICAMENTE con un objeto JSON con este formato exacto, sin texto adici
       "area_construccion_m2": <número o null>,
       "area_terreno_m2": <número o null>,
       "medidas_terreno": "<string o null>",
+      "amenidades": "<string o null>",
       "extras": "<string o null>",
       "mascota": "<string o null>",
       "descripcion": "<string o null>"

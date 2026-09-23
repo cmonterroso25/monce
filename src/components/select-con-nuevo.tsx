@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Opcion = { id: string; nombre: string }
 
@@ -10,14 +10,27 @@ export default function SelectConNuevo({
   opciones,
   placeholder,
   defaultValue = '',
+  valorExterno,
 }: {
   name: string
   label: string
   opciones: Opcion[]
   placeholder: string
   defaultValue?: string
+  valorExterno?: string
 }) {
   const [valor, setValor] = useState(defaultValue)
+
+  // Permite que un componente externo (ej. el extractor de IA) fije el
+  // valor seleccionado sin romper el uso normal: si nadie pasa
+  // `valorExterno`, este efecto nunca se dispara y el select se
+  // comporta exactamente como antes.
+  useEffect(() => {
+    if (valorExterno !== undefined && valorExterno !== valor) {
+      setValor(valorExterno)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorExterno])
 
   return (
     <div>
