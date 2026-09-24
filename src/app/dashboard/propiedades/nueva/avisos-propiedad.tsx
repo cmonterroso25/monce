@@ -10,10 +10,20 @@ export default function AvisosPropiedad({
   formRef,
   versionExtraccion,
   operacionAlterna,
+  requisitosRentaGuardados,
 }: {
   formRef: React.RefObject<HTMLFormElement | null>
   versionExtraccion: number
   operacionAlterna: string | null
+  // Valor de "Requisitos de renta" que vive en el estado del padre
+  // (formulario-nueva-propiedad.tsx). Es necesario porque, cuando la
+  // pestaña activa es "venta", el campo <SelectorRequisitosRenta> ni
+  // siquiera está montado en el DOM ({esRenta && ...}) — leerlo con
+  // form.elements.namedItem() ahí siempre da vacío, aunque el agente ya
+  // haya seleccionado un paquete mientras estuvo en la pestaña de renta.
+  // Sin este valor, el aviso saltaba SIEMPRE que había una operación
+  // alterna de renta, sin importar si ya se había seleccionado algo.
+  requisitosRentaGuardados: string
 }) {
   const [avisos, setAvisos] = useState<string[]>([])
 
@@ -33,17 +43,26 @@ export default function AvisosPropiedad({
     }
 
     const operacionActiva = campo('tipo_operacion')
-    const hayRenta = operacionActiva === 'renta' || operacionAlterna === 'renta'
-    if (hayRenta && !campo('requisitos_renta').trim()) {
+    const esRentaActiva = operacionActiva === 'renta'
+    const hayRenta = esRentaActiva || operacionAlterna === 'renta'
+
+    // Si la pestaña activa es renta, el campo existe en el DOM y se lee de
+    // ahí (así refleja cambios en tiempo real). Si la pestaña activa es
+    // venta pero la operación ALTERNA es renta, el campo del DOM no existe
+    // (está desmontado), así que se usa el valor guardado en el estado del
+    // padre, que es el que realmente se va a guardar para esa operación.
+    const requisitosActuales = esRentaActiva ? campo('requisitos_renta') : requisitosRentaGuardados
+
+    if (hayRenta && !requisitosActuales.trim()) {
       lista.push(
-        operacionActiva !== 'renta'
-          ? 'La versión de renta necesita requisitos: selecciona un paquete en "Requisitos de renta".'
+        !esRentaActiva
+          ? 'La versión de renta necesita requisitos: cambia a la pestaña de renta y selecciona un paquete en "Requisitos de renta".'
           : 'Toda renta debe llevar requisitos: selecciona un paquete (no dejes "Ninguno").'
       )
     }
 
     setAvisos(lista)
-  }, [formRef, operacionAlterna])
+  }, [formRef, operacionAlterna, requisitosRentaGuardados])
 
   useEffect(() => {
     const form = formRef.current

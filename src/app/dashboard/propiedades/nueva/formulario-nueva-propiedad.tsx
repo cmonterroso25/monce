@@ -478,6 +478,7 @@ export default function FormularioNuevaPropiedad({
           formRef={formRef}
           versionExtraccion={extraccion?.version ?? 0}
           operacionAlterna={otraOperacionAlterna?.tipo_operacion ?? null}
+          requisitosRentaGuardados={requisitosRenta}
         />
 
         <BotonGuardarPropiedad
