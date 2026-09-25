@@ -105,6 +105,7 @@ function dibujarLineasJustificadas(
   tamano: number,
   color: ReturnType<typeof rgb>,
   anchoObjetivo: number,
+  alturaLinea: number,
   obtenerY: () => number,
   avanzarY: (delta: number) => void
 ) {
@@ -116,6 +117,7 @@ function dibujarLineasJustificadas(
     } else {
       dibujarLineaJustificada(pagina, linea, x, y, fuente, tamano, color, anchoObjetivo)
     }
+    avanzarY(alturaLinea)
   })
 }
 
@@ -272,10 +274,10 @@ async function generarPdfInforme(datos: {
         TAMANO_DETALLE,
         GRIS_OSCURO,
         ANCHO_DETALLE,
+        13,
         () => y,
         (delta) => { y -= delta }
       )
-      y -= 13 * lineasDetalle.length
       y -= 6
     }
     y -= 4
