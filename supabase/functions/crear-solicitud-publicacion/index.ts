@@ -44,6 +44,11 @@ const MAX_DESCRIPCION_CHARS = 10000;
 // USD se publican como precio * TIPO_CAMBIO_USD_GTQ (decisión de Carlos).
 const TIPO_CAMBIO_USD_GTQ = 7.8;
 
+// Límites reales (maxlength) del formulario móvil de Marketplace, medidos en
+// el HTML capturado. El Worker también los valida y rechaza sin truncar.
+const MAX_TITULO_MARKETPLACE = 100;
+const MAX_DESCRIPCION_MARKETPLACE = 2000;
+
 type CanalSolicitado = {
   canal_codigo: string;
   cuenta_social_id?: string | null;
@@ -420,6 +425,34 @@ async function procesarCanal(args: {
         cuentaSocialId: cuenta?.id ?? null,
         versionAdapter: superficie?.version_adapter_actual ?? null,
         mensaje: `Moneda "${propiedad.moneda}" no soportada para Facebook Marketplace (solo Q, GTQ o USD).`,
+      });
+    }
+  }
+
+  // [7c] Límites de texto de Marketplace: se rechaza con mensaje visible en
+  // el CRM en lugar de fallar después dentro del Worker.
+  if (canalCodigo === "facebook_marketplace") {
+    const longTitulo = String(propiedad.titulo ?? "").length;
+    const longDescripcion = String(textoDescripcion ?? propiedad.descripcion ?? "").length;
+    const excesos: string[] = [];
+    if (longTitulo > MAX_TITULO_MARKETPLACE) {
+      excesos.push(`el título tiene ${longTitulo} caracteres (máximo ${MAX_TITULO_MARKETPLACE})`);
+    }
+    if (longDescripcion > MAX_DESCRIPCION_MARKETPLACE) {
+      excesos.push(`la descripción tiene ${longDescripcion} caracteres (máximo ${MAX_DESCRIPCION_MARKETPLACE})`);
+    }
+    if (excesos.length > 0) {
+      return await crearSubjobFallido({
+        clienteMotor,
+        solicitudId,
+        propiedad,
+        asesorId,
+        canalId: canal.id,
+        canalCodigo,
+        superficieId: superficie?.id ?? null,
+        cuentaSocialId: cuenta?.id ?? null,
+        versionAdapter: superficie?.version_adapter_actual ?? null,
+        mensaje: `Facebook Marketplace no acepta el texto: ${excesos.join("; ")}. Acórtalo en la ficha de la propiedad.`,
       });
     }
   }
