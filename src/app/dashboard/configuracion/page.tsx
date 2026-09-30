@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { invitarUsuario, crearOrganizacion } from './acciones'
+import { invitarUsuario, crearOrganizacion, crearCuentaSocial, eliminarCuentaSocial } from './acciones'
 import BotonEliminarOrganizacion from '@/components/boton-eliminar-organizacion'
 
 export default async function Configuracion({
@@ -43,6 +43,20 @@ export default async function Configuracion({
         .order('nombre')
     : { data: null }
 
+  // Cuentas sociales de la propia organización (la RLS ya limita la lectura).
+  const { data: cuentasSociales } = await supabase
+    .from('cuentas_sociales')
+    .select('id, plataforma, etiqueta, estado, asesor:perfiles!asesor_id (nombre_completo)')
+    .eq('organization_id', miPerfil!.organization_id)
+    .order('creado_en')
+
+  const { data: asesores } = await supabase
+    .from('perfiles')
+    .select('id, nombre_completo')
+    .eq('organization_id', miPerfil!.organization_id)
+    .eq('activo', true)
+    .order('nombre_completo')
+
   return (
     <div className="mx-auto max-w-2xl p-8">
       <h1 className="mb-6 text-2xl font-bold text-[#2C3E50]">Configuración</h1>
@@ -60,6 +74,16 @@ export default async function Configuracion({
       {exito === 'org' && (
         <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Organización creada correctamente.
+        </div>
+      )}
+      {exito === 'cuenta' && (
+        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Cuenta social creada. Queda pendiente de autenticar.
+        </div>
+      )}
+      {exito === 'cuenta_eliminada' && (
+        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Cuenta social eliminada.
         </div>
       )}
       {exito === 'org_eliminada' && (
@@ -113,6 +137,83 @@ export default async function Configuracion({
             className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]"
           >
             Enviar invitación
+          </button>
+        </form>
+      </div>
+
+      <div className="mb-8 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-sm font-semibold text-[#2C3E50]">Cuentas sociales (publicación en redes)</h2>
+
+        {(cuentasSociales ?? []).length === 0 ? (
+          <p className="mb-4 text-sm text-slate-500">Todavía no hay cuentas sociales registradas.</p>
+        ) : (
+          <ul className="mb-4 space-y-2">
+            {(cuentasSociales ?? []).map((cuenta) => (
+              <li key={cuenta.id} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm">
+                <span>
+                  <span className="font-medium text-[#2C3E50]">{cuenta.etiqueta ?? cuenta.plataforma}</span>
+                  <span className="text-slate-500">
+                    {' '}· {cuenta.plataforma} · {(Array.isArray(cuenta.asesor) ? cuenta.asesor[0] : cuenta.asesor)?.nombre_completo ?? 'Sin asesor'}
+                  </span>
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                    {cuenta.estado}
+                  </span>
+                  <form action={eliminarCuentaSocial}>
+                    <input type="hidden" name="cuenta_id" value={cuenta.id} />
+                    <button type="submit" className="text-xs text-red-600 hover:underline">
+                      Eliminar
+                    </button>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form action={crearCuentaSocial} className="space-y-4 border-t border-slate-100 pt-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Asesor dueño de la cuenta</label>
+            <select
+              name="asesor_id"
+              required
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              {(asesores ?? []).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nombre_completo}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Plataforma</label>
+            <select
+              name="plataforma"
+              required
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="facebook">Facebook</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Etiqueta</label>
+            <input
+              name="etiqueta"
+              placeholder="Ej. Facebook de Carlos"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <p className="text-xs text-slate-400">
+            La cuenta queda como PENDING_SETUP. Pasa a READY cuando se autentique la sesión de Facebook
+            en el Worker; hasta entonces no aparece al publicar.
+          </p>
+          <button
+            type="submit"
+            className="rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF]"
+          >
+            Agregar cuenta
           </button>
         </form>
       </div>

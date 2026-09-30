@@ -195,12 +195,12 @@ function generarBloquesPropiedad(
 // Solo la usa "Copiar para Marketplace" (nunca la notificación automática).
 // El precio SIEMPRE se incluye (venta o renta), con la nota de
 // mantenimiento integrada cuando aplica (ver lineaPrecio).
-function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)[] {
+function generarBloquesResumen(p: PropiedadMarketplace, incluirTitulo: boolean): (string | false | null)[] {
   const negocio = p.tipo_operacion === 'renta' ? 'RENTA' : 'VENTA'
   const requisitos = lineasRequisitos(p)
 
   return [
-    p.titulo,
+    incluirTitulo && p.titulo,
     p.codigo ? `📌 Código: ${p.codigo}` : null,
     p.descripcion ?? null,
     requisitos.length > 0 && requisitos.join('\n'),
@@ -208,12 +208,18 @@ function generarBloquesResumen(p: PropiedadMarketplace): (string | false | null)
   ]
 }
 
-export function generarTextoMarketplace(p: PropiedadMarketplace): string {
+// `incluirTitulo` (default true) solo afecta la rama resumen: el formulario
+// móvil de Marketplace tiene campo de título aparte, así que el motor de
+// publicación lo pasa en false para no repetirlo dentro de la descripción.
+export function generarTextoMarketplace(
+  p: PropiedadMarketplace,
+  opts?: { incluirTitulo?: boolean }
+): string {
   const descripcionCorta = (p.descripcion?.trim().length ?? 0) < UMBRAL_DESCRIPCION_CORTA
 
   const bloques = descripcionCorta
     ? generarBloquesPropiedad(p, { incluirDescripcion: true })
-    : generarBloquesResumen(p)
+    : generarBloquesResumen(p, opts?.incluirTitulo ?? true)
 
   return bloques.filter(Boolean).join('\n\n')
 }

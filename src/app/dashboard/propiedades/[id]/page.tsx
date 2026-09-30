@@ -10,7 +10,13 @@ import CambiarEstado from './cambiar-estado'
 import DetalleRequisitosRenta from '@/components/detalle-requisitos-renta'
 import SeccionAreasYAmbientes from '@/components/seccion-areas-ambientes'
 import AnaliticaPropiedad from './analitica-propiedad'
-import { obtenerAnaliticaVistas } from './acciones'
+import {
+  obtenerAnaliticaVistas,
+  obtenerCanalesActivos,
+  obtenerCuentasSocialesListas,
+  type CuentaSocialLista,
+} from './acciones'
+import PublicarCanales from './publicar-canales'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 import { formatearZona } from '@/lib/formato-zona'
 import { formatearPrecioRenta } from '@/lib/formato-precio'
@@ -33,6 +39,20 @@ const coloresModalidad: Record<string, string> = {
 
 const ESTADOS = ['disponible', 'reservada', 'vendida', 'rentada', 'inactiva']
 const ESTADOS_VISIBLES_PORTAL = ['disponible', 'reservada']
+
+const ETIQUETAS_ENVIO: Record<string, string> = {
+  QUEUED: 'En cola',
+  PUBLICANDO: 'Publicando',
+  WAITING_APPROVAL: 'Esperando aprobación',
+  APPROVED: 'Aprobada',
+  PUBLICADO: 'Publicada',
+  VALIDATION_ERROR: 'Faltan datos',
+  AUTH_REQUIRED: 'Cuenta requiere reautenticación',
+  ADAPTER_MISMATCH: 'Formulario de Facebook cambió',
+  APPROVAL_EXPIRED: 'Aprobación expirada',
+  CANCELLED: 'Cancelada',
+  FAILED: 'Error',
+}
 
 function urlImagen(ruta: string) {
   if (ruta.startsWith('http')) return ruta
@@ -122,6 +142,36 @@ export default async function DetallePropiedad({
     desde.setHours(0, 0, 0, 0)
     analiticaInicial = await obtenerAnaliticaVistas(propiedad.id, desde.toISOString(), hasta.toISOString())
   }
+
+  // Motor de publicación multicanal: catálogo de canales activos y las
+  // cuentas sociales READY que este usuario puede ver (la RLS de
+  // cuentas_sociales ya limita a las propias o a todas si es admin).
+  // No se cargan si la propiedad es no publicable: el botón no se muestra.
+  const puedePublicarEnRedes = propiedad.publicable !== false
+  const canalesActivos = puedePublicarEnRedes ? await obtenerCanalesActivos() : []
+  const cuentasPorPlataforma: Record<string, CuentaSocialLista[]> = {}
+  if (canalesActivos.length > 0) {
+    const plataformas = [
+      ...new Set(canalesActivos.filter((c) => c.requiere_cuenta_social).map((c) => c.plataforma)),
+    ]
+    const listas = await Promise.all(
+      plataformas.map((p) => obtenerCuentasSocialesListas(propiedad.organization_id, p))
+    )
+    plataformas.forEach((p, i) => {
+      cuentasPorPlataforma[p] = listas[i]
+    })
+  }
+
+  // Historial de envíos al motor de publicación (la RLS de trabajos_publicacion
+  // ya limita a los del asesor, el captador de la propiedad o un admin).
+  const { data: historialPublicaciones } = puedePublicarEnRedes
+    ? await supabase
+        .from('trabajos_publicacion')
+        .select('id, estado, mensaje_error, creado_en, canal:canales_publicacion (nombre)')
+        .eq('propiedad_id', propiedad.id)
+        .order('creado_en', { ascending: false })
+        .limit(10)
+    : { data: null }
 
   const hayInformacionPrivada =
     propiedad.modalidad_captacion ||
@@ -398,12 +448,47 @@ export default async function DetallePropiedad({
               codigo={propiedad.codigo}
               descripcion={propiedad.descripcion}
             />
+            {puedePublicarEnRedes && canalesActivos.length > 0 && (
+              <PublicarCanales
+                propiedadId={propiedad.id}
+                canalesActivos={canalesActivos}
+                cuentasPorPlataforma={cuentasPorPlataforma}
+              />
+            )}
             <CambiarEstado
               propiedadId={propiedad.id}
               estadoActual={propiedad.estado}
               estados={ESTADOS}
             />
           </div>
+
+          {historialPublicaciones && historialPublicaciones.length > 0 && (
+            <div className="mt-6 rounded-lg border border-slate-200 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-[#2C3E50]">Historial de publicaciones</h2>
+              <ul className="space-y-2">
+                {historialPublicaciones.map((envio) => {
+                  const canal = Array.isArray(envio.canal) ? envio.canal[0] : envio.canal
+                  const etiqueta = ETIQUETAS_ENVIO[envio.estado] ?? envio.estado
+                  return (
+                    <li key={envio.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-[#2C3E50]">{canal?.nombre ?? 'Canal'}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                          {etiqueta}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {new Date(envio.creado_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}
+                      </p>
+                      {envio.mensaje_error && (
+                        <p className="mt-1 text-xs text-slate-500">{envio.mensaje_error}</p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>

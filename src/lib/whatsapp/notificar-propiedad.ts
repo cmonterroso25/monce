@@ -2,12 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { urlSitio } from '@/lib/url'
 import { notificarWhatsapp, obtenerChatIdGrupo, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
 import { mensajeWhatsappPropiedad, type PropiedadMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
-const SELECT_PROPIEDAD_CON_MUNICIPIO = `
+export const SELECT_PROPIEDAD_CON_MUNICIPIO = `
   *,
   municipio:municipios (nombre),
   colega:colegas (nombre)
 `
-function aPropiedadMarketplace(row: any): PropiedadMarketplace & { codigo: string | null } {
+export function aPropiedadMarketplace(row: any): PropiedadMarketplace & { codigo: string | null } {
   return {
     titulo: row.titulo,
     tipo_operacion: row.tipo_operacion,

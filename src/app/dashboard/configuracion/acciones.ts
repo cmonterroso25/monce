@@ -140,3 +140,107 @@ export async function eliminarOrganizacion(formData: FormData) {
   revalidatePath('/dashboard/configuracion')
   redirect('/dashboard/configuracion?exito=org_eliminada')
 }
+
+// ============================================================
+// Cuentas sociales (motor de publicación multicanal)
+// Se crean en PENDING_SETUP; pasan a READY cuando el Worker autentica la
+// sesión. La RLS de cuentas_sociales ya limita INSERT/DELETE a admin o
+// propietario de plataforma; aquí se valida además para dar un mensaje claro.
+// ============================================================
+
+const PLATAFORMAS_CUENTA_SOCIAL = ['facebook', 'instagram', 'whatsapp', 'google', 'website', 'portal']
+
+export async function crearCuentaSocial(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol, organization_id, es_propietario_plataforma')
+    .eq('id', user.id)
+    .single()
+
+  if (miPerfil?.rol !== 'administrador' && miPerfil?.es_propietario_plataforma !== true) {
+    redirect(
+      `/dashboard/configuracion?error=${encodeURIComponent('No tienes permiso para gestionar cuentas sociales.')}`
+    )
+  }
+
+  const asesorId = formData.get('asesor_id') as string
+  const plataforma = formData.get('plataforma') as string
+  const etiqueta = ((formData.get('etiqueta') as string) ?? '').trim()
+
+  if (!PLATAFORMAS_CUENTA_SOCIAL.includes(plataforma)) {
+    redirect(`/dashboard/configuracion?error=${encodeURIComponent('Plataforma no válida.')}`)
+  }
+
+  const { data: asesor } = await supabase
+    .from('perfiles')
+    .select('id')
+    .eq('id', asesorId)
+    .eq('organization_id', miPerfil!.organization_id)
+    .maybeSingle()
+
+  if (!asesor) {
+    redirect(
+      `/dashboard/configuracion?error=${encodeURIComponent('El asesor no pertenece a tu organización.')}`
+    )
+  }
+
+  const { error } = await supabase.from('cuentas_sociales').insert({
+    organization_id: miPerfil!.organization_id,
+    asesor_id: asesorId,
+    plataforma,
+    etiqueta: etiqueta || null,
+    estado: 'PENDING_SETUP',
+  })
+
+  if (error) {
+    console.error('--- ERROR AL CREAR CUENTA SOCIAL ---', error)
+    redirect(`/dashboard/configuracion?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/dashboard/configuracion')
+  redirect('/dashboard/configuracion?exito=cuenta')
+}
+
+export async function eliminarCuentaSocial(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: miPerfil } = await supabase
+    .from('perfiles')
+    .select('rol, organization_id, es_propietario_plataforma')
+    .eq('id', user.id)
+    .single()
+
+  if (miPerfil?.rol !== 'administrador' && miPerfil?.es_propietario_plataforma !== true) {
+    redirect(
+      `/dashboard/configuracion?error=${encodeURIComponent('No tienes permiso para gestionar cuentas sociales.')}`
+    )
+  }
+
+  const cuentaId = formData.get('cuenta_id') as string
+
+  // Si la cuenta ya tiene trabajos de publicación, la FK impide borrarla:
+  // el mensaje de error de Postgres se muestra tal cual.
+  const { error } = await supabase
+    .from('cuentas_sociales')
+    .delete()
+    .eq('id', cuentaId)
+    .eq('organization_id', miPerfil!.organization_id)
+
+  if (error) {
+    console.error('--- ERROR AL ELIMINAR CUENTA SOCIAL ---', error)
+    redirect(`/dashboard/configuracion?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/dashboard/configuracion')
+  redirect('/dashboard/configuracion?exito=cuenta_eliminada')
+}

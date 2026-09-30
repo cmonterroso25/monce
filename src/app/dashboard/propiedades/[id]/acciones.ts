@@ -2,7 +2,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
-import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad } from '@/lib/whatsapp/notificar-propiedad'
+import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad, aPropiedadMarketplace, SELECT_PROPIEDAD_CON_MUNICIPIO } from '@/lib/whatsapp/notificar-propiedad'
+import { generarTextoMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
 const ESTADOS_NO_DISPONIBLE = ['vendida', 'rentada', 'inactiva']
 export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {
   const supabase = await createClient()
@@ -148,4 +149,137 @@ export async function obtenerAnaliticaVistas(
     .sort((a, b) => b.cantidad - a.cantidad)
 
   return { total: data.length, porAgente }
+}
+
+
+// ============================================================
+// Motor de Publicación Multicanal (canales_publicacion / trabajos_publicacion)
+//
+// Estas funciones son el puente entre la ficha de propiedad y la Edge
+// Function `crear-solicitud-publicacion`, que es la que de verdad valida
+// campos requeridos, genera el contenido y abre los subjobs por canal.
+// Aquí NO se duplica esa lógica — solo se cargan los catálogos para la
+// UI y se llama a la Edge Function con el JWT de la sesión actual.
+// ============================================================
+
+export type CanalPublicacionActivo = {
+  id: string
+  codigo: string
+  nombre: string
+  plataforma: string
+  requiere_cuenta_social: boolean
+}
+
+export type CuentaSocialLista = {
+  id: string
+  plataforma: string
+  etiqueta: string | null
+  tipo_cuenta: string
+}
+
+export async function obtenerCanalesActivos(): Promise<CanalPublicacionActivo[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('canales_publicacion')
+    .select('id, codigo, nombre, plataforma, requiere_cuenta_social')
+    .eq('activo', true)
+    .order('nombre')
+
+  if (error) {
+    console.error('No se pudieron leer canales_publicacion:', error)
+    return []
+  }
+  return data ?? []
+}
+
+export async function obtenerCuentasSocialesListas(
+  organizationId: string,
+  plataforma: string
+): Promise<CuentaSocialLista[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('cuentas_sociales')
+    .select('id, plataforma, etiqueta, tipo_cuenta')
+    .eq('organization_id', organizationId)
+    .eq('plataforma', plataforma)
+    .eq('estado', 'READY')
+    .order('etiqueta')
+
+  if (error) {
+    console.error('No se pudieron leer cuentas_sociales:', error)
+    return []
+  }
+  return data ?? []
+}
+
+export type SubjobPublicacionResultado = {
+  canal_codigo: string
+  trabajo_id: string
+  estado: string
+  mensaje_error?: string
+}
+
+export type ResultadoSolicitudPublicacion =
+  | { ok: true; solicitudId: string; traceId: string; subjobs: SubjobPublicacionResultado[] }
+  | { ok: false; mensaje: string }
+
+export async function crearSolicitudPublicacion(
+  propiedadId: string,
+  canales: { canal_codigo: string; cuenta_social_id?: string | null }[]
+): Promise<ResultadoSolicitudPublicacion> {
+  const supabase = await createClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    return { ok: false, mensaje: 'Tu sesión expiró. Vuelve a iniciar sesión e intenta de nuevo.' }
+  }
+
+  // Texto para el campo Descripción del formulario móvil de Marketplace.
+  // El título va en su propio campo, por eso se omite aquí (incluirTitulo: false).
+  const { data: filaPropiedad, error: errorPropiedad } = await supabase
+    .from('propiedades')
+    .select(SELECT_PROPIEDAD_CON_MUNICIPIO)
+    .eq('id', propiedadId)
+    .single()
+
+  if (errorPropiedad || !filaPropiedad) {
+    return { ok: false, mensaje: 'No se pudo leer la propiedad para armar el texto de la publicación.' }
+  }
+
+  const descripcionMarketplace = generarTextoMarketplace(aPropiedadMarketplace(filaPropiedad), {
+    incluirTitulo: false,
+  })
+
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/crear-solicitud-publicacion`
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ propiedad_id: propiedadId, canales, descripcion_marketplace: descripcionMarketplace }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      return { ok: false, mensaje: data?.error ?? 'No se pudo crear la solicitud de publicación' }
+    }
+
+    revalidatePath(`/dashboard/propiedades/${propiedadId}`)
+
+    return {
+      ok: true,
+      solicitudId: data.solicitud_id,
+      traceId: data.trace_id,
+      subjobs: data.subjobs,
+    }
+  } catch (err) {
+    console.error('Error llamando a crear-solicitud-publicacion:', err)
+    return { ok: false, mensaje: 'Error de red al contactar el motor de publicación.' }
+  }
 }
