@@ -355,6 +355,59 @@ async function procesarCanal(args: {
   // ---------------------------------------------------------------
   // [7] Validación previa al Worker (§24) — categoría + campos requeridos
   // ---------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // [7a] Anti-duplicados: no se crea otro envío si ya hay uno vivo o publicado
+  // para la misma propiedad, canal y cuenta. NEEDS_REVIEW cuenta como vivo
+  // porque puede significar que se pulsó Publicar sin confirmar el resultado.
+  // ---------------------------------------------------------------
+  {
+    const ESTADOS_BLOQUEANTES = [
+      "QUEUED", "PUBLICANDO", "WAITING_APPROVAL", "APPROVED", "VERIFICANDO", "PUBLICADO", "NEEDS_REVIEW",
+    ];
+    let consultaPrevios = clienteMotor
+      .from("trabajos_publicacion")
+      .select("id, estado, creado_en")
+      .eq("propiedad_id", propiedad.id)
+      .eq("canal_id", canal.id)
+      .in("estado", ESTADOS_BLOQUEANTES);
+    consultaPrevios = cuenta?.id
+      ? consultaPrevios.eq("cuenta_social_id", cuenta.id)
+      : consultaPrevios.is("cuenta_social_id", null);
+    const { data: previos, error: errorPrevios } = await consultaPrevios
+      .order("creado_en", { ascending: false })
+      .limit(1);
+
+    let mensajeBloqueo: string | null = null;
+    if (errorPrevios) {
+      console.error(errorPrevios);
+      mensajeBloqueo = "No se pudo comprobar si esta propiedad ya tiene un envío en curso, así que no se creó otro por seguridad. Intenta de nuevo.";
+    } else if (previos && previos.length > 0) {
+      const previo = previos[0];
+      const detalles: Record<string, string> = {
+        PUBLICADO: "ya está publicada en este canal con esta cuenta. Si quieres republicarla, retira antes el anuncio en Facebook y avisa a un administrador",
+        NEEDS_REVIEW: "tiene un envío que requiere revisión (puede que ya se haya publicado). Revisa Facebook antes de crear otro",
+      };
+      mensajeBloqueo = `Esta propiedad ${
+        detalles[previo.estado] ?? `ya tiene un envío en curso (estado ${previo.estado}). Espera a que termine o recházalo`
+      }.`;
+    }
+
+    if (mensajeBloqueo) {
+      return await crearSubjobFallido({
+        clienteMotor,
+        solicitudId,
+        propiedad,
+        asesorId,
+        canalId: canal.id,
+        canalCodigo,
+        superficieId: superficie?.id ?? null,
+        cuentaSocialId: cuenta?.id ?? null,
+        versionAdapter: superficie?.version_adapter_actual ?? null,
+        mensaje: mensajeBloqueo,
+      });
+    }
+  }
+
   let categoriaMatch: { ruta_categoria: string; categoria_externa_id: string | null } | null = null;
   if (canal.requiere_categoria && superficie) {
     const { data: mapeo } = await clienteUsuario
