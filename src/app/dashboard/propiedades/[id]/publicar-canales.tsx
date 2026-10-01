@@ -148,9 +148,11 @@ export default function PublicarCanales({ propiedadId, canalesActivos, cuentasPo
 
                         {marcado && canal.requiere_cuenta_social && (
                           <div className="mt-2 pl-6">
-                            {cuentas.length === 0 ? (
+                            {cuentas.filter((c) => c.estado === 'READY').length === 0 ? (
                               <p className="text-xs text-amber-600">
-                                No hay ninguna cuenta de {canal.plataforma} lista. Pide a un administrador que agregue una en Configuración.
+                                {cuentas.length === 0
+                                  ? `No hay ninguna cuenta de ${canal.plataforma} lista. Pide a un administrador que agregue una en Configuración.`
+                                  : 'La cuenta está ocupada con otra publicación. Intenta de nuevo en unos minutos.'}
                               </p>
                             ) : (
                               <select
@@ -162,8 +164,8 @@ export default function PublicarCanales({ propiedadId, canalesActivos, cuentasPo
                               >
                                 <option value="">Selecciona una cuenta…</option>
                                 {cuentas.map((cuenta) => (
-                                  <option key={cuenta.id} value={cuenta.id}>
-                                    {cuenta.etiqueta ?? cuenta.plataforma} ({cuenta.tipo_cuenta})
+                                  <option key={cuenta.id} value={cuenta.id} disabled={cuenta.estado !== 'READY'}>
+                                    {cuenta.etiqueta ?? cuenta.plataforma} ({cuenta.tipo_cuenta}){cuenta.estado !== 'READY' ? ' — ocupada' : ''}
                                   </option>
                                 ))}
                               </select>

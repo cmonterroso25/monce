@@ -175,6 +175,7 @@ export type CuentaSocialLista = {
   plataforma: string
   etiqueta: string | null
   tipo_cuenta: string
+  estado: string
 }
 
 export async function obtenerCanalesActivos(): Promise<CanalPublicacionActivo[]> {
@@ -199,10 +200,10 @@ export async function obtenerCuentasSocialesListas(
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('cuentas_sociales')
-    .select('id, plataforma, etiqueta, tipo_cuenta')
+    .select('id, plataforma, etiqueta, tipo_cuenta, estado')
     .eq('organization_id', organizationId)
     .eq('plataforma', plataforma)
-    .eq('estado', 'READY')
+    .in('estado', ['READY', 'BUSY'])
     .order('etiqueta')
 
   if (error) {
