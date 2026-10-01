@@ -17,6 +17,7 @@ import {
   type CuentaSocialLista,
 } from './acciones'
 import PublicarCanales from './publicar-canales'
+import RevisionPublicacion, { type RevisionPendiente } from './revision-publicacion'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 import { formatearZona } from '@/lib/formato-zona'
 import { formatearPrecioRenta } from '@/lib/formato-precio'
@@ -52,6 +53,10 @@ const ETIQUETAS_ENVIO: Record<string, string> = {
   APPROVAL_EXPIRED: 'Aprobación expirada',
   CANCELLED: 'Cancelada',
   FAILED: 'Error',
+  NEEDS_REVIEW: 'Requiere revisión',
+  VERIFICANDO: 'Verificando',
+  RETRY_WAITING: 'Esperando reintento',
+  HUMAN_INTERVENTION_REQUIRED: 'Requiere intervención humana',
 }
 
 function urlImagen(ruta: string) {
@@ -167,11 +172,45 @@ export default async function DetallePropiedad({
   const { data: historialPublicaciones } = puedePublicarEnRedes
     ? await supabase
         .from('trabajos_publicacion')
-        .select('id, estado, mensaje_error, creado_en, canal:canales_publicacion (nombre)')
+        .select('id, estado, mensaje_error, creado_en, expira_en, canal:canales_publicacion (nombre)')
         .eq('propiedad_id', propiedad.id)
         .order('creado_en', { ascending: false })
         .limit(10)
     : { data: null }
+
+  // Revisión humana: envíos que el Worker dejó llenos y esperando aprobación.
+  // Si la RLS no deja leer contenido_publicacion o activos_publicacion, la
+  // tarjeta lo indica en lugar de fallar.
+  const revisionesPendientes: RevisionPendiente[] = []
+  for (const t of (historialPublicaciones ?? []).filter((x) => x.estado === 'WAITING_APPROVAL')) {
+    const { data: cont } = await supabase
+      .from('contenido_publicacion')
+      .select('titulo, precio, moneda, descripcion')
+      .eq('trabajo_id', t.id)
+      .order('version_contenido', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const { data: activos } = await supabase
+      .from('activos_publicacion')
+      .select('clave_almacenamiento, secuencia')
+      .eq('trabajo_id', t.id)
+      .eq('tipo_activo', 'photo')
+      .order('secuencia', { ascending: true })
+    const canalRev = Array.isArray(t.canal) ? t.canal[0] : t.canal
+    revisionesPendientes.push({
+      id: t.id,
+      canalNombre: canalRev?.nombre ?? 'el canal',
+      expiraEn: t.expira_en ?? null,
+      titulo: cont?.titulo ?? null,
+      precio: cont?.precio ?? null,
+      moneda: cont?.moneda ?? null,
+      descripcion: cont?.descripcion ?? null,
+      fotos: (activos ?? []).map((a) => a.clave_almacenamiento as string),
+    })
+  }
+  const hayEnviosActivos = (historialPublicaciones ?? []).some((x) =>
+    ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED'].includes(x.estado)
+  )
 
   const hayInformacionPrivada =
     propiedad.modalidad_captacion ||
@@ -461,6 +500,14 @@ export default async function DetallePropiedad({
               estados={ESTADOS}
             />
           </div>
+
+          {(revisionesPendientes.length > 0 || hayEnviosActivos) && (
+            <RevisionPublicacion
+              propiedadId={propiedad.id}
+              revisiones={revisionesPendientes}
+              hayActivos={hayEnviosActivos}
+            />
+          )}
 
           {historialPublicaciones && historialPublicaciones.length > 0 && (
             <div className="mt-6 rounded-lg border border-slate-200 p-4">

@@ -283,3 +283,65 @@ export async function crearSolicitudPublicacion(
     return { ok: false, mensaje: 'Error de red al contactar el motor de publicación.' }
   }
 }
+
+
+// ============================================================
+// Aprobación humana de una publicación (WAITING_APPROVAL)
+// La RLS de trabajos_publicacion decide quién puede actualizar; si no hay
+// permiso, el update afecta 0 filas y se informa al usuario.
+// ============================================================
+
+export type ResultadoDecision = { ok: true } | { ok: false; mensaje: string }
+
+export async function aprobarPublicacion(trabajoId: string, propiedadId: string): Promise<ResultadoDecision> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'Tu sesión expiró. Vuelve a iniciar sesión.' }
+
+  const { data, error } = await supabase
+    .from('trabajos_publicacion')
+    .update({ estado: 'APPROVED', aprobado_en: new Date().toISOString() })
+    .eq('id', trabajoId)
+    .eq('estado', 'WAITING_APPROVAL')
+    .gt('expira_en', new Date().toISOString())
+    .select('id')
+
+  if (error) return { ok: false, mensaje: error.message }
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      mensaje: 'Esta publicación ya no está esperando aprobación (venció, fue cancelada o no tienes permiso).',
+    }
+  }
+  revalidatePath(`/dashboard/propiedades/${propiedadId}`)
+  return { ok: true }
+}
+
+export async function rechazarPublicacion(trabajoId: string, propiedadId: string): Promise<ResultadoDecision> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'Tu sesión expiró. Vuelve a iniciar sesión.' }
+
+  const { data, error } = await supabase
+    .from('trabajos_publicacion')
+    .update({
+      estado: 'CANCELLED',
+      codigo_error: 'REJECTED_BY_USER',
+      mensaje_error: 'Rechazada por el asesor antes de publicar.',
+      completado_en: new Date().toISOString(),
+    })
+    .eq('id', trabajoId)
+    .eq('estado', 'WAITING_APPROVAL')
+    .select('id')
+
+  if (error) return { ok: false, mensaje: error.message }
+  if (!data || data.length === 0) {
+    return { ok: false, mensaje: 'Esta publicación ya no está esperando aprobación o no tienes permiso.' }
+  }
+  revalidatePath(`/dashboard/propiedades/${propiedadId}`)
+  return { ok: true }
+}
