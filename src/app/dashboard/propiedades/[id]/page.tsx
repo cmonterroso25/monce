@@ -17,6 +17,7 @@ import {
   type CuentaSocialLista,
 } from './acciones'
 import PublicarCanales from './publicar-canales'
+import LiberarEnvio from './liberar-envio'
 import RevisionPublicacion, { type RevisionPendiente } from './revision-publicacion'
 import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-renta'
 import { formatearZona } from '@/lib/formato-zona'
@@ -153,6 +154,7 @@ export default async function DetallePropiedad({
   // cuentas_sociales ya limita a las propias o a todas si es admin).
   // No se cargan si la propiedad es no publicable: el botón no se muestra.
   const puedePublicarEnRedes = propiedad.publicable !== false
+  const esAdmin = miPerfil?.rol === 'administrador'
   const canalesActivos = puedePublicarEnRedes ? await obtenerCanalesActivos() : []
   const cuentasPorPlataforma: Record<string, CuentaSocialLista[]> = {}
   if (canalesActivos.length > 0) {
@@ -529,6 +531,9 @@ export default async function DetallePropiedad({
                       </p>
                       {envio.mensaje_error && (
                         <p className="mt-1 text-xs text-slate-500">{envio.mensaje_error}</p>
+                      )}
+                      {esAdmin && ['PUBLICADO', 'NEEDS_REVIEW'].includes(envio.estado) && (
+                        <LiberarEnvio trabajoId={envio.id} propiedadId={propiedad.id} estado={envio.estado} />
                       )}
                     </li>
                   )

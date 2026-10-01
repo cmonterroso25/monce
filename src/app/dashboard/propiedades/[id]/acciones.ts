@@ -1,5 +1,6 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
 import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad, aPropiedadMarketplace, SELECT_PROPIEDAD_CON_MUNICIPIO } from '@/lib/whatsapp/notificar-propiedad'
@@ -345,4 +346,70 @@ export async function rechazarPublicacion(trabajoId: string, propiedadId: string
   }
   revalidatePath(`/dashboard/propiedades/${propiedadId}`)
   return { ok: true }
+}
+
+
+// ============================================================
+// Liberar una propiedad bloqueada por un envío PUBLICADO o NEEDS_REVIEW
+// Solo administradores. El administrador confirma, por su cuenta, que el
+// anuncio ya no existe en Facebook; el CRM no lo comprueba.
+// ============================================================
+
+export type ResultadoLiberacion = { ok: true; aviso?: string } | { ok: false; mensaje: string }
+
+export async function liberarEnvioPublicacion(trabajoId: string, propiedadId: string): Promise<ResultadoLiberacion> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'Tu sesión expiró. Vuelve a iniciar sesión.' }
+
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).maybeSingle()
+  if (perfil?.rol !== 'administrador') {
+    return { ok: false, mensaje: 'Solo un administrador puede liberar una propiedad.' }
+  }
+
+  const { data: trabajo, error: errorLeer } = await supabase
+    .from('trabajos_publicacion')
+    .select('id, estado, propiedad_id')
+    .eq('id', trabajoId)
+    .maybeSingle()
+  if (errorLeer) return { ok: false, mensaje: errorLeer.message }
+  if (!trabajo || trabajo.propiedad_id !== propiedadId) {
+    return { ok: false, mensaje: 'No se encontró ese envío para esta propiedad.' }
+  }
+  if (!['PUBLICADO', 'NEEDS_REVIEW'].includes(trabajo.estado)) {
+    return { ok: false, mensaje: `Este envío está en ${trabajo.estado} y no se puede liberar.` }
+  }
+
+  const estadoPrevio = trabajo.estado
+  const { data, error } = await supabase
+    .from('trabajos_publicacion')
+    .update({
+      estado: 'CANCELLED',
+      codigo_error: 'LIBERADO_POR_ADMIN',
+      mensaje_error: `Liberada por un administrador (estado previo: ${estadoPrevio}).`,
+      completado_en: new Date().toISOString(),
+    })
+    .eq('id', trabajoId)
+    .eq('estado', estadoPrevio)
+    .select('id')
+
+  if (error) return { ok: false, mensaje: error.message }
+  if (!data || data.length === 0) {
+    return { ok: false, mensaje: 'El envío cambió de estado mientras tanto o no tienes permiso. Recarga la página.' }
+  }
+
+  // logs_publicacion solo tiene política de SELECT para usuarios: se inserta con service role.
+  const { error: errorLog } = await supabaseAdmin.from('logs_publicacion').insert({
+    trabajo_id: trabajoId,
+    tipo_evento: 'LISTING_RELEASED',
+    detalle: { estado_previo: estadoPrevio, liberado_por: user.id },
+  })
+  if (errorLog) console.error(`No se pudo registrar LISTING_RELEASED del trabajo ${trabajoId}: ${errorLog.message}`)
+
+  revalidatePath(`/dashboard/propiedades/${propiedadId}`)
+  return errorLog
+    ? { ok: true, aviso: `La propiedad quedó libre, pero no se pudo registrar el evento en el log: ${errorLog.message}` }
+    : { ok: true }
 }
