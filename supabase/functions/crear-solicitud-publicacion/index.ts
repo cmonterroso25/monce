@@ -531,7 +531,6 @@ async function procesarCanal(args: {
       version_adapter: superficie?.version_adapter_actual ?? null,
       estado: "QUEUED",
       version_payload: siguienteVersion,
-      encolado_en: new Date().toISOString(),
     })
     .select("id")
     .single();
@@ -549,7 +548,7 @@ async function procesarCanal(args: {
   // ---------------------------------------------------------------
   // [8] Genera contenido (TEMPLATE — sin IA en este MVP)
   // ---------------------------------------------------------------
-  await clienteMotor.from("contenido_publicacion").insert({
+  const { error: errorContenido } = await clienteMotor.from("contenido_publicacion").insert({
     trabajo_id: trabajo.id,
     titulo: propiedad.titulo,
     precio: precioPublicar,
@@ -580,6 +579,7 @@ async function procesarCanal(args: {
     .sort((a: any, b: any) => Number(!!b.es_portada) - Number(!!a.es_portada) || (a.orden ?? 0) - (b.orden ?? 0))
     .slice(0, MAX_FOTOS_MARKETPLACE);
 
+  let errorActivos: { message: string } | null = null;
   if (fotosParaSubir.length > 0) {
     const filas = fotosParaSubir.map((img: any, idx: number) => ({
       trabajo_id: trabajo.id,
@@ -590,13 +590,49 @@ async function procesarCanal(args: {
       secuencia: idx + 1,
       estado: "PENDING",
     }));
-    await clienteMotor.from("activos_publicacion").insert(filas);
+    const { error: eAct } = await clienteMotor.from("activos_publicacion").insert(filas);
+    errorActivos = eAct;
   }
 
-  await clienteMotor.from("logs_publicacion").insert([
-    { trabajo_id: trabajo.id, tipo_evento: "ASSETS_READY", detalle: { total_fotos: imagenes.length, fotos_a_subir: fotosParaSubir.length } },
-    { trabajo_id: trabajo.id, tipo_evento: "QUEUE_ENQUEUED", detalle: {} },
-  ]);
+  // El trabajo solo se vuelve reclamable (encolado_en) cuando contenido y
+  // activos quedaron guardados; si algo falló, no se encola a medias.
+  const errorPrep = errorContenido?.message ?? errorActivos?.message ?? null;
+  if (errorPrep) {
+    console.error(errorPrep);
+    const mensajePrep = `No se pudo preparar el envío (${errorPrep}). No se encoló; intenta de nuevo.`;
+    await clienteMotor
+      .from("trabajos_publicacion")
+      .update({ estado: "FAILED", codigo_error: "PREPARACION_FALLIDA", mensaje_error: mensajePrep })
+      .eq("id", trabajo.id);
+    await clienteMotor.from("logs_publicacion").insert({
+      trabajo_id: trabajo.id,
+      tipo_evento: "FAILED",
+      detalle: { codigo: "PREPARACION_FALLIDA", mensaje: errorPrep },
+    });
+    return { canal_codigo: canalCodigo, trabajo_id: trabajo.id, estado: "FAILED", mensaje_error: mensajePrep };
+  }
+
+  await clienteMotor.from("logs_publicacion").insert({
+    trabajo_id: trabajo.id,
+    tipo_evento: "ASSETS_READY",
+    detalle: { total_fotos: imagenes.length, fotos_a_subir: fotosParaSubir.length },
+  });
+
+  const { error: errorEncolar } = await clienteMotor
+    .from("trabajos_publicacion")
+    .update({ encolado_en: new Date().toISOString() })
+    .eq("id", trabajo.id);
+  if (errorEncolar) {
+    console.error(errorEncolar);
+    const mensajeEnc = `No se pudo encolar el envío (${errorEncolar.message}).`;
+    await clienteMotor
+      .from("trabajos_publicacion")
+      .update({ estado: "FAILED", codigo_error: "ENCOLADO_FALLIDO", mensaje_error: mensajeEnc })
+      .eq("id", trabajo.id);
+    return { canal_codigo: canalCodigo, trabajo_id: trabajo.id, estado: "FAILED", mensaje_error: mensajeEnc };
+  }
+
+  await clienteMotor.from("logs_publicacion").insert({ trabajo_id: trabajo.id, tipo_evento: "QUEUE_ENQUEUED", detalle: {} });
 
   return { canal_codigo: canalCodigo, trabajo_id: trabajo.id, estado: "QUEUED" };
 }
