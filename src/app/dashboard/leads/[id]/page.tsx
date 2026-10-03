@@ -30,7 +30,7 @@ export default async function DetalleLead({
   const { data: lead } = await supabase
     .from('leads')
     .select(
-      '*, contacto:contactos(id, nombre_completo, telefono, correo), propiedad:propiedades(id, titulo, codigo), agente:perfiles(id, nombre_completo)'
+      '*, contacto:contactos(id, nombre_completo, telefono, correo), propiedad:propiedades(id, titulo, codigo), agente:perfiles(id, nombre_completo), propiedades_lead:lead_propiedades(propiedad:propiedades(id, titulo, codigo))'
     )
     .eq('id', id)
     .single()
@@ -166,6 +166,22 @@ export default async function DetalleLead({
             ) : '—'}
           </p>
           <p className="text-slate-600"><span className="font-medium">Agente:</span> {lead.agente?.nombre_completo ?? '—'}</p>
+          {(lead.propiedades_lead ?? []).length > 0 && (
+            <div className="sm:col-span-2 text-slate-600">
+              <span className="font-medium">Propiedades de interés:</span>
+              <ul className="mt-1 space-y-0.5">
+                {(lead.propiedades_lead as any[]).map((pl) =>
+                  pl.propiedad ? (
+                    <li key={pl.propiedad.id}>
+                      <Link href={`/dashboard/propiedades/${pl.propiedad.id}`} className="text-[#38B6FF] hover:underline">
+                        {pl.propiedad.codigo ? `${pl.propiedad.codigo} · ` : ''}{pl.propiedad.titulo}
+                      </Link>
+                    </li>
+                  ) : null
+                )}
+              </ul>
+            </div>
+          )}
           {lead.etapa === 'perdida' && (
             <p className="sm:col-span-2 text-slate-600"><span className="font-medium">Motivo de pérdida:</span> {lead.motivo_perdida ?? '—'}</p>
           )}

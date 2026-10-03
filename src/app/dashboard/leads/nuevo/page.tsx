@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { crearLead } from '../acciones'
+import SelectorPropiedadesLead from '@/components/selector-propiedades-lead'
 
 export default async function NuevoLead({
   searchParams,
@@ -55,14 +56,7 @@ export default async function NuevoLead({
           )}
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Código de propiedad de interés (opcional)</label>
-          <input
-            name="propiedad_codigo"
-            placeholder="Ej. PROP-0123"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
+        <SelectorPropiedadesLead contactoIdInicial={contactoPreseleccionado?.id ?? null} />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Agente responsable</label>

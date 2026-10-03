@@ -1,6 +1,6 @@
 'use server'
 import { createClient } from '@/lib/supabase/server'
-import { CANALES_ENVIO } from '@/lib/propiedades-enviadas'
+import { CANALES_ENVIO, obtenerPropiedadesEnviadas } from '@/lib/propiedades-enviadas'
 
 export async function registrarEnvioPropiedad(contactoId: string, propiedadId: string, canal: string) {
   if (!(CANALES_ENVIO as readonly string[]).includes(canal)) {
@@ -32,4 +32,14 @@ export async function registrarEnvioPropiedad(contactoId: string, propiedadId: s
     return { ok: false, mensaje: error.message }
   }
   return { ok: true, mensaje: null }
+}
+
+// Lo usa el formulario de nuevo lead cuando el contacto se elige dentro del propio formulario.
+export async function listarPropiedadesEnviadas(contactoId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+  return obtenerPropiedadesEnviadas(supabase, contactoId)
 }

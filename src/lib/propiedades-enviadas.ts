@@ -92,3 +92,53 @@ export async function guardarPropiedadesVisita(
   if (error) return { ok: false, mensaje: error.message }
   return { ok: true, mensaje: null }
 }
+
+// Devuelve, en el mismo orden recibido, los ids que se pueden vincular a un lead:
+// los enviados al contacto o los ya vinculados antes (extraPermitidas).
+export async function filtrarPropiedadesPermitidas(
+  supabase: Cliente,
+  contactoId: string | null,
+  ids: string[],
+  extraPermitidas: string[] = []
+): Promise<string[]> {
+  const unicos = [...new Set(ids.filter(Boolean))]
+  if (unicos.length === 0) return []
+
+  const permitidas = new Set(extraPermitidas)
+  if (contactoId) {
+    const { data } = await supabase
+      .from('envios_propiedad_contacto')
+      .select('propiedad_id')
+      .eq('contacto_id', contactoId)
+      .in('propiedad_id', unicos)
+    for (const e of data ?? []) permitidas.add(e.propiedad_id as string)
+  }
+  return unicos.filter((id) => permitidas.has(id))
+}
+
+// Guarda las propiedades de un lead. Con reemplazar=true borra las anteriores primero.
+export async function reemplazarPropiedadesLead(
+  supabase: Cliente,
+  params: {
+    leadId: string
+    organizationId?: string | null
+    propiedadesIds: string[]
+    reemplazar: boolean
+  }
+): Promise<{ ok: boolean; mensaje: string | null }> {
+  if (params.reemplazar) {
+    const { error } = await supabase.from('lead_propiedades').delete().eq('lead_id', params.leadId)
+    if (error) return { ok: false, mensaje: error.message }
+  }
+  if (params.propiedadesIds.length === 0) return { ok: true, mensaje: null }
+
+  const { error } = await supabase.from('lead_propiedades').insert(
+    params.propiedadesIds.map((propiedadId) => ({
+      lead_id: params.leadId,
+      propiedad_id: propiedadId,
+      organization_id: params.organizationId ?? undefined,
+    }))
+  )
+  if (error) return { ok: false, mensaje: error.message }
+  return { ok: true, mensaje: null }
+}

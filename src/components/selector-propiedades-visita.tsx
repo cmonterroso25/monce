@@ -10,17 +10,21 @@ const ETIQUETAS_CANAL: Record<string, string> = {
 export default function SelectorPropiedadesVisita({
   opciones,
   seleccionadas = [],
+  etiqueta = 'Propiedades a visitar (enviadas a este contacto)',
+  cargando = false,
 }: {
   opciones: PropiedadEnviada[]
   seleccionadas?: string[]
+  etiqueta?: string
+  cargando?: boolean
 }) {
   return (
     <div>
       <input type="hidden" name="selector_propiedades" value="1" />
-      <label className="mb-1 block text-xs font-medium text-gray-600">
-        Propiedades a visitar (enviadas a este contacto)
-      </label>
-      {opciones.length === 0 ? (
+      <label className="mb-1 block text-xs font-medium text-gray-600">{etiqueta}</label>
+      {cargando ? (
+        <p className="rounded border border-dashed border-gray-300 px-3 py-2 text-xs text-slate-400">Cargando...</p>
+      ) : opciones.length === 0 ? (
         <p className="rounded border border-dashed border-gray-300 px-3 py-2 text-xs text-slate-400">
           Este contacto aún no tiene propiedades enviadas. Usa &quot;Buscar coincidencias&quot; en el contacto y
           comparte una propiedad.
@@ -42,7 +46,9 @@ export default function SelectorPropiedadesVisita({
                   {o.titulo}
                 </span>
                 <span className="block text-[10px] text-slate-400">
-                  Enviada por {o.canales.map((c) => ETIQUETAS_CANAL[c] ?? c).join(', ')}
+                  {o.canales.length > 0
+                    ? `Enviada por ${o.canales.map((c) => ETIQUETAS_CANAL[c] ?? c).join(', ')}`
+                    : 'Vinculada antes al lead (no enviada por estos canales)'}
                 </span>
               </span>
             </label>

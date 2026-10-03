@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { actualizarLead } from '../../acciones'
+import SelectorPropiedadesVisita from '@/components/selector-propiedades-visita'
+import { obtenerPropiedadesEnviadas, type PropiedadEnviada } from '@/lib/propiedades-enviadas'
 
 export default async function EditarLead({
   params,
@@ -14,12 +16,37 @@ export default async function EditarLead({
 
   const { data: lead } = await supabase
     .from('leads')
-    .select('*, propiedad:propiedades(codigo)')
+    .select('*, propiedad:propiedades(id, titulo, codigo)')
     .eq('id', id)
     .single()
   const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').order('nombre_completo')
 
   if (!lead) return <div className="p-8">Lead no encontrado.</div>
+
+  // Opciones: propiedades enviadas al contacto + las ya vinculadas al lead
+  // (aunque no se hayan enviado por estos canales, para no perderlas al guardar).
+  const opciones: PropiedadEnviada[] = lead.contacto_id
+    ? await obtenerPropiedadesEnviadas(supabase, lead.contacto_id)
+    : []
+
+  const { data: vinculadasData } = await supabase
+    .from('lead_propiedades')
+    .select('propiedad:propiedades(id, titulo, codigo)')
+    .eq('lead_id', id)
+
+  const vinculadas = ((vinculadasData ?? []) as any[]).map((v) => v.propiedad).filter(Boolean)
+  const yaVinculadas = [lead.propiedad, ...vinculadas].filter(Boolean) as {
+    id: string
+    titulo: string
+    codigo: string | null
+  }[]
+
+  for (const p of yaVinculadas) {
+    if (!opciones.some((o) => o.id === p.id)) {
+      opciones.push({ id: p.id, titulo: p.titulo, codigo: p.codigo ?? null, canales: [], ultimoEnvio: '' })
+    }
+  }
+  const seleccionadas = [...new Set(yaVinculadas.map((p) => p.id))]
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
@@ -32,15 +59,11 @@ export default async function EditarLead({
       <form action={actualizarLead} className="space-y-4">
         <input type="hidden" name="lead_id" value={lead.id} />
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Código de propiedad de interés (opcional)</label>
-          <input
-            name="propiedad_codigo"
-            defaultValue={lead.propiedad?.codigo ?? ''}
-            placeholder="Ej. PROP-0123"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
+        <SelectorPropiedadesVisita
+          opciones={opciones}
+          seleccionadas={seleccionadas}
+          etiqueta="Propiedades de interés (enviadas a este contacto)"
+        />
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Agente responsable</label>

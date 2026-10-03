@@ -4,7 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
-import { guardarPropiedadesVisita } from '@/lib/propiedades-enviadas'
+import {
+  guardarPropiedadesVisita,
+  filtrarPropiedadesPermitidas,
+  reemplazarPropiedadesLead,
+} from '@/lib/propiedades-enviadas'
 
 function numeroOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
@@ -62,15 +66,13 @@ export async function crearLead(formData: FormData) {
     redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent('Debes seleccionar un contacto.')}`)
   }
 
-  const propiedadCodigo = textoOpcional(formData.get('propiedad_codigo'))
-  const { id: propiedadId, error: errorPropiedad } = await resolverPropiedadPorCodigo(
+  // Solo se aceptan propiedades que ya se enviaron a este contacto.
+  const propiedadesValidas = await filtrarPropiedadesPermitidas(
     supabase,
-    propiedadCodigo,
-    perfil?.organization_id
+    contactoId,
+    formData.getAll('propiedades_ids') as string[]
   )
-  if (errorPropiedad) {
-    redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent(errorPropiedad)}`)
-  }
+  const propiedadId = propiedadesValidas[0] ?? null
 
   const { data: lead, error } = await supabase
     .from('leads')
@@ -92,6 +94,22 @@ export async function crearLead(formData: FormData) {
     redirect(`/dashboard/leads/nuevo?error=${encodeURIComponent(error.message)}`)
   }
 
+  if (propiedadesValidas.length > 0) {
+    const guardado = await reemplazarPropiedadesLead(supabase, {
+      leadId: lead.id,
+      organizationId: perfil?.organization_id,
+      propiedadesIds: propiedadesValidas,
+      reemplazar: false,
+    })
+    if (!guardado.ok) {
+      console.error('--- ERROR AL GUARDAR PROPIEDADES DEL LEAD ---', guardado.mensaje)
+      revalidatePath('/dashboard/leads')
+      redirect(
+        `/dashboard/leads/${lead.id}?error=${encodeURIComponent('El lead se creó, pero no se pudieron guardar las propiedades: ' + guardado.mensaje)}`
+      )
+    }
+  }
+
   revalidatePath('/dashboard/leads')
   redirect(`/dashboard/leads/${lead.id}`)
 }
@@ -111,20 +129,39 @@ export async function actualizarLead(formData: FormData) {
     .eq('id', user.id)
     .single()
 
-  const propiedadCodigo = textoOpcional(formData.get('propiedad_codigo'))
-  const { id: propiedadId, error: errorPropiedad } = await resolverPropiedadPorCodigo(
+  const hayCaja = formData.has('selector_propiedades')
+
+  // Se aceptan las enviadas al contacto y las que el lead ya tenía vinculadas.
+  const { data: leadActual } = await supabase
+    .from('leads')
+    .select('contacto_id, propiedad_id')
+    .eq('id', leadId)
+    .single()
+  const { data: vinculadasActuales } = await supabase
+    .from('lead_propiedades')
+    .select('propiedad_id')
+    .eq('lead_id', leadId)
+  const yaVinculadas = [
+    leadActual?.propiedad_id,
+    ...(vinculadasActuales ?? []).map((v) => v.propiedad_id),
+  ].filter(Boolean) as string[]
+
+  const propiedadesValidas = await filtrarPropiedadesPermitidas(
     supabase,
-    propiedadCodigo,
-    perfil?.organization_id
+    leadActual?.contacto_id ?? null,
+    formData.getAll('propiedades_ids') as string[],
+    yaVinculadas
   )
-  if (errorPropiedad) {
-    redirect(`/dashboard/leads/${leadId}/editar?error=${encodeURIComponent(errorPropiedad)}`)
-  }
+  // La propiedad principal se conserva si sigue elegida; si no, la primera.
+  const propiedadId =
+    leadActual?.propiedad_id && propiedadesValidas.includes(leadActual.propiedad_id)
+      ? leadActual.propiedad_id
+      : propiedadesValidas[0] ?? null
 
   const { error } = await supabase
     .from('leads')
     .update({
-      propiedad_id: propiedadId,
+      ...(hayCaja ? { propiedad_id: propiedadId } : {}),
       agente_id: textoOpcional(formData.get('agente_id')),
       motivo_perdida: textoOpcional(formData.get('motivo_perdida')),
       actualizado_en: new Date().toISOString(),
@@ -134,6 +171,21 @@ export async function actualizarLead(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL ACTUALIZAR LEAD ---', error)
     redirect(`/dashboard/leads/${leadId}/editar?error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (hayCaja) {
+    const guardado = await reemplazarPropiedadesLead(supabase, {
+      leadId,
+      organizationId: perfil?.organization_id,
+      propiedadesIds: propiedadesValidas,
+      reemplazar: true,
+    })
+    if (!guardado.ok) {
+      console.error('--- ERROR AL GUARDAR PROPIEDADES DEL LEAD ---', guardado.mensaje)
+      redirect(
+        `/dashboard/leads/${leadId}/editar?error=${encodeURIComponent('No se pudieron guardar las propiedades: ' + guardado.mensaje)}`
+      )
+    }
   }
 
   revalidatePath('/dashboard/leads')
