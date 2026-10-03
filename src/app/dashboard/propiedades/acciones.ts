@@ -595,6 +595,20 @@ export type DatosOperacionAlterna = {
   requisitos_renta: string | null
 }
 
+// Cambia la palabra de operación del título ("... en Renta ...") a la de la operación
+// alterna. Solo toca "en <renta|alquiler|venta>"; si el título no sigue ese patrón
+// se deja igual (el agente debe revisarlo al editar la propiedad).
+function tituloParaOperacion(titulo: string, operacion: string): string {
+  const palabra = operacion === 'venta' ? 'Venta' : 'Renta'
+  return titulo.replace(/\b(en\s+)(renta|alquiler|venta)\b/i, (_m, en: string, vieja: string) => {
+    const nueva =
+      vieja === vieja.toUpperCase() ? palabra.toUpperCase()
+      : vieja[0] === vieja[0].toUpperCase() ? palabra
+      : palabra.toLowerCase()
+    return en + nueva
+  })
+}
+
 export async function duplicarPropiedadOperacionAlterna(
   propiedadIdOrigen: string,
   datos: DatosOperacionAlterna
@@ -623,7 +637,8 @@ export async function duplicarPropiedadOperacionAlterna(
     .eq('id', user.id)
     .single()
 
-  const slug = generarSlug(origen.titulo as string)
+  const tituloNuevo = tituloParaOperacion(origen.titulo as string, datos.tipo_operacion)
+  const slug = generarSlug(tituloNuevo)
 
   // Se excluyen: id/creado_en (los genera la base), slug (se recalcula),
   // codigo (lo asigna un trigger propio, debe ser único por propiedad),
@@ -642,6 +657,7 @@ export async function duplicarPropiedadOperacionAlterna(
     .insert({
       ...resto,
       slug,
+      titulo: tituloNuevo,
       tipo_operacion: datos.tipo_operacion,
       precio: datos.precio,
       moneda: datos.moneda,
