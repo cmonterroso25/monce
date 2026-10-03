@@ -5,6 +5,7 @@ const ETIQUETAS_CANAL: Record<string, string> = {
   messenger: 'Messenger',
   instagram: 'Instagram',
   tiktok: 'TikTok',
+  manual: 'notificación manual',
 }
 
 export default function SelectorPropiedadesVisita({

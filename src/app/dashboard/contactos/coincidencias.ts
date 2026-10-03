@@ -231,14 +231,49 @@ export async function buscarCoincidencias(contactoId: string) {
 
 export async function marcarCoincidenciaNotificada(coincidenciaId: string, contactoId: string) {
   const supabase = await createClient()
-  const { error } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'No autenticado' }
+
+  const { data: coincidencia, error } = await supabase
     .from('coincidencias_propiedad')
     .update({ notificado: true })
     .eq('id', coincidenciaId)
+    .select('propiedad_id, organization_id')
+    .single()
+
+  if (error || !coincidencia) {
+    revalidatePath(`/dashboard/contactos/${contactoId}`)
+    return { ok: false, mensaje: error?.message ?? 'Coincidencia no encontrada' }
+  }
+
+  // Marcar como notificada también asocia la propiedad al contacto (caso de
+  // propiedades enviadas fuera del CRM). Si ya hay un envío registrado de esa
+  // propiedad a este contacto, por cualquier canal, no se duplica.
+  if (coincidencia.propiedad_id) {
+    const { data: previo } = await supabase
+      .from('envios_propiedad_contacto')
+      .select('id')
+      .eq('contacto_id', contactoId)
+      .eq('propiedad_id', coincidencia.propiedad_id)
+      .limit(1)
+
+    if (!previo || previo.length === 0) {
+      const { error: errorEnvio } = await supabase.from('envios_propiedad_contacto').insert({
+        contacto_id: contactoId,
+        propiedad_id: coincidencia.propiedad_id,
+        canal: 'manual',
+        enviado_por: user.id,
+        organization_id: coincidencia.organization_id,
+      })
+      if (errorEnvio) {
+        console.error('--- ERROR AL ASOCIAR PROPIEDAD AL MARCAR NOTIFICADA ---', errorEnvio)
+      }
+    }
+  }
 
   revalidatePath(`/dashboard/contactos/${contactoId}`)
-
-  if (error) return { ok: false, mensaje: error.message }
   return { ok: true, mensaje: null }
 }
 
