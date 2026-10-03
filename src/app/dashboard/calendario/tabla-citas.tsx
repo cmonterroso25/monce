@@ -11,6 +11,7 @@ type Cita = {
   agente_id: string | null
   contacto: { nombre_completo: string; telefono: string | null } | null
   lead: { id: string; propiedad: { titulo: string } | null } | null
+  propiedades_visita: { propiedad: { id: string; titulo: string } | null }[] | null
   agente: { nombre_completo: string } | null
 }
 const GRID_COLS = 'grid-cols-[140px_1.6fr_1.4fr_1.2fr_130px]'
@@ -57,7 +58,24 @@ export default function TablaCitas({ citas }: { citas: Cita[] }) {
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm text-slate-600">{cita.lead?.propiedad?.titulo ?? '—'}</p>
+                {(() => {
+                  const visitas = (cita.propiedades_visita ?? [])
+                    .map((v) => v.propiedad?.titulo)
+                    .filter(Boolean) as string[]
+                  if (visitas.length === 0) {
+                    return <p className="truncate text-sm text-slate-600">{cita.lead?.propiedad?.titulo ?? '—'}</p>
+                  }
+                  return (
+                    <div title={visitas.join('\n')}>
+                      {visitas.slice(0, 2).map((titulo, i) => (
+                        <p key={i} className="truncate text-sm text-slate-600">{titulo}</p>
+                      ))}
+                      {visitas.length > 2 && (
+                        <p className="text-xs text-slate-400">+{visitas.length - 2} más</p>
+                      )}
+                    </div>
+                  )
+                })()}
                 {cita.lead_id && (
                   <Link href={`/dashboard/leads/${cita.lead_id}`} className="inline-flex items-center gap-1 text-xs text-[#38B6FF] hover:underline">
                     Ver lead <ArrowUpRight size={10} />

@@ -29,7 +29,7 @@ export default async function Calendario({
   const { data: proximasCitas, error: errorProximasCitas } = await supabase
     .from('actividades')
     .select(
-      'id, notas, programada_en, completada_en, lead_id, agente_id, contacto:contactos(nombre_completo, telefono), lead:leads(id, propiedad:propiedades(titulo)), agente:perfiles!actividades_agente_id_fkey(nombre_completo)'
+      'id, notas, programada_en, completada_en, lead_id, agente_id, contacto:contactos(nombre_completo, telefono), lead:leads(id, propiedad:propiedades(titulo)), agente:perfiles!actividades_agente_id_fkey(nombre_completo), propiedades_visita:actividad_propiedades(propiedad:propiedades(id, titulo))'
     )
     .in('tipo_actividad', ['cita', 'reunion'])
     .is('completada_en', null)
