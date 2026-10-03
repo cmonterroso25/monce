@@ -65,7 +65,7 @@ export async function buscarCoincidencias(contactoId: string) {
   const { data: propiedades } = await supabase
     .from('propiedades')
     .select('id, precio, zona, tipo_propiedad, municipio:municipios(nombre)')
-    .in('estado', ['disponible', 'reservada'])
+    .eq('estado', 'disponible')
 
   const candidatosInternos = (propiedades ?? []).map((p: any) => ({
     propiedad_id: p.id,

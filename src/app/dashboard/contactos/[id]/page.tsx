@@ -43,12 +43,13 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
   const { data: coincidenciasData } = await supabase
     .from('coincidencias_propiedad')
     .select(
-      'id, puntaje_coincidencia, notificado, propiedad:propiedades(id, titulo, slug, precio, moneda, zona, ciudad, dormitorios, banos, municipio:municipios(nombre), imagenes_propiedad(ruta_almacenamiento, es_portada))'
+      'id, puntaje_coincidencia, notificado, propiedad:propiedades(id, estado, titulo, slug, precio, moneda, zona, ciudad, dormitorios, banos, municipio:municipios(nombre), imagenes_propiedad(ruta_almacenamiento, es_portada))'
     )
     .eq('contacto_id', id)
     .order('puntaje_coincidencia', { ascending: false })
 
-  const coincidencias = (coincidenciasData ?? []) as any[]
+  // Solo propiedades disponibles: si se reservó o cambió de estado después de la búsqueda, no se muestra.
+  const coincidencias = ((coincidenciasData ?? []) as any[]).filter((c) => c.propiedad?.estado === 'disponible')
 
   const { data: coincidenciasExternasData } = await supabase
     .from('coincidencias_propiedad_externa')
