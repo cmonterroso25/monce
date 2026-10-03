@@ -14,6 +14,7 @@ import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
 import BotonEliminarLeadConRedireccion from '../boton-eliminar-lead-con-redireccion'
 import BotonEnviar from '@/components/boton-enviar'
 import SelectorPropiedadesVisita from '@/components/selector-propiedades-visita'
+import SelectorColegasActividad from '@/components/selector-colegas-actividad'
 import { obtenerPropiedadesEnviadas } from '@/lib/propiedades-enviadas'
 
 export default async function DetalleLead({
@@ -62,7 +63,7 @@ export default async function DetalleLead({
 
   const { data: actividades, error: errorActividades } = await supabase
     .from('actividades')
-    .select('*, agente:perfiles!actividades_agente_id_fkey(nombre_completo), colega:colegas(nombre), propiedades_visita:actividad_propiedades(propiedad:propiedades(id, titulo, codigo))')
+    .select('*, agente:perfiles!actividades_agente_id_fkey(nombre_completo), colega:colegas(nombre), colegas_cita:actividad_colegas(colega:colegas(nombre)), propiedades_visita:actividad_propiedades(propiedad:propiedades(id, titulo, codigo))')
     .eq('lead_id', id)
     .order('creado_en', { ascending: false })
 
@@ -231,19 +232,7 @@ export default async function DetalleLead({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Colega</label>
-              <select
-                name="colega_id"
-                defaultValue=""
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              >
-                <option value="">Sin colega</option>
-                {(colegas ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
-              </select>
-            </div>
+            <SelectorColegasActividad colegas={colegas ?? []} />
           </div>
           <SelectorPropiedadesVisita opciones={propiedadesEnviadas} />
           <textarea name="notas" placeholder="Notas de la actividad..." rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
@@ -268,7 +257,13 @@ export default async function DetalleLead({
                 </p>
                 {a.notas && <p className="text-slate-600">{a.notas}</p>}
                 {a.agente?.nombre_completo && <p className="text-xs text-slate-400">{a.agente.nombre_completo}</p>}
-                {a.colega?.nombre && <p className="text-xs text-slate-400">Colega: {a.colega.nombre}</p>}
+                {(() => {
+                  const nombres = ((a.colegas_cita ?? []) as any[]).map((c) => c.colega?.nombre).filter(Boolean) as string[]
+                  const lista = nombres.length > 0 ? nombres : a.colega?.nombre ? [a.colega.nombre] : []
+                  return lista.length > 0 ? (
+                    <p className="text-xs text-slate-400">{lista.length > 1 ? 'Colegas' : 'Colega'}: {lista.join(', ')}</p>
+                  ) : null
+                })()}
                 {(a.propiedades_visita ?? []).length > 0 && (
                   <p className="text-xs text-slate-400">
                     Propiedades: {(a.propiedades_visita as any[]).map((pv) => pv.propiedad?.titulo).filter(Boolean).join(' · ')}

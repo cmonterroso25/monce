@@ -4,6 +4,7 @@ import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../../../leads/constantes'
 import BotonEnviar from '@/components/boton-enviar'
 import { aInputLocalGT } from '@/lib/fecha-gt'
 import SelectorPropiedadesVisita from '@/components/selector-propiedades-visita'
+import SelectorColegasActividad from '@/components/selector-colegas-actividad'
 import { obtenerPropiedadesEnviadas } from '@/lib/propiedades-enviadas'
 export default async function EditarActividad({
   params,
@@ -35,6 +36,12 @@ export default async function EditarActividad({
     .select('propiedad_id')
     .eq('actividad_id', id)
   const propiedadesSeleccionadas = (vinculadas ?? []).map((v) => v.propiedad_id as string)
+  const { data: colegasVinculados } = await supabase
+    .from('actividad_colegas')
+    .select('colega_id')
+    .eq('actividad_id', id)
+  const colegasSeleccionados = (colegasVinculados ?? []).map((v) => v.colega_id as string)
+  if (colegasSeleccionados.length === 0 && actividad.colega_id) colegasSeleccionados.push(actividad.colega_id)
   const { data: colegas } = actividad.organization_id
     ? await supabase
         .from('colegas')
@@ -81,19 +88,11 @@ export default async function EditarActividad({
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Colega</label>
-            <select
-              name="colega_id"
-              defaultValue={actividad.colega_id ?? ''}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">Sin colega</option>
-              {(colegas ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
-          </div>
+          <SelectorColegasActividad
+            colegas={colegas ?? []}
+            seleccionados={colegasSeleccionados}
+            claseEtiqueta="mb-1 block text-sm font-medium text-gray-700"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>

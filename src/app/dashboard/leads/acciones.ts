@@ -5,6 +5,12 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
 import {
+  validarColegas,
+  guardarColegasActividad,
+  idsColegasDeActividad,
+  nombresDeColegas,
+} from '@/lib/colegas-actividad'
+import {
   guardarPropiedadesVisita,
   filtrarPropiedadesPermitidas,
   reemplazarPropiedadesLead,
@@ -225,7 +231,12 @@ export async function crearActividad(formData: FormData) {
 
   const tipoActividad = formData.get('tipo_actividad') as string
   const programadaEn = aTimestampGuatemala(formData.get('programada_en'))
-  const colegaId = textoOpcional(formData.get('colega_id'))
+  const colegasIds = await validarColegas(
+    supabase,
+    formData.getAll('colegas_ids') as string[],
+    perfil?.organization_id
+  )
+  const colegaId = colegasIds[0] ?? null
 
   // El agente que atenderá la cita ahora se puede elegir en el formulario
   // (campo "agente_id"); si no se selecciona ninguno, se usa quien registra
@@ -272,6 +283,22 @@ export async function crearActividad(formData: FormData) {
     redirect(`/dashboard/leads/${leadId}?error=${encodeURIComponent(error.message)}`)
   }
 
+  if (actividadCreada?.id && colegasIds.length > 0) {
+    const guardadoColegas = await guardarColegasActividad(supabase, {
+      actividadId: actividadCreada.id,
+      organizationId: perfil?.organization_id,
+      colegasIds,
+      reemplazar: false,
+    })
+    if (!guardadoColegas.ok) {
+      console.error('--- ERROR AL GUARDAR COLEGAS DE LA ACTIVIDAD ---', guardadoColegas.mensaje)
+      revalidatePath('/dashboard/actividades')
+      redirect(
+        `/dashboard/leads/${leadId}?error=${encodeURIComponent('La actividad se creó, pero no se pudieron guardar los colegas: ' + guardadoColegas.mensaje)}`
+      )
+    }
+  }
+
   if ((tipoActividad === 'cita' || tipoActividad === 'reunion') && programadaEn) {
     // Se usa supabaseAdmin (service role) para esta lectura: quien registra
     // la actividad puede no ser el agente_asignado del contacto (por
@@ -311,9 +338,8 @@ export async function crearActividad(formData: FormData) {
         .eq('id', agenteAsignadoId)
         .maybeSingle()
 
-      const { data: colega } = colegaId
-        ? await supabase.from('colegas').select('nombre').eq('id', colegaId).maybeSingle()
-        : { data: null }
+      const nombresColegas = await nombresDeColegas(supabase, colegasIds)
+      const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
       if (chatIdCitas) {
@@ -387,9 +413,11 @@ export async function actualizarActividad(formData: FormData) {
   // si no vienen (por ejemplo un formulario viejo sin esos campos), se
   // conserva lo que ya tenía la actividad.
   const nuevoAgenteId = textoOpcional(formData.get('agente_id')) ?? antes?.agente_id ?? null
-  const nuevoColegaId = formData.has('colega_id')
-    ? textoOpcional(formData.get('colega_id'))
-    : antes?.colega_id ?? null
+  const hayCajaColegas = formData.has('selector_colegas')
+  const colegasIdsNuevos = hayCajaColegas
+    ? await validarColegas(supabase, formData.getAll('colegas_ids') as string[], antes?.organization_id)
+    : []
+  const nuevoColegaId = hayCajaColegas ? colegasIdsNuevos[0] ?? null : antes?.colega_id ?? null
 
   const { error } = await supabase
     .from('actividades')
@@ -405,6 +433,21 @@ export async function actualizarActividad(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL ACTUALIZAR ACTIVIDAD ---', error)
     redirect(`/dashboard/actividades/${actividadId}/editar?error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (antes && hayCajaColegas) {
+    const guardadoColegas = await guardarColegasActividad(supabase, {
+      actividadId,
+      organizationId: antes.organization_id,
+      colegasIds: colegasIdsNuevos,
+      reemplazar: true,
+    })
+    if (!guardadoColegas.ok) {
+      console.error('--- ERROR AL GUARDAR COLEGAS DE LA ACTIVIDAD ---', guardadoColegas.mensaje)
+      redirect(
+        `/dashboard/actividades/${actividadId}/editar?error=${encodeURIComponent('No se pudieron guardar los colegas: ' + guardadoColegas.mensaje)}`
+      )
+    }
   }
 
   if (
@@ -423,9 +466,9 @@ export async function actualizarActividad(formData: FormData) {
       ? await supabase.from('perfiles').select('nombre_completo').eq('id', nuevoAgenteId).maybeSingle()
       : { data: null }
 
-    const { data: colega } = nuevoColegaId
-      ? await supabase.from('colegas').select('nombre').eq('id', nuevoColegaId).maybeSingle()
-      : { data: null }
+    const idsColegasMensaje = await idsColegasDeActividad(supabase, actividadId, nuevoColegaId)
+    const nombresColegas = await nombresDeColegas(supabase, idsColegasMensaje)
+    const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
     const chatIdCitas = await obtenerChatIdGrupo(supabase, antes.organization_id, 'citas')
     if (chatIdCitas) {
