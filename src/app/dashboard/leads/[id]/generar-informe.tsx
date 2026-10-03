@@ -5,15 +5,25 @@ import { crearInforme, obtenerUrlSubidaDocumento, finalizarInforme } from './inf
 import { CAMPOS_DOCUMENTOS_INFORME, type CampoArchivo } from './campos-informe'
 import { useInforme } from './contexto-informe'
 
+type PropiedadInforme = { id: string; titulo: string; codigo: string | null }
+
 export default function GenerarInforme({
   leadId,
   contactoId,
   contactoNombre,
+  propiedades,
+  propiedadInicialId,
 }: {
   leadId: string
   contactoId: string
   contactoNombre: string
+  propiedades: PropiedadInforme[]
+  propiedadInicialId: string | null
 }) {
+  const propiedadInicial =
+    propiedadInicialId && propiedades.some((p) => p.id === propiedadInicialId)
+      ? propiedadInicialId
+      : propiedades[0]?.id ?? ''
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progreso, setProgreso] = useState<string | null>(null)
@@ -54,11 +64,12 @@ export default function GenerarInforme({
     setError(null)
     const formData = new FormData(e.currentTarget)
     const comentarios = (formData.get('comentarios_agente') as string) || ''
+    const propiedadId = (formData.get('propiedad_id') as string) || ''
 
     startTransition(async () => {
       try {
         setProgreso('Iniciando informe...')
-        const creado = await crearInforme(leadId, contactoId, comentarios)
+        const creado = await crearInforme(leadId, contactoId, propiedadId, comentarios)
         if (!creado.ok || !creado.informeId) {
           setError(creado.mensaje ?? 'No se pudo generar el informe.')
           setProgreso(null)
@@ -131,6 +142,30 @@ export default function GenerarInforme({
                 Candidato: <span className="font-medium text-[#2C3E50]">{contactoNombre}</span>
               </p>
 
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Propiedad a evaluar</label>
+                {propiedades.length === 0 ? (
+                  <p className="rounded border border-dashed border-gray-300 px-3 py-2 text-xs text-slate-400">
+                    Este contacto no tiene propiedades relacionadas. Envíale una propiedad desde &quot;Buscar
+                    coincidencias&quot; o vincúlala al lead desde Editar.
+                  </p>
+                ) : (
+                  <select
+                    name="propiedad_id"
+                    required
+                    defaultValue={propiedadInicial}
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs text-[#2C3E50]"
+                  >
+                    {propiedades.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.codigo ? `${p.codigo} · ` : ''}
+                        {p.titulo}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               {error && (
                 <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   {error}
@@ -197,7 +232,7 @@ export default function GenerarInforme({
                 </button>
                 <button
                   type="submit"
-                  disabled={isPending}
+                  disabled={isPending || propiedades.length === 0}
                   className="rounded bg-[#2C3E50] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#38B6FF] disabled:opacity-50"
                 >
                   {isPending ? 'Enviando...' : 'Iniciar análisis'}

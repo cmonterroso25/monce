@@ -76,6 +76,18 @@ export default async function DetalleLead({
     ? await obtenerPropiedadesEnviadas(supabase, lead.contacto_id)
     : []
 
+  // Opciones del informe: propiedad del lead + vinculadas al lead + enviadas al contacto.
+  const opcionesInforme = (() => {
+    const mapa = new Map<string, { id: string; titulo: string; codigo: string | null }>()
+    const agregar = (p: any) => {
+      if (p?.id && !mapa.has(p.id)) mapa.set(p.id, { id: p.id, titulo: p.titulo, codigo: p.codigo ?? null })
+    }
+    agregar(lead.propiedad)
+    for (const pl of (lead.propiedades_lead ?? []) as any[]) agregar(pl.propiedad)
+    for (const p of propiedadesEnviadas) agregar(p)
+    return [...mapa.values()]
+  })()
+
   const { data: solicitudArrendamiento } = await supabase
     .from('solicitudes_arrendamiento')
     .select('id, estado')
@@ -100,6 +112,8 @@ export default async function DetalleLead({
             agenteActualId={user?.id ?? ''}
           />
           <GenerarInforme
+            propiedades={opcionesInforme}
+            propiedadInicialId={lead.propiedad_id ?? null}
             leadId={id}
             contactoId={lead.contacto_id}
             contactoNombre={lead.contacto?.nombre_completo ?? 'Contacto'}

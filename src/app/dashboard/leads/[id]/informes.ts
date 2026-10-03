@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { obtenerUrlFirmada } from '@/lib/r2/url-firmada'
 import { obtenerUrlSubida } from '@/lib/r2/url-subida'
 import { CAMPOS_DOCUMENTOS_INFORME } from './campos-informe'
+import { filtrarPropiedadesPermitidas } from '@/lib/propiedades-enviadas'
 
 const EDGE_FUNCTION_URL = 'https://ymvrddvckmwiajcqaled.supabase.co/functions/v1/generar-informe'
 
@@ -21,6 +22,7 @@ function obtenerExtension(nombreArchivo: string): string {
 export async function crearInforme(
   leadId: string,
   contactoId: string,
+  propiedadId: string,
   comentarios?: string
 ): Promise<{
   ok: boolean
@@ -42,9 +44,11 @@ export async function crearInforme(
   const organizationId = perfil?.organization_id
   if (!organizationId) return { ok: false, mensaje: 'No se encontró la organización del usuario.' }
 
+  if (!propiedadId) return { ok: false, mensaje: 'Selecciona la propiedad a evaluar.' }
+
   const { data: leadInfo, error: errorLead } = await supabase
     .from('leads')
-    .select('propiedad_id, propiedades(precio, moneda, tipo_operacion)')
+    .select('contacto_id, propiedad_id')
     .eq('id', leadId)
     .single()
 
@@ -53,14 +57,36 @@ export async function crearInforme(
     return { ok: false, mensaje: 'No se encontró el lead.' }
   }
 
-  const propiedad = Array.isArray(leadInfo.propiedades)
-    ? leadInfo.propiedades[0]
-    : leadInfo.propiedades
+  // Solo se aceptan propiedades enviadas al contacto o ya vinculadas al lead.
+  const { data: vinculadasData } = await supabase
+    .from('lead_propiedades')
+    .select('propiedad_id')
+    .eq('lead_id', leadId)
+  const yaVinculadas = [
+    leadInfo.propiedad_id,
+    ...(vinculadasData ?? []).map((v) => v.propiedad_id),
+  ].filter(Boolean) as string[]
 
-  if (!leadInfo.propiedad_id || !propiedad || propiedad.precio == null) {
+  const permitidas = await filtrarPropiedadesPermitidas(
+    supabase,
+    leadInfo.contacto_id ?? null,
+    [propiedadId],
+    yaVinculadas
+  )
+  if (permitidas.length === 0) {
+    return { ok: false, mensaje: 'La propiedad elegida no está relacionada con este contacto.' }
+  }
+
+  const { data: propiedad } = await supabase
+    .from('propiedades')
+    .select('id, titulo, precio')
+    .eq('id', propiedadId)
+    .single()
+
+  if (!propiedad || propiedad.precio == null) {
     return {
       ok: false,
-      mensaje: 'Este lead no tiene una propiedad con precio cargado. Asigna una propiedad con precio antes de generar el informe.',
+      mensaje: `La propiedad "${propiedad?.titulo ?? 'seleccionada'}" no tiene precio cargado. Cárgalo antes de generar el informe.`,
     }
   }
 
@@ -72,6 +98,7 @@ export async function crearInforme(
       contacto_id: contactoId,
       estado: 'procesando',
       creado_por: user.id,
+      propiedad_id: propiedadId,
       comentarios_agente: comentarios?.trim() || null,
     })
     .select('id')
@@ -134,7 +161,7 @@ export async function finalizarInforme(
 
   const { data: informe, error: errorInforme } = await supabase
     .from('informes_evaluacion')
-    .select('id, organization_id, lead_id, contacto_id, comentarios_agente')
+    .select('id, organization_id, lead_id, contacto_id, comentarios_agente, propiedad_id')
     .eq('id', informeId)
     .single()
 
@@ -143,18 +170,20 @@ export async function finalizarInforme(
     return { ok: false, mensaje: 'Informe no encontrado o sin permiso.' }
   }
 
-  const { data: leadInfo, error: errorLead } = await supabase
-    .from('leads')
-    .select('propiedades(precio, moneda, tipo_operacion)')
-    .eq('id', informe.lead_id)
-    .single()
-
-  if (errorLead || !leadInfo) {
-    console.error('--- ERROR AL CONSULTAR LEAD (finalizar) ---', errorLead)
-    return { ok: false, mensaje: 'No se encontró el lead asociado al informe.' }
+  if (!informe.propiedad_id) {
+    return { ok: false, mensaje: 'El informe no tiene una propiedad asociada.' }
   }
 
-  const propiedad = Array.isArray(leadInfo.propiedades) ? leadInfo.propiedades[0] : leadInfo.propiedades
+  const { data: propiedad, error: errorPropiedad } = await supabase
+    .from('propiedades')
+    .select('precio, moneda, tipo_operacion')
+    .eq('id', informe.propiedad_id)
+    .single()
+
+  if (errorPropiedad || !propiedad) {
+    console.error('--- ERROR AL CONSULTAR PROPIEDAD DEL INFORME (finalizar) ---', errorPropiedad)
+    return { ok: false, mensaje: 'No se encontró la propiedad asociada al informe.' }
+  }
 
   const contextoFinanciero = {
     monto_referencia: propiedad?.precio ?? null,
