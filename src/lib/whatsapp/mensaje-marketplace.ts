@@ -161,12 +161,12 @@ function generarBloquesPropiedad(
   // la línea de precio (ver notaMantenimientoRenta/lineaPrecio), para no
   // duplicar la información. El mantenimiento siempre se muestra en
   // quetzales, sin importar la moneda del precio/IUSI de la propiedad.
+  // Venta: solo se muestra si hay una cuota real (> 0). Con null/0 no se dice nada.
+  const montoMantenimientoVenta = p.mantenimiento ? Number(p.mantenimiento) : 0
   const textoMantenimiento =
-    p.tipo_operacion === 'renta'
+    p.tipo_operacion === 'renta' || !(montoMantenimientoVenta > 0)
       ? null
-      : !p.mantenimiento || Number(p.mantenimiento) === 0
-        ? '🛠️ Mantenimiento incluido'
-        : `🛠️ Mantenimiento: Q${Number(p.mantenimiento).toLocaleString()}`
+      : `🛠️ Mantenimiento: Q${montoMantenimientoVenta.toLocaleString()}`
 
   const textoMascota = p.mascota === 'Si' ? '🐾 Se aceptan mascotas' : null
 
