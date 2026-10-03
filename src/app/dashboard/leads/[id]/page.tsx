@@ -13,6 +13,8 @@ import { crearActividad } from '../acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../constantes'
 import BotonEliminarLeadConRedireccion from '../boton-eliminar-lead-con-redireccion'
 import BotonEnviar from '@/components/boton-enviar'
+import SelectorPropiedadesVisita from '@/components/selector-propiedades-visita'
+import { obtenerPropiedadesEnviadas } from '@/lib/propiedades-enviadas'
 
 export default async function DetalleLead({
   params,
@@ -60,7 +62,7 @@ export default async function DetalleLead({
 
   const { data: actividades, error: errorActividades } = await supabase
     .from('actividades')
-    .select('*, agente:perfiles!actividades_agente_id_fkey(nombre_completo), colega:colegas(nombre)')
+    .select('*, agente:perfiles!actividades_agente_id_fkey(nombre_completo), colega:colegas(nombre), propiedades_visita:actividad_propiedades(propiedad:propiedades(id, titulo, codigo))')
     .eq('lead_id', id)
     .order('creado_en', { ascending: false })
 
@@ -69,6 +71,10 @@ export default async function DetalleLead({
   }
 
   const informeInicial = await obtenerUltimoInforme(id)
+
+  const propiedadesEnviadas = lead.contacto_id
+    ? await obtenerPropiedadesEnviadas(supabase, lead.contacto_id)
+    : []
 
   const { data: solicitudArrendamiento } = await supabase
     .from('solicitudes_arrendamiento')
@@ -209,6 +215,7 @@ export default async function DetalleLead({
               </select>
             </div>
           </div>
+          <SelectorPropiedadesVisita opciones={propiedadesEnviadas} />
           <textarea name="notas" placeholder="Notas de la actividad..." rows={2} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
           <BotonEnviar className="rounded bg-[#2C3E50] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#38B6FF]">
             Registrar actividad
@@ -232,6 +239,11 @@ export default async function DetalleLead({
                 {a.notas && <p className="text-slate-600">{a.notas}</p>}
                 {a.agente?.nombre_completo && <p className="text-xs text-slate-400">{a.agente.nombre_completo}</p>}
                 {a.colega?.nombre && <p className="text-xs text-slate-400">Colega: {a.colega.nombre}</p>}
+                {(a.propiedades_visita ?? []).length > 0 && (
+                  <p className="text-xs text-slate-400">
+                    Propiedades: {(a.propiedades_visita as any[]).map((pv) => pv.propiedad?.titulo).filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
               <div className="shrink-0">
                 {a.completada_en ? (

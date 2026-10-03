@@ -3,6 +3,8 @@ import { actualizarActividad } from '../../../leads/acciones'
 import { TIPOS_ACTIVIDAD, ETIQUETAS_ACTIVIDAD } from '../../../leads/constantes'
 import BotonEnviar from '@/components/boton-enviar'
 import { aInputLocalGT } from '@/lib/fecha-gt'
+import SelectorPropiedadesVisita from '@/components/selector-propiedades-visita'
+import { obtenerPropiedadesEnviadas } from '@/lib/propiedades-enviadas'
 export default async function EditarActividad({
   params,
   searchParams,
@@ -25,6 +27,14 @@ export default async function EditarActividad({
         .eq('activo', true)
         .order('nombre_completo')
     : { data: [] }
+  const propiedadesEnviadas = actividad.contacto_id
+    ? await obtenerPropiedadesEnviadas(supabase, actividad.contacto_id)
+    : []
+  const { data: vinculadas } = await supabase
+    .from('actividad_propiedades')
+    .select('propiedad_id')
+    .eq('actividad_id', id)
+  const propiedadesSeleccionadas = (vinculadas ?? []).map((v) => v.propiedad_id as string)
   const { data: colegas } = actividad.organization_id
     ? await supabase
         .from('colegas')
@@ -89,6 +99,7 @@ export default async function EditarActividad({
           <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
           <textarea name="notas" defaultValue={actividad.notas ?? ''} rows={3} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
+        <SelectorPropiedadesVisita opciones={propiedadesEnviadas} seleccionadas={propiedadesSeleccionadas} />
         <BotonEnviar className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Guardar cambios
         </BotonEnviar>

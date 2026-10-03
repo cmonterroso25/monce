@@ -215,6 +215,8 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
                         dormitorios={propiedad.dormitorios}
                         banos={propiedad.banos}
                         telefonoContacto={contacto.telefono}
+                        contactoId={id}
+                        propiedadId={propiedad.id}
                       />
                     )}
                     {c.notificado ? (

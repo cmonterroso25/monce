@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { MessageCircle, Send, AtSign, Music2 } from 'lucide-react'
 import { urlSitio } from '@/lib/url'
+import { registrarEnvioPropiedad } from './envios'
 type Plataforma = 'messenger' | 'instagram' | 'tiktok'
 const ETIQUETAS_PLATAFORMA: Record<Plataforma, string> = {
   messenger: 'Messenger',
@@ -25,6 +26,8 @@ export function CompartirPropiedad({
   dormitorios,
   banos,
   telefonoContacto,
+  contactoId,
+  propiedadId,
 }: {
   slug: string
   titulo: string
@@ -36,10 +39,21 @@ export function CompartirPropiedad({
   dormitorios?: string | null
   banos?: string | null
   telefonoContacto?: string | null
+  contactoId?: string
+  propiedadId?: string
 }) {
   const [copiado, setCopiado] = useState<Plataforma | 'error' | null>(null)
   const enlace = urlSitio(`/propiedades/${slug}`)
   const numero = numeroWhatsapp(telefonoContacto)
+
+  // Registra el envío al hacer clic (sin confirmación). No bloquea la acción
+  // principal: si falla, solo se deja el error en consola.
+  function registrar(canal: 'whatsapp' | Plataforma) {
+    if (!contactoId || !propiedadId) return
+    registrarEnvioPropiedad(contactoId, propiedadId, canal).catch((e) =>
+      console.error('No se pudo registrar el envío', e)
+    )
+  }
 
   function generarMensaje() {
     const ubicacion = [zona, municipio, ciudad].filter(Boolean).join(', ')
@@ -60,8 +74,10 @@ export function CompartirPropiedad({
     const mensaje = encodeURIComponent(generarMensaje())
     const url = numero ? `https://wa.me/${numero}?text=${mensaje}` : `https://wa.me/?text=${mensaje}`
     window.open(url, '_blank')
+    registrar('whatsapp')
   }
   async function copiarLink(app: Plataforma) {
+    registrar(app)
     try {
       await navigator.clipboard.writeText(enlace)
       setCopiado(app)

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
+import { guardarPropiedadesVisita } from '@/lib/propiedades-enviadas'
 
 function numeroOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
@@ -191,7 +192,11 @@ export async function crearActividad(formData: FormData) {
     organization_id: perfil?.organization_id,
   }
 
-  const { error } = await supabase.from('actividades').insert(payloadActividad)
+  const { data: actividadCreada, error } = await supabase
+    .from('actividades')
+    .insert(payloadActividad)
+    .select('id')
+    .single()
 
   if (error) {
     // Diagnóstico ampliado: se registra el payload exacto que se intentó
@@ -288,6 +293,23 @@ export async function crearActividad(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/leads/${leadId}`)
+  if (actividadCreada?.id) {
+    const guardado = await guardarPropiedadesVisita(supabase, {
+      actividadId: actividadCreada.id,
+      contactoId,
+      organizationId: perfil?.organization_id,
+      propiedadesIds: formData.getAll('propiedades_ids') as string[],
+      reemplazar: false,
+    })
+    if (!guardado.ok) {
+      console.error('--- ERROR AL GUARDAR PROPIEDADES DE LA ACTIVIDAD ---', guardado.mensaje)
+      revalidatePath('/dashboard/actividades')
+      redirect(
+        `/dashboard/leads/${leadId}?error=${encodeURIComponent('La actividad se creó, pero no se pudieron guardar las propiedades: ' + guardado.mensaje)}`
+      )
+    }
+  }
+
   revalidatePath('/dashboard/actividades')
   redirect(`/dashboard/leads/${leadId}`)
 }
@@ -381,6 +403,22 @@ export async function actualizarActividad(formData: FormData) {
   }
 
   revalidatePath('/dashboard/actividades')
+  if (antes && formData.has('selector_propiedades')) {
+    const guardado = await guardarPropiedadesVisita(supabase, {
+      actividadId,
+      contactoId: antes.contacto_id,
+      organizationId: antes.organization_id,
+      propiedadesIds: formData.getAll('propiedades_ids') as string[],
+      reemplazar: true,
+    })
+    if (!guardado.ok) {
+      console.error('--- ERROR AL GUARDAR PROPIEDADES DE LA ACTIVIDAD ---', guardado.mensaje)
+      redirect(
+        `/dashboard/actividades/${actividadId}/editar?error=${encodeURIComponent('No se pudieron guardar las propiedades: ' + guardado.mensaje)}`
+      )
+    }
+  }
+
   revalidatePath('/dashboard/calendario')
   if (leadId) revalidatePath(`/dashboard/leads/${leadId}`)
   redirect('/dashboard/actividades')
