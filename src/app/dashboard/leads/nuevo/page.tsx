@@ -59,6 +59,21 @@ export default async function NuevoLead({
         <SelectorPropiedadesLead contactoIdInicial={contactoPreseleccionado?.id ?? null} />
 
         <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Código de otra propiedad (opcional)
+          </label>
+          <input
+            name="propiedad_codigo"
+            defaultValue="PROP-0"
+            autoComplete="off"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Para una propiedad enviada fuera del CRM: completa el número. Se asocia a este contacto y al lead.
+          </p>
+        </div>
+
+        <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Agente responsable</label>
           <select name="agente_id" defaultValue={user?.id} className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
             {(perfiles ?? []).map((p) => (

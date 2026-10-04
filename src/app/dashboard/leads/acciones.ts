@@ -78,6 +78,62 @@ export async function crearLead(formData: FormData) {
     contactoId,
     formData.getAll('propiedades_ids') as string[]
   )
+
+  // Código escrito a mano (propiedad enviada fuera del CRM): se asocia al contacto
+  // como envío 'manual' y se vincula al lead. "PROP-0" / "PROP-" solos se ignoran.
+  const codigoManual = (textoOpcional(formData.get('propiedad_codigo')) ?? '').trim().toUpperCase()
+  if (codigoManual && codigoManual !== 'PROP-0' && codigoManual !== 'PROP-') {
+    const urlError = (mensaje: string) =>
+      `/dashboard/leads/nuevo?contacto_id=${contactoId}&error=${encodeURIComponent(mensaje)}`
+
+    const { id: propiedadManualId, error: errorCodigo } = await resolverPropiedadPorCodigo(
+      supabase,
+      codigoManual,
+      perfil?.organization_id
+    )
+    if (errorCodigo || !propiedadManualId) {
+      redirect(urlError(errorCodigo ?? 'No se encontró la propiedad.'))
+    }
+
+    // Solo propiedades disponibles (mismo criterio que "Buscar coincidencias").
+    const { data: propiedadManual } = await supabase
+      .from('propiedades')
+      .select('estado')
+      .eq('id', propiedadManualId)
+      .single()
+    if (propiedadManual?.estado !== 'disponible') {
+      const motivo =
+        propiedadManual?.estado === 'reservada'
+          ? 'se encuentra reservada'
+          : `su estado es "${propiedadManual?.estado ?? 'desconocido'}", no disponible`
+      redirect(urlError(`No se puede asociar la propiedad ${codigoManual} a este lead porque ${motivo}.`))
+    }
+
+    if (!propiedadesValidas.includes(propiedadManualId)) {
+      const { data: previo } = await supabase
+        .from('envios_propiedad_contacto')
+        .select('id')
+        .eq('contacto_id', contactoId)
+        .eq('propiedad_id', propiedadManualId)
+        .limit(1)
+
+      if (!previo || previo.length === 0) {
+        const { error: errorEnvio } = await supabase.from('envios_propiedad_contacto').insert({
+          contacto_id: contactoId,
+          propiedad_id: propiedadManualId,
+          canal: 'manual',
+          enviado_por: user.id,
+          organization_id: perfil?.organization_id,
+        })
+        if (errorEnvio) {
+          console.error('--- ERROR AL ASOCIAR PROPIEDAD POR CÓDIGO ---', errorEnvio)
+          redirect(urlError('No se pudo asociar la propiedad al contacto: ' + errorEnvio.message))
+        }
+      }
+      propiedadesValidas.push(propiedadManualId)
+    }
+  }
+
   const propiedadId = propiedadesValidas[0] ?? null
 
   const { data: lead, error } = await supabase
