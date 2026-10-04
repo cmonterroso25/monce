@@ -4,6 +4,8 @@ import { BedDouble, Bath, Ruler, MapPin, Pencil } from 'lucide-react'
 import TabsPropiedades from './tabs-propiedades'
 import FiltrosPropiedades from './filtros-propiedades'
 import BotonEliminarPropiedad from './boton-eliminar'
+import RefrescarSiEnCurso from './refrescar-si-en-curso'
+import { listarEnviosEnCurso } from './envios-en-curso'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -102,8 +104,17 @@ export default async function ListadoPropiedades({
   const { data: propiedades } = await query
   const totalPropiedades = propiedades?.length ?? 0
 
+  // Propiedades con un envío tuyo en curso (la de "esperando aprobación" tiene prioridad).
+  const enviosEnCurso = await listarEnviosEnCurso()
+  const estadoPorPropiedad = new Map<string, string>()
+  for (const e of enviosEnCurso) {
+    if (estadoPorPropiedad.get(e.propiedadId) === 'WAITING_APPROVAL') continue
+    estadoPorPropiedad.set(e.propiedadId, e.estado)
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8">
+      <RefrescarSiEnCurso activo={enviosEnCurso.length > 0} />
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Propiedades</h1>
@@ -159,11 +170,18 @@ export default async function ListadoPropiedades({
                 (img: { es_portada: boolean }) => img.es_portada
               )
               const puedeEditar = esAdmin || propiedad.captado_por === user?.id
+              const estadoEnvio = estadoPorPropiedad.get(propiedad.id)
+              const claseFila =
+                estadoEnvio === 'WAITING_APPROVAL'
+                  ? 'border-l-4 border-l-amber-400 bg-amber-100 hover:bg-amber-200'
+                  : estadoEnvio
+                    ? 'border-l-4 border-l-[#38B6FF] bg-sky-100 hover:bg-sky-200'
+                    : 'hover:bg-slate-50'
 
               return (
                 <div
                   key={propiedad.id}
-                  className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 last:border-b-0`}
+                  className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-100 px-3 py-2 transition last:border-b-0 ${claseFila}`}
                 >
                   <Link href={`/dashboard/propiedades/${propiedad.id}`} className="contents">
                     {/* Thumbnail */}
@@ -215,6 +233,19 @@ export default async function ListadoPropiedades({
                         {propiedad.tipo_operacion}
                         {propiedad.tipo_propiedad ? ` · ${propiedad.tipo_propiedad}` : ''}
                       </p>
+                      {estadoEnvio && (
+                        <p
+                          className={`truncate text-xs font-semibold ${
+                            estadoEnvio === 'WAITING_APPROVAL' ? 'text-amber-800' : 'text-sky-800'
+                          }`}
+                        >
+                          {estadoEnvio === 'WAITING_APPROVAL'
+                            ? 'Esperando tu aprobación'
+                            : estadoEnvio === 'QUEUED'
+                              ? 'En cola para publicar'
+                              : 'Publicando…'}
+                        </p>
+                      )}
                     </div>
 
                     {/* Ubicación */}

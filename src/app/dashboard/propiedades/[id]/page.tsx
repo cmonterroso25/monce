@@ -189,7 +189,7 @@ export default async function DetallePropiedad({
     .eq('propiedad_id', propiedad.id)
   if (!esAdmin && user) consultaHistorial = consultaHistorial.eq('asesor_id', user.id)
   const { data: historialPublicaciones } = puedePublicarEnRedes
-    ? await consultaHistorial.order('creado_en', { ascending: false }).limit(10)
+    ? await consultaHistorial.order('creado_en', { ascending: false }).limit(50)
     : { data: null }
 
   // Revisión humana: envíos que el Worker dejó llenos y esperando aprobación.
@@ -225,6 +225,12 @@ export default async function DetallePropiedad({
   const hayEnviosActivos = (historialPublicaciones ?? []).some((x) =>
     ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED'].includes(x.estado)
   )
+
+  // El historial muestra solo lo publicado, más NEEDS_REVIEW (bloquea la propiedad y ahí vive el botón de liberar).
+  // Los fallidos no se muestran; los envíos en curso se ven en el panel y en la tarjeta de aprobación.
+  const historialVisible = (historialPublicaciones ?? [])
+    .filter((x) => ['PUBLICADO', 'NEEDS_REVIEW'].includes(x.estado))
+    .slice(0, 10)
 
   const hayInformacionPrivada =
     propiedad.modalidad_captacion ||
@@ -523,11 +529,11 @@ export default async function DetallePropiedad({
             />
           )}
 
-          {historialPublicaciones && historialPublicaciones.length > 0 && (
+          {historialVisible.length > 0 && (
             <div className="mt-6 rounded-lg border border-slate-200 p-4">
               <h2 className="mb-2 text-sm font-semibold text-[#2C3E50]">Historial de publicaciones</h2>
               <ul className="space-y-2">
-                {historialPublicaciones.map((envio) => {
+                {historialVisible.map((envio) => {
                   const canal = Array.isArray(envio.canal) ? envio.canal[0] : envio.canal
                   const cuenta = Array.isArray(envio.cuenta) ? envio.cuenta[0] : envio.cuenta
                   const etiqueta = ETIQUETAS_ENVIO[envio.estado] ?? envio.estado

@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { cerrarSesion } from './acciones'
+import { useEnviosEnCurso, PanelEnviosEnCurso } from './envios-en-curso'
 
 type Modulo = {
   nombre: string
@@ -54,6 +55,8 @@ type SidebarProps = {
 export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: SidebarProps) {
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
+  const envios = useEnviosEnCurso()
+  const hayEsperandoAprobacion = envios.some((e) => e.estado === 'WAITING_APPROVAL')
   const esAdmin = rol === 'administrador'
   const modulos: Modulo[] = esAdmin ? [...MODULOS_BASE, ...MODULOS_SOLO_ADMIN] : MODULOS_BASE
 
@@ -73,10 +76,17 @@ export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: Si
         </Link>
         <button
           onClick={() => setAbierto(true)}
-          className="rounded-md p-2 text-white hover:bg-white/10"
+          className="relative rounded-md p-2 text-white hover:bg-white/10"
           aria-label="Abrir menú"
         >
           <Menu size={22} />
+          {envios.length > 0 && (
+            <span
+              className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ${
+                hayEsperandoAprobacion ? 'bg-red-500' : 'bg-[#38B6FF]'
+              }`}
+            />
+          )}
         </button>
       </div>
 
@@ -108,6 +118,7 @@ export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: Si
             const Icono = modulo.icono
             const activo = esActivo(modulo.href)
             const mostrarBadgeCitas = modulo.href === '/dashboard/calendario' && citasHoy > 0
+            const mostrarBadgeEnvios = modulo.href === '/dashboard/propiedades' && envios.length > 0
 
             if (!modulo.construido) {
               return (
@@ -138,6 +149,16 @@ export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: Si
                   <Icono size={18} />
                   {modulo.nombre}
                 </span>
+                {mostrarBadgeEnvios && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white ${
+                      hayEsperandoAprobacion ? 'bg-red-500' : 'bg-[#38B6FF]'
+                    }`}
+                    title="Publicaciones en curso"
+                  >
+                    {envios.length}
+                  </span>
+                )}
                 {mostrarBadgeCitas && (
                   <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     {citasHoy}
@@ -146,6 +167,7 @@ export default function Sidebar({ nombreCompleto, rol, email, citasHoy = 0 }: Si
               </Link>
             )
           })}
+          <PanelEnviosEnCurso envios={envios} onNavegar={() => setAbierto(false)} />
         </nav>
 
         <div className="border-t border-white/10 px-4 py-4">
