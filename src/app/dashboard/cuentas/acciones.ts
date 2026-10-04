@@ -1,8 +1,11 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+
+const ESTADOS_CONECTABLES = ['PENDING_SETUP', 'AUTH_REQUIRED', 'ERROR']
 
 function conError(mensaje: string): never {
   return redirect(`/dashboard/cuentas?error=${encodeURIComponent(mensaje)}`)
@@ -68,7 +71,9 @@ export async function eliminarMiCuentaSocial(formData: FormData) {
     .eq('asesor_id', user.id)
     .maybeSingle()
   if (!cuenta) conError('No se encontró esa cuenta entre las tuyas.')
-  if (cuenta!.estado === 'BUSY') conError('La cuenta está publicando ahora mismo. Espera a que termine.')
+  if (['BUSY', 'CONNECT_REQUESTED', 'CONNECTING'].includes(cuenta!.estado)) {
+    conError('La cuenta está en uso (publicando o conectándose). Espera a que termine o cancela la conexión.')
+  }
 
   const { data: borradas, error } = await supabase
     .from('cuentas_sociales')
@@ -89,4 +94,84 @@ export async function eliminarMiCuentaSocial(formData: FormData) {
 
   revalidatePath('/dashboard/cuentas')
   redirect('/dashboard/cuentas?exito=eliminada')
+}
+
+// Pide al Worker (en la Mac) que abra la ventana de inicio de sesión de Facebook.
+// La RLS de cuentas_sociales solo deja editar a admin; por eso se valida aquí que la
+// cuenta sea del usuario y se escribe con service role, solo hacia CONNECT_REQUESTED.
+export async function solicitarConexionCuenta(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const cuentaId = formData.get('cuenta_id') as string
+
+  const { data: cuenta } = await supabase
+    .from('cuentas_sociales')
+    .select('id, estado')
+    .eq('id', cuentaId)
+    .eq('asesor_id', user.id)
+    .maybeSingle()
+  if (!cuenta) conError('No se encontró esa cuenta entre las tuyas.')
+  if (!ESTADOS_CONECTABLES.includes(cuenta!.estado)) {
+    conError(`La cuenta está en estado ${cuenta!.estado} y no se puede conectar ahora.`)
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_sociales')
+    .update({ estado: 'CONNECT_REQUESTED' })
+    .eq('id', cuentaId)
+    .eq('asesor_id', user.id)
+    .in('estado', ESTADOS_CONECTABLES)
+    .select('id')
+
+  if (error) {
+    console.error('--- ERROR AL SOLICITAR CONEXION DE CUENTA ---', error)
+    conError(error.message)
+  }
+  if (!data || data.length === 0) conError('La cuenta cambió de estado mientras tanto. Recarga la página.')
+
+  revalidatePath('/dashboard/cuentas')
+  redirect('/dashboard/cuentas?exito=conexion_solicitada')
+}
+
+// Cancela una solicitud que el Worker todavía no tomó.
+export async function cancelarConexionCuenta(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const cuentaId = formData.get('cuenta_id') as string
+
+  const { data: cuenta } = await supabase
+    .from('cuentas_sociales')
+    .select('id, estado, autenticada_en')
+    .eq('id', cuentaId)
+    .eq('asesor_id', user.id)
+    .maybeSingle()
+  if (!cuenta) conError('No se encontró esa cuenta entre las tuyas.')
+  if (cuenta!.estado !== 'CONNECT_REQUESTED') {
+    conError('Solo se puede cancelar mientras el Worker no haya abierto la ventana.')
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_sociales')
+    .update({ estado: cuenta!.autenticada_en ? 'AUTH_REQUIRED' : 'PENDING_SETUP' })
+    .eq('id', cuentaId)
+    .eq('asesor_id', user.id)
+    .eq('estado', 'CONNECT_REQUESTED')
+    .select('id')
+
+  if (error) {
+    console.error('--- ERROR AL CANCELAR CONEXION DE CUENTA ---', error)
+    conError(error.message)
+  }
+  if (!data || data.length === 0) conError('El Worker ya tomó la solicitud; cierra la ventana de Chromium si no quieres continuar.')
+
+  revalidatePath('/dashboard/cuentas')
+  redirect('/dashboard/cuentas?exito=conexion_cancelada')
 }

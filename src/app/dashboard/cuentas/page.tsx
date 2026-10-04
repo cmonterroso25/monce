@@ -1,16 +1,28 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { crearMiCuentaSocial, eliminarMiCuentaSocial } from './acciones'
+import {
+  crearMiCuentaSocial,
+  eliminarMiCuentaSocial,
+  solicitarConexionCuenta,
+  cancelarConexionCuenta,
+} from './acciones'
+import RefrescarSiConectando from './refrescar-si-conectando'
 
 const ETIQUETAS_ESTADO: Record<string, { texto: string; clase: string }> = {
   PENDING_SETUP: { texto: 'Falta conectar la sesión', clase: 'bg-amber-100 text-amber-700' },
   AUTH_REQUIRED: { texto: 'Requiere iniciar sesión de nuevo', clase: 'bg-amber-100 text-amber-700' },
+  CONNECT_REQUESTED: { texto: 'Esperando al Worker…', clase: 'bg-blue-100 text-blue-700' },
+  CONNECTING: { texto: 'Inicia sesión en la ventana de la Mac', clase: 'bg-blue-100 text-blue-700' },
   READY: { texto: 'Lista', clase: 'bg-green-100 text-green-700' },
   BUSY: { texto: 'Publicando ahora', clase: 'bg-blue-100 text-blue-700' },
   LOCKED: { texto: 'Bloqueada', clase: 'bg-red-100 text-red-700' },
   DISABLED: { texto: 'Desactivada', clase: 'bg-slate-100 text-slate-600' },
   ERROR: { texto: 'Con error', clase: 'bg-red-100 text-red-700' },
 }
+
+const CONECTABLES = ['PENDING_SETUP', 'AUTH_REQUIRED', 'ERROR']
+const EN_CONEXION = ['CONNECT_REQUESTED', 'CONNECTING']
+const NO_ELIMINABLES = ['BUSY', 'CONNECT_REQUESTED', 'CONNECTING']
 
 export default async function MisCuentas({
   searchParams,
@@ -32,8 +44,11 @@ export default async function MisCuentas({
     .eq('asesor_id', user.id)
     .order('creado_en')
 
+  const hayConexionEnCurso = (cuentas ?? []).some((c) => EN_CONEXION.includes(c.estado))
+
   return (
     <div className="mx-auto max-w-2xl p-8">
+      <RefrescarSiConectando activo={hayConexionEnCurso} />
       <h1 className="mb-2 text-2xl font-bold text-[#2C3E50]">Mis cuentas</h1>
       <p className="mb-6 text-sm text-slate-500">
         Cuentas de Facebook con las que publicas en Marketplace. Solo tú puedes publicar con ellas.
@@ -44,12 +59,23 @@ export default async function MisCuentas({
       )}
       {exito === 'creada' && (
         <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          Cuenta agregada. Falta conectar su sesión de Facebook en el Worker.
+          Cuenta agregada. Pulsa &quot;Conectar con Facebook&quot; para iniciar sesión.
         </div>
       )}
       {exito === 'eliminada' && (
         <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Cuenta eliminada.
+        </div>
+      )}
+      {exito === 'conexion_solicitada' && (
+        <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
+          Solicitud enviada. En unos segundos se abrirá una ventana de Chromium en la Mac del Worker para que
+          inicies sesión en Facebook. El Worker debe estar corriendo.
+        </div>
+      )}
+      {exito === 'conexion_cancelada' && (
+        <div className="mb-4 rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          Solicitud cancelada.
         </div>
       )}
 
@@ -64,7 +90,7 @@ export default async function MisCuentas({
                 clase: 'bg-slate-100 text-slate-700',
               }
               return (
-                <li key={cuenta.id} className="flex items-center justify-between border-b border-gray-100 py-2 text-sm">
+                <li key={cuenta.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 py-2 text-sm">
                   <span>
                     <span className="font-medium text-[#2C3E50]">{cuenta.etiqueta ?? cuenta.plataforma}</span>
                     <span className="text-slate-500">
@@ -76,12 +102,30 @@ export default async function MisCuentas({
                   </span>
                   <span className="flex items-center gap-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${estado.clase}`}>{estado.texto}</span>
-                    <form action={eliminarMiCuentaSocial}>
-                      <input type="hidden" name="cuenta_id" value={cuenta.id} />
-                      <button type="submit" className="text-xs text-red-600 hover:underline">
-                        Eliminar
-                      </button>
-                    </form>
+                    {CONECTABLES.includes(cuenta.estado) && (
+                      <form action={solicitarConexionCuenta}>
+                        <input type="hidden" name="cuenta_id" value={cuenta.id} />
+                        <button type="submit" className="rounded bg-[#38B6FF] px-2 py-1 text-xs font-medium text-white hover:bg-[#2A9FE8]">
+                          Conectar con Facebook
+                        </button>
+                      </form>
+                    )}
+                    {cuenta.estado === 'CONNECT_REQUESTED' && (
+                      <form action={cancelarConexionCuenta}>
+                        <input type="hidden" name="cuenta_id" value={cuenta.id} />
+                        <button type="submit" className="text-xs text-slate-600 hover:underline">
+                          Cancelar
+                        </button>
+                      </form>
+                    )}
+                    {!NO_ELIMINABLES.includes(cuenta.estado) && (
+                      <form action={eliminarMiCuentaSocial}>
+                        <input type="hidden" name="cuenta_id" value={cuenta.id} />
+                        <button type="submit" className="text-xs text-red-600 hover:underline">
+                          Eliminar
+                        </button>
+                      </form>
+                    )}
                   </span>
                 </li>
               )
@@ -101,9 +145,8 @@ export default async function MisCuentas({
             />
           </div>
           <p className="text-xs text-slate-400">
-            Plataforma: Facebook. La cuenta queda pendiente hasta que se conecte su sesión en el Worker
-            (por ahora lo hace el administrador con <code>npm run login</code>). Hasta entonces no aparece
-            al publicar.
+            Plataforma: Facebook. Después de agregarla, pulsa &quot;Conectar con Facebook&quot;: se abre una
+            ventana en la Mac donde corre el Worker para que inicies sesión.
           </p>
           <button
             type="submit"
