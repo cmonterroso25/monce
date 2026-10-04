@@ -43,10 +43,11 @@ export default async function EditarLead({
 
   for (const p of yaVinculadas) {
     if (!opciones.some((o) => o.id === p.id)) {
-      opciones.push({ id: p.id, titulo: p.titulo, codigo: p.codigo ?? null, canales: [], ultimoEnvio: '' })
+      opciones.push({ id: p.id, titulo: p.titulo, codigo: p.codigo ?? null, canales: [], ultimoEnvio: '', estado: null })
     }
   }
   const seleccionadas = [...new Set(yaVinculadas.map((p) => p.id))]
+  const opcionesVisibles = opciones.filter((o) => o.estado === 'disponible' || seleccionadas.includes(o.id))
 
   return (
     <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
@@ -60,7 +61,7 @@ export default async function EditarLead({
         <input type="hidden" name="lead_id" value={lead.id} />
 
         <SelectorPropiedadesVisita
-          opciones={opciones}
+          opciones={opcionesVisibles}
           seleccionadas={seleccionadas}
           etiqueta="Propiedades de interés (enviadas a este contacto)"
         />

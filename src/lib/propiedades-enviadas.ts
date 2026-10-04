@@ -10,16 +10,18 @@ export type PropiedadEnviada = {
   codigo: string | null
   canales: string[]
   ultimoEnvio: string
+  estado: string | null
 }
 
 // Propiedades enviadas a un contacto (una fila por propiedad, con los canales usados).
+// Devuelve todas, sea cual sea su estado: cada pantalla decide si filtra por 'disponible'.
 export async function obtenerPropiedadesEnviadas(
   supabase: Cliente,
   contactoId: string
 ): Promise<PropiedadEnviada[]> {
   const { data, error } = await supabase
     .from('envios_propiedad_contacto')
-    .select('canal, creado_en, propiedad:propiedades(id, titulo, codigo)')
+    .select('canal, creado_en, propiedad:propiedades(id, titulo, codigo, estado)')
     .eq('contacto_id', contactoId)
     .order('creado_en', { ascending: false })
 
@@ -42,6 +44,7 @@ export async function obtenerPropiedadesEnviadas(
         codigo: p.codigo ?? null,
         canales: [e.canal],
         ultimoEnvio: e.creado_en,
+        estado: p.estado ?? null,
       })
     }
   }
@@ -50,6 +53,7 @@ export async function obtenerPropiedadesEnviadas(
 
 // Guarda las propiedades de una actividad. Solo acepta propiedades que ya se
 // enviaron a ese contacto. Con reemplazar=true borra las anteriores primero.
+// Con soloDisponibles=true descarta además las que no estén en estado 'disponible'.
 export async function guardarPropiedadesVisita(
   supabase: Cliente,
   params: {
@@ -58,6 +62,7 @@ export async function guardarPropiedadesVisita(
     organizationId?: string | null
     propiedadesIds: string[]
     reemplazar: boolean
+    soloDisponibles?: boolean
   }
 ): Promise<{ ok: boolean; mensaje: string | null }> {
   const ids = [...new Set(params.propiedadesIds.filter(Boolean))]
@@ -79,7 +84,19 @@ export async function guardarPropiedadesVisita(
     .in('propiedad_id', ids)
   if (errorEnviadas) return { ok: false, mensaje: errorEnviadas.message }
 
-  const validas = [...new Set((enviadas ?? []).map((e) => e.propiedad_id as string))]
+  let validas = [...new Set((enviadas ?? []).map((e) => e.propiedad_id as string))]
+
+  if (params.soloDisponibles && validas.length > 0) {
+    const { data: disponibles, error: errorDisponibles } = await supabase
+      .from('propiedades')
+      .select('id')
+      .in('id', validas)
+      .eq('estado', 'disponible')
+    if (errorDisponibles) return { ok: false, mensaje: errorDisponibles.message }
+    const permitidas = new Set((disponibles ?? []).map((d) => d.id as string))
+    validas = validas.filter((id) => permitidas.has(id))
+  }
+
   if (validas.length === 0) return { ok: true, mensaje: null }
 
   const { error } = await supabase.from('actividad_propiedades').insert(
@@ -95,11 +112,13 @@ export async function guardarPropiedadesVisita(
 
 // Devuelve, en el mismo orden recibido, los ids que se pueden vincular a un lead:
 // los enviados al contacto o los ya vinculados antes (extraPermitidas).
+// Con soloDisponibles=true descarta los que no estén en estado 'disponible'.
 export async function filtrarPropiedadesPermitidas(
   supabase: Cliente,
   contactoId: string | null,
   ids: string[],
-  extraPermitidas: string[] = []
+  extraPermitidas: string[] = [],
+  soloDisponibles = false
 ): Promise<string[]> {
   const unicos = [...new Set(ids.filter(Boolean))]
   if (unicos.length === 0) return []
@@ -113,7 +132,18 @@ export async function filtrarPropiedadesPermitidas(
       .in('propiedad_id', unicos)
     for (const e of data ?? []) permitidas.add(e.propiedad_id as string)
   }
-  return unicos.filter((id) => permitidas.has(id))
+  let resultado = unicos.filter((id) => permitidas.has(id))
+
+  if (soloDisponibles && resultado.length > 0) {
+    const { data: disponibles } = await supabase
+      .from('propiedades')
+      .select('id')
+      .in('id', resultado)
+      .eq('estado', 'disponible')
+    const ok = new Set((disponibles ?? []).map((d) => d.id as string))
+    resultado = resultado.filter((id) => ok.has(id))
+  }
+  return resultado
 }
 
 // Guarda las propiedades de un lead. Con reemplazar=true borra las anteriores primero.

@@ -98,7 +98,10 @@ export default async function EditarActividad({
           <label className="mb-1 block text-sm font-medium text-gray-700">Notas</label>
           <textarea name="notas" defaultValue={actividad.notas ?? ''} rows={3} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
         </div>
-        <SelectorPropiedadesVisita opciones={propiedadesEnviadas} seleccionadas={propiedadesSeleccionadas} />
+        <SelectorPropiedadesVisita
+          opciones={propiedadesEnviadas.filter((p) => p.estado === 'disponible' || propiedadesSeleccionadas.includes(p.id))}
+          seleccionadas={propiedadesSeleccionadas}
+        />
         <BotonEnviar className="w-full rounded bg-[#2C3E50] px-4 py-2 text-sm font-medium text-white hover:bg-[#38B6FF] sm:w-auto">
           Guardar cambios
         </BotonEnviar>

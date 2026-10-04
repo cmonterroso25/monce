@@ -76,7 +76,9 @@ export async function crearLead(formData: FormData) {
   const propiedadesValidas = await filtrarPropiedadesPermitidas(
     supabase,
     contactoId,
-    formData.getAll('propiedades_ids') as string[]
+    formData.getAll('propiedades_ids') as string[],
+    [],
+    true
   )
 
   // Código escrito a mano (propiedad enviada fuera del CRM): se asocia al contacto
@@ -434,6 +436,7 @@ export async function crearActividad(formData: FormData) {
       organizationId: perfil?.organization_id,
       propiedadesIds: formData.getAll('propiedades_ids') as string[],
       reemplazar: false,
+      soloDisponibles: true,
     })
     if (!guardado.ok) {
       console.error('--- ERROR AL GUARDAR PROPIEDADES DE LA ACTIVIDAD ---', guardado.mensaje)

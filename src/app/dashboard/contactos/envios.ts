@@ -41,5 +41,6 @@ export async function listarPropiedadesEnviadas(contactoId: string) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return []
-  return obtenerPropiedadesEnviadas(supabase, contactoId)
+  const enviadas = await obtenerPropiedadesEnviadas(supabase, contactoId)
+  return enviadas.filter((p) => p.estado === 'disponible')
 }
