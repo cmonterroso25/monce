@@ -290,6 +290,7 @@ export default function FormularioEditarPropiedad({
           <input
             type="number"
             name="area_construccion_m2"
+            step="any"
             defaultValue={propiedad.area_construccion_m2 ?? ''}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
@@ -299,6 +300,7 @@ export default function FormularioEditarPropiedad({
           <input
             type="number"
             name="area_terreno_m2"
+            step="any"
             defaultValue={propiedad.area_terreno_m2 ?? ''}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
