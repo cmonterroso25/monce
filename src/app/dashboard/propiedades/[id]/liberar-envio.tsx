@@ -15,8 +15,8 @@ export default function LiberarEnvio({ trabajoId, propiedadId, estado }: Props) 
   const publicado = estado === 'PUBLICADO'
   const etiqueta = publicado ? 'Ya retiré el anuncio: liberar propiedad' : 'No existe anuncio: liberar propiedad'
   const confirmacion = publicado
-    ? 'Confirma que ya retiraste este anuncio de Facebook (Tus publicaciones). La propiedad quedará libre para volver a publicarse. ¿Continuar?'
-    : 'Confirma que revisaste Tus publicaciones en Facebook y que NO existe un anuncio de esta propiedad. La propiedad quedará libre para volver a publicarse. ¿Continuar?'
+    ? 'Confirma que ya retiraste este anuncio de Facebook (Tus publicaciones). El envío se BORRARÁ del historial y la propiedad quedará libre para volver a publicarse. ¿Continuar?'
+    : 'Confirma que revisaste Tus publicaciones en Facebook y que NO existe un anuncio de esta propiedad. El envío se BORRARÁ del historial y la propiedad quedará libre para volver a publicarse. ¿Continuar?'
 
   async function liberar() {
     if (!window.confirm(confirmacion)) return

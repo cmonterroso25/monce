@@ -390,33 +390,23 @@ export async function liberarEnvioPublicacion(trabajoId: string, propiedadId: st
   }
 
   const estadoPrevio = trabajo.estado
-  const { data, error } = await supabase
+
+  // Borrado real: el envío desaparece del historial junto con su contenido, fotos, intentos y
+  // logs (todas esas tablas borran en cascada). trabajos_publicacion no tiene política DELETE
+  // para usuarios, por eso se borra con service role, tras comprobar arriba que es administrador.
+  const { data, error } = await supabaseAdmin
     .from('trabajos_publicacion')
-    .update({
-      estado: 'CANCELLED',
-      codigo_error: 'LIBERADO_POR_ADMIN',
-      mensaje_error: `Liberada por un administrador (estado previo: ${estadoPrevio}).`,
-      completado_en: new Date().toISOString(),
-    })
+    .delete()
     .eq('id', trabajoId)
+    .eq('propiedad_id', propiedadId)
     .eq('estado', estadoPrevio)
     .select('id')
 
   if (error) return { ok: false, mensaje: error.message }
   if (!data || data.length === 0) {
-    return { ok: false, mensaje: 'El envío cambió de estado mientras tanto o no tienes permiso. Recarga la página.' }
+    return { ok: false, mensaje: 'El envío cambió de estado mientras tanto. Recarga la página.' }
   }
 
-  // logs_publicacion solo tiene política de SELECT para usuarios: se inserta con service role.
-  const { error: errorLog } = await supabaseAdmin.from('logs_publicacion').insert({
-    trabajo_id: trabajoId,
-    tipo_evento: 'LISTING_RELEASED',
-    detalle: { estado_previo: estadoPrevio, liberado_por: user.id },
-  })
-  if (errorLog) console.error(`No se pudo registrar LISTING_RELEASED del trabajo ${trabajoId}: ${errorLog.message}`)
-
   revalidatePath(`/dashboard/propiedades/${propiedadId}`)
-  return errorLog
-    ? { ok: true, aviso: `La propiedad quedó libre, pero no se pudo registrar el evento en el log: ${errorLog.message}` }
-    : { ok: true }
+  return { ok: true }
 }

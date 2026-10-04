@@ -60,6 +60,15 @@ const ETIQUETAS_ENVIO: Record<string, string> = {
   HUMAN_INTERVENTION_REQUIRED: 'Requiere intervención humana',
 }
 
+const ETIQUETAS_PLATAFORMA: Record<string, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  whatsapp: 'WhatsApp',
+  google: 'Google',
+  website: 'Sitio web',
+  portal: 'Portal',
+}
+
 function urlImagen(ruta: string) {
   if (ruta.startsWith('http')) return ruta
   return `${R2_PUBLIC_URL}/${ruta}`
@@ -171,13 +180,16 @@ export default async function DetallePropiedad({
 
   // Historial de envíos al motor de publicación (la RLS de trabajos_publicacion
   // ya limita a los del asesor, el captador de la propiedad o un admin).
+  // Cada asesor ve solo sus envíos (y por tanto solo sus cuentas); el administrador ve todos.
+  let consultaHistorial = supabase
+    .from('trabajos_publicacion')
+    .select(
+      'id, estado, mensaje_error, creado_en, expira_en, cuenta_social_id, canal:canales_publicacion (nombre, plataforma), cuenta:cuentas_sociales (etiqueta)'
+    )
+    .eq('propiedad_id', propiedad.id)
+  if (!esAdmin && user) consultaHistorial = consultaHistorial.eq('asesor_id', user.id)
   const { data: historialPublicaciones } = puedePublicarEnRedes
-    ? await supabase
-        .from('trabajos_publicacion')
-        .select('id, estado, mensaje_error, creado_en, expira_en, canal:canales_publicacion (nombre)')
-        .eq('propiedad_id', propiedad.id)
-        .order('creado_en', { ascending: false })
-        .limit(10)
+    ? await consultaHistorial.order('creado_en', { ascending: false }).limit(10)
     : { data: null }
 
   // Revisión humana: envíos que el Worker dejó llenos y esperando aprobación.
@@ -517,6 +529,7 @@ export default async function DetallePropiedad({
               <ul className="space-y-2">
                 {historialPublicaciones.map((envio) => {
                   const canal = Array.isArray(envio.canal) ? envio.canal[0] : envio.canal
+                  const cuenta = Array.isArray(envio.cuenta) ? envio.cuenta[0] : envio.cuenta
                   const etiqueta = ETIQUETAS_ENVIO[envio.estado] ?? envio.estado
                   return (
                     <li key={envio.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
@@ -526,6 +539,10 @@ export default async function DetallePropiedad({
                           {etiqueta}
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500">
+                        {ETIQUETAS_PLATAFORMA[canal?.plataforma ?? ''] ?? canal?.plataforma ?? ''}
+                        {envio.cuenta_social_id ? ` · Cuenta: ${cuenta?.etiqueta ?? 'sin nombre'}` : ''}
+                      </p>
                       <p className="text-xs text-slate-400">
                         {new Date(envio.creado_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}
                       </p>
