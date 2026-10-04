@@ -49,6 +49,13 @@ const TIPO_CAMBIO_USD_GTQ = 7.8;
 const MAX_TITULO_MARKETPLACE = 100;
 const MAX_DESCRIPCION_MARKETPLACE = 2000;
 
+// Tope de publicaciones por cuenta de Facebook en 24 h (protege la cuenta).
+// Valor prudente elegido por nosotros; Facebook no publica un límite oficial.
+const MAX_PUBLICACIONES_POR_CUENTA_24H = 15;
+const ESTADOS_QUE_CUENTAN_EN_TOPE = [
+  "QUEUED", "PUBLICANDO", "WAITING_APPROVAL", "APPROVED", "VERIFICANDO", "PUBLICADO", "NEEDS_REVIEW",
+];
+
 type CanalSolicitado = {
   canal_codigo: string;
   cuenta_social_id?: string | null;
@@ -299,7 +306,7 @@ async function procesarCanal(args: {
 
     const { data: cuentaData } = await clienteUsuario
       .from("cuentas_sociales")
-      .select("id, organization_id, plataforma, estado")
+      .select("id, organization_id, asesor_id, plataforma, estado")
       .eq("id", cuentaSocialId)
       .single();
 
@@ -317,6 +324,21 @@ async function procesarCanal(args: {
         cuentaSocialId: null,
         versionAdapter: superficie?.version_adapter_actual ?? null,
         mensaje: "La cuenta social indicada no existe o no pertenece a tu organización.",
+      });
+    }
+
+    if (cuenta.asesor_id !== asesorId) {
+      return await crearSubjobFallido({
+        clienteMotor,
+        solicitudId,
+        propiedad,
+        asesorId,
+        canalId: canal.id,
+        canalCodigo,
+        superficieId: superficie?.id ?? null,
+        cuentaSocialId: null,
+        versionAdapter: superficie?.version_adapter_actual ?? null,
+        mensaje: "Solo puedes publicar con tus propias cuentas sociales.",
       });
     }
 
@@ -404,6 +426,41 @@ async function procesarCanal(args: {
         cuentaSocialId: cuenta?.id ?? null,
         versionAdapter: superficie?.version_adapter_actual ?? null,
         mensaje: mensajeBloqueo,
+      });
+    }
+  }
+
+  // [7a-bis] Tope diario por cuenta: limita cuántas publicaciones puede
+  // empujar una misma cuenta en 24 h.
+  if (cuenta?.id) {
+    const desde24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: usadas, error: errorTope } = await clienteMotor
+      .from("trabajos_publicacion")
+      .select("id", { count: "exact", head: true })
+      .eq("cuenta_social_id", cuenta.id)
+      .in("estado", ESTADOS_QUE_CUENTAN_EN_TOPE)
+      .gte("creado_en", desde24h);
+
+    let mensajeTope: string | null = null;
+    if (errorTope) {
+      console.error(errorTope);
+      mensajeTope = "No se pudo comprobar el tope diario de esta cuenta, así que no se creó el envío por seguridad. Intenta de nuevo.";
+    } else if ((usadas ?? 0) >= MAX_PUBLICACIONES_POR_CUENTA_24H) {
+      mensajeTope = `Esta cuenta ya alcanzó el tope de ${MAX_PUBLICACIONES_POR_CUENTA_24H} publicaciones en 24 horas. Usa otra de tus cuentas o intenta más tarde.`;
+    }
+
+    if (mensajeTope) {
+      return await crearSubjobFallido({
+        clienteMotor,
+        solicitudId,
+        propiedad,
+        asesorId,
+        canalId: canal.id,
+        canalCodigo,
+        superficieId: superficie?.id ?? null,
+        cuentaSocialId: cuenta.id,
+        versionAdapter: superficie?.version_adapter_actual ?? null,
+        mensaje: mensajeTope,
       });
     }
   }

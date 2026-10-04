@@ -13,6 +13,7 @@ import {
   CalendarClock,
   CalendarDays,
   CheckSquare,
+  Share2,
   Settings,
   LogOut,
   Menu,
@@ -35,6 +36,7 @@ const MODULOS_BASE: Modulo[] = [
   { nombre: 'Calendario', href: '/dashboard/calendario', icono: CalendarDays, construido: true },
   { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarClock, construido: true },
   { nombre: 'Tareas', href: '/dashboard/tareas', icono: CheckSquare, construido: true },
+  { nombre: 'Mis cuentas', href: '/dashboard/cuentas', icono: Share2, construido: true },
 ]
 
 const MODULOS_SOLO_ADMIN: Modulo[] = [

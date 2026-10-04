@@ -199,10 +199,17 @@ export async function obtenerCuentasSocialesListas(
   plataforma: string
 ): Promise<CuentaSocialLista[]> {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+  // Solo las cuentas del propio asesor, aunque sea administrador:
+  // cada asesor publica únicamente con sus cuentas.
   const { data, error } = await supabase
     .from('cuentas_sociales')
     .select('id, plataforma, etiqueta, tipo_cuenta, estado')
     .eq('organization_id', organizationId)
+    .eq('asesor_id', user.id)
     .eq('plataforma', plataforma)
     .in('estado', ['READY', 'BUSY'])
     .order('etiqueta')

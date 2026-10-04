@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Rocket, X, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import {
   crearSolicitudPublicacion,
@@ -151,8 +152,8 @@ export default function PublicarCanales({ propiedadId, canalesActivos, cuentasPo
                             {cuentas.filter((c) => c.estado === 'READY').length === 0 ? (
                               <p className="text-xs text-amber-600">
                                 {cuentas.length === 0
-                                  ? `No hay ninguna cuenta de ${canal.plataforma} lista. Pide a un administrador que agregue una en Configuración.`
-                                  : 'La cuenta está ocupada con otra publicación. Intenta de nuevo en unos minutos.'}
+                                  ? <>No tienes ninguna cuenta de {canal.plataforma} lista. <Link href="/dashboard/cuentas" className="underline">Agrega o conecta una en Mis cuentas</Link>.</>
+                                  : 'Tus cuentas están ocupadas con otra publicación. Intenta de nuevo en unos minutos.'}
                               </p>
                             ) : (
                               <select
