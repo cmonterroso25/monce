@@ -7,6 +7,7 @@ import {
   cancelarConexionCuenta,
 } from './acciones'
 import RefrescarSiConectando from './refrescar-si-conectando'
+import PanelPublicaciones from './panel-publicaciones'
 
 const ETIQUETAS_ESTADO: Record<string, { texto: string; clase: string }> = {
   PENDING_SETUP: { texto: 'Falta conectar la sesión', clase: 'bg-amber-100 text-amber-700' },
@@ -27,9 +28,27 @@ const NO_ELIMINABLES = ['BUSY', 'CONNECT_REQUESTED', 'CONNECTING']
 export default async function MisCuentas({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; exito?: string }>
+  searchParams: Promise<{
+    error?: string
+    exito?: string
+    q?: string
+    estado?: string
+    canal?: string
+    cuenta?: string
+    pagina?: string
+    revision?: string
+  }>
 }) {
-  const { error, exito } = await searchParams
+  const {
+    error,
+    exito,
+    q,
+    estado: filtroEstado,
+    canal: filtroCanal,
+    cuenta: filtroCuenta,
+    pagina,
+    revision,
+  } = await searchParams
   const supabase = await createClient()
 
   const {
@@ -47,7 +66,8 @@ export default async function MisCuentas({
   const hayConexionEnCurso = (cuentas ?? []).some((c) => EN_CONEXION.includes(c.estado))
 
   return (
-    <div className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-5xl p-8">
+      <div className="mx-auto max-w-2xl">
       <RefrescarSiConectando activo={hayConexionEnCurso} />
       <h1 className="mb-2 text-2xl font-bold text-[#2C3E50]">Mis cuentas</h1>
       <p className="mb-6 text-sm text-slate-500">
@@ -156,6 +176,12 @@ export default async function MisCuentas({
           </button>
         </form>
       </div>
+      </div>
+
+      <PanelPublicaciones
+        userId={user.id}
+        filtros={{ q, estado: filtroEstado, canal: filtroCanal, cuenta: filtroCuenta, pagina, revision }}
+      />
     </div>
   )
 }
