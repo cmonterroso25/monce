@@ -8,6 +8,16 @@ const ESTADOS_ERROR = ['FAILED', 'VALIDATION_ERROR', 'ADAPTER_MISMATCH']
 const ESTADOS_PANEL = ['PUBLICADO', 'NEEDS_REVIEW', ...ESTADOS_EN_CURSO, ...ESTADOS_ERROR]
 const VENTANA_ERROR_HORAS = 24
 const TOPE_24H = 15
+// Plataforma de cuenta social que usa cada canal (para saber si está publicado en todas las cuentas).
+const PLATAFORMA_CANAL: Record<string, string> = {
+  facebook_marketplace: 'facebook',
+  facebook_page: 'facebook',
+  instagram: 'instagram',
+  whatsapp: 'whatsapp',
+  tiktok: 'tiktok',
+}
+// Una cuenta en estos estados no cuenta como "disponible" para la estrella.
+const ESTADOS_CUENTA_NO_DISPONIBLE = ['DISABLED', 'LOCKED']
 const POR_PAGINA = 50
 const MS_HORA = 3600000
 
@@ -113,7 +123,7 @@ export default async function PanelPublicaciones({
   const supabase = await createClient()
 
   const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }] = await Promise.all([
-    supabase.from('cuentas_sociales').select('id, etiqueta, plataforma').eq('asesor_id', userId).order('creado_en'),
+    supabase.from('cuentas_sociales').select('id, etiqueta, plataforma, estado').eq('asesor_id', userId).order('creado_en'),
     supabase
       .from('trabajos_publicacion')
       .select(
@@ -125,8 +135,15 @@ export default async function PanelPublicaciones({
       .limit(1000),
   ])
 
-  const cuentas = (cuentasData ?? []) as { id: string; etiqueta: string | null; plataforma: string }[]
+  const cuentas = (cuentasData ?? []) as { id: string; etiqueta: string | null; plataforma: string; estado: string }[]
   const etiquetaCuenta = new Map(cuentas.map((c) => [c.id, c.etiqueta ?? c.plataforma]))
+  const cuentasDisponiblesPorPlataforma = new Map<string, string[]>()
+  for (const c of cuentas) {
+    if (ESTADOS_CUENTA_NO_DISPONIBLE.includes(c.estado)) continue
+    const lista = cuentasDisponiblesPorPlataforma.get(c.plataforma) ?? []
+    lista.push(c.id)
+    cuentasDisponiblesPorPlataforma.set(c.plataforma, lista)
+  }
 
   const ahora = Date.now()
   const todos: Trabajo[] = (trabajosData ?? [])
@@ -165,6 +182,22 @@ export default async function PanelPublicaciones({
     ...trabajos.filter((t) => t.estado === 'NEEDS_REVIEW').map((t) => t.propiedadId),
     ...errores.map((e) => e.propiedadId),
   ])
+
+  // Propiedades con anuncio vigente (PUBLICADO o NEEDS_REVIEW) que ya no están disponibles.
+  const idsConAnuncioVigente = [
+    ...new Set(
+      trabajos.filter((t) => t.estado === 'PUBLICADO' || t.estado === 'NEEDS_REVIEW').map((t) => t.propiedadId)
+    ),
+  ]
+  let porRetirar: { id: string; codigo: string | null }[] = []
+  if (idsConAnuncioVigente.length > 0) {
+    const { data: noDisponibles } = await supabase
+      .from('propiedades')
+      .select('id, codigo')
+      .in('id', idsConAnuncioVigente)
+      .in('estado', ESTADOS_NO_DISPONIBLE)
+    porRetirar = (noDisponibles ?? []) as typeof porRetirar
+  }
 
   // Resumen
   const vigentes = trabajos.filter((t) => t.estado === 'PUBLICADO').length
@@ -257,6 +290,31 @@ export default async function PanelPublicaciones({
       {errorTrabajos && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           No se pudieron leer tus publicaciones: {errorTrabajos.message}
+        </div>
+      )}
+
+      {porRetirar.length > 0 && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <div className="font-semibold">
+            {porRetirar.length === 1
+              ? '1 propiedad ya no está disponible pero su anuncio sigue publicado'
+              : `${porRetirar.length} propiedades ya no están disponibles pero sus anuncios siguen publicados`}
+          </div>
+          <p className="mt-1 text-xs">
+            Retira el anuncio de Facebook. Después, un administrador debe liberar el envío desde la ficha de la propiedad.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {porRetirar.slice(0, 15).map((p) => (
+              <Link
+                key={p.id}
+                href={`/dashboard/propiedades/${p.id}`}
+                className="rounded bg-white px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200 hover:bg-red-100"
+              >
+                {p.codigo ?? 'Sin código'}
+              </Link>
+            ))}
+            {porRetirar.length > 15 && <span className="text-xs">y {porRetirar.length - 15} más</span>}
+          </div>
         </div>
       )}
 
@@ -459,6 +517,11 @@ export default async function PanelPublicaciones({
                             return !acc || PRIORIDAD[n] > PRIORIDAD[acc] ? n : acc
                           }, null)
                           const publicadoPorMi = delCanal.some((t) => nivelDe(t.estado) !== 'error')
+                          const disponibles = cuentasDisponiblesPorPlataforma.get(PLATAFORMA_CANAL[c.codigo] ?? '') ?? []
+                          const publicadasIds = new Set(
+                            delCanal.filter((t) => t.estado === 'PUBLICADO' && t.cuentaId).map((t) => t.cuentaId as string)
+                          )
+                          const enTodasLasCuentas = disponibles.length > 0 && disponibles.every((id) => publicadasIds.has(id))
                           const titulo =
                             delCanal.length > 0
                               ? [c.nombre, ...delCanal.map((t) => lineaTrabajo(t, etiquetaCuenta))].join('\n')
@@ -471,10 +534,22 @@ export default async function PanelPublicaciones({
                               style={{ color: publicadoPorMi ? c.color : '#CBD5E1' }}
                             >
                               <IconoCanal codigo={c.codigo} className="h-5 w-5" />
-                              {nivel && (
-                                <span
-                                  className={`absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-white ${CLASE_PUNTO[nivel]}`}
-                                />
+                              {enTodasLasCuentas ? (
+                                <svg viewBox="0 0 24 24" className="absolute -right-0.5 -top-1 h-4 w-4" aria-hidden="true">
+                                  <path
+                                    d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9L12 2.5z"
+                                    fill="#FACC15"
+                                    stroke="#ffffff"
+                                    strokeWidth="1.5"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              ) : (
+                                nivel && (
+                                  <span
+                                    className={`absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-white ${CLASE_PUNTO[nivel]}`}
+                                  />
+                                )
                               )}
                             </span>
                           )
