@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { CheckCircle2 } from 'lucide-react'
-import { marcarActividadCompletada } from '../leads/acciones'
+import { marcarActividadCompletada } from '@/app/dashboard/leads/acciones'
 
 export default function MarcarCompletada({
   actividadId,

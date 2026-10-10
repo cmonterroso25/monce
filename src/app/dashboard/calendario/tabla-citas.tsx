@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Phone, ArrowUpRight, Pencil } from 'lucide-react'
-import MarcarCompletada from '../actividades/marcar-completada'
+import MarcarCompletada from '@/components/marcar-actividad-completada'
 import { colorParaAgente } from '@/lib/ui/color-agente'
 type Cita = {
   id: string
