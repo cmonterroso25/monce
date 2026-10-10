@@ -177,10 +177,12 @@ export default async function PanelPublicaciones({
   if (propiedadesPublicadas.size > 0) {
     const { data: noDisponiblesData } = await supabase
       .from('propiedades')
-      .select('id')
+      .select('id, estado')
       .in('id', [...propiedadesPublicadas])
-      .in('estado', ESTADOS_NO_DISPONIBLE.map((s) => s.toUpperCase()))
-    noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
+    const estadosNoDisp = new Set(['RENTADA', 'VENDIDA', 'INACTIVA', 'rentada', 'vendida', 'inactiva'])
+    noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[])
+      .filter((p: any) => estadosNoDisp.has(p.estado))
+      .filter((p) => !ocultasPorUsuario.has(p.id)).length
   }
 
   // Errores visibles: solo las últimas 24 h y sin un reintento posterior de la misma propiedad/canal/cuenta.
