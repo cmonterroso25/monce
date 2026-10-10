@@ -260,20 +260,18 @@ export default async function ListadoPropiedades({
 
                     {/* Hab / Baños / m2 / Mascota */}
                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                        <span className="flex items-center gap-1">
-                          <BedDouble size={15} className="text-slate-400" />
-                          {propiedad.dormitorios ?? '—'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Bath size={15} className="text-slate-400" />
-                          {propiedad.banos ?? '—'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Ruler size={15} className="text-slate-400" />
-                          {propiedad.area_construccion_m2 ?? '—'} m²
-                        </span>
-                      </div>
+                      <span className="flex items-center gap-1">
+                        <BedDouble size={15} className="text-slate-400" />
+                        {propiedad.dormitorios ?? '—'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Bath size={15} className="text-slate-400" />
+                        {propiedad.banos ?? '—'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Ruler size={15} className="text-slate-400" />
+                        {propiedad.area_construccion_m2 ?? '—'} m²
+                      </span>
                       {propiedad.tipo_operacion === 'renta' &&
                        (propiedad.tipo_propiedad === 'casa' || propiedad.tipo_propiedad === 'apartamento') && (
                         <>
