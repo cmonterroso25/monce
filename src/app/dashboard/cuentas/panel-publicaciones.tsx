@@ -123,7 +123,7 @@ export default async function PanelPublicaciones({
 }) {
   const supabase = await createClient()
 
-  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }] = await Promise.all([
+  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }, { data: perfilData }] = await Promise.all([
     supabase.from('cuentas_sociales').select('id, etiqueta, plataforma, estado').eq('asesor_id', userId).order('creado_en'),
     supabase
       .from('trabajos_publicacion')
@@ -137,7 +137,12 @@ export default async function PanelPublicaciones({
     supabase
       .from('propiedades_ocultas_usuario')
       .select('propiedad_id')
-      .eq('usuario_id', userId)
+      .eq('usuario_id', userId),
+    supabase
+      .from('perfiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .single()
   ])
 
   const ocultasPorUsuario = new Set((ocultasData ?? []).map((o: any) => o.propiedad_id))
@@ -171,18 +176,15 @@ export default async function PanelPublicaciones({
   // Envíos que cuentan para el resumen, el tope y los canales en color (sin errores).
   const trabajos = todos.filter((t) => !ESTADOS_ERROR.includes(t.estado))
 
-  // Contar propiedades no disponibles que el usuario ha publicado y que están visibles
-  const propiedadesPublicadas = new Set(todos.map((t) => t.propiedadId))
+  // Contar todas las propiedades no disponibles de la organización que están visibles
   let noDisponiblesVisibles = 0
-  if (propiedadesPublicadas.size > 0) {
+  if (perfilData?.organization_id) {
     const { data: noDisponiblesData } = await supabase
       .from('propiedades')
-      .select('id, estado')
-      .in('id', [...propiedadesPublicadas])
-    const estadosNoDisp = new Set(['RENTADA', 'VENDIDA', 'INACTIVA', 'rentada', 'vendida', 'inactiva'])
-    noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[])
-      .filter((p: any) => estadosNoDisp.has(p.estado))
-      .filter((p) => !ocultasPorUsuario.has(p.id)).length
+      .select('id')
+      .eq('organization_id', perfilData.organization_id)
+      .in('estado', ['rentada', 'vendida', 'inactiva'])
+    noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
   }
 
   // Errores visibles: solo las últimas 24 h y sin un reintento posterior de la misma propiedad/canal/cuenta.
