@@ -259,32 +259,34 @@ export default async function ListadoPropiedades({
                     </div>
 
                     {/* Hab / Baños / m2 / Mascota */}
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                      <span className="flex items-center gap-1">
-                        <BedDouble size={15} className="text-slate-400" />
-                        {propiedad.dormitorios ?? '—'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Bath size={15} className="text-slate-400" />
-                        {propiedad.banos ?? '—'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Ruler size={15} className="text-slate-400" />
-                        {propiedad.area_construccion_m2 ?? '—'} m²
-                      </span>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1">
+                          <BedDouble size={15} className="text-slate-400" />
+                          {propiedad.dormitorios ?? '—'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Bath size={15} className="text-slate-400" />
+                          {propiedad.banos ?? '—'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Ruler size={15} className="text-slate-400" />
+                          {propiedad.area_construccion_m2 ?? '—'} m²
+                        </span>
+                      </div>
                       {propiedad.tipo_operacion === 'renta' &&
                        (propiedad.tipo_propiedad === 'casa' || propiedad.tipo_propiedad === 'apartamento') && (
                         <>
                           {propiedad.mascota && propiedad.mascota.toLowerCase() !== 'no' ? (
-                            <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-green-100 px-2 py-1 text-xs font-medium">
                               🐾
                             </span>
                           ) : propiedad.mascota && propiedad.mascota.toLowerCase() === 'no' ? (
-                            <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-1 text-xs font-medium">
                               🐾
                             </span>
                           ) : (
-                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
                               🐾
                             </span>
                           )}
