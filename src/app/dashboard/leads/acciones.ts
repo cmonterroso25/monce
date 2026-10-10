@@ -402,10 +402,13 @@ export async function crearActividad(formData: FormData) {
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
       if (chatIdCitas) {
         const fechaTexto = fechaVisita.toLocaleString('es-GT', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit',
           timeZone: 'America/Guatemala',
-        })
+        }).replace(' a las ', ' - ')
         const notas = textoOpcional(formData.get('notas'))
         const mensaje = [
           `📅 *Nueva cita agendada*`,
@@ -532,10 +535,13 @@ export async function actualizarActividad(formData: FormData) {
     const chatIdCitas = await obtenerChatIdGrupo(supabase, antes.organization_id, 'citas')
     if (chatIdCitas) {
       const fechaTexto = new Date(nuevaProgramadaEn).toLocaleString('es-GT', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
         timeZone: 'America/Guatemala',
-      })
+      }).replace(' a las ', ' - ')
       const notasReprogramada = textoOpcional(formData.get('notas'))
       const mensaje = [
         `🔄 *Cita reprogramada*`,

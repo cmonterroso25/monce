@@ -250,6 +250,14 @@ export default async function DetallePropiedad({
 
   const enlacePortal = `/propiedades/${propiedad.slug}`
 
+  const ahora = new Date()
+  const fechaIngreso = propiedad.creado_en ? new Date(propiedad.creado_en) : null
+  const diasDesdeIngreso = fechaIngreso
+    ? Math.floor((ahora.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24))
+    : null
+  const dentroDe30Dias = diasDesdeIngreso !== null && diasDesdeIngreso < 30
+  const esVenta = propiedad.tipo_operacion === 'venta'
+
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <Link
@@ -264,6 +272,15 @@ export default async function DetallePropiedad({
           <Ban size={20} className="shrink-0 text-red-600" />
           <p className="text-sm font-bold text-red-700">
             No publicable — esta propiedad NO se puede compartir en redes sociales.
+          </p>
+        </div>
+      )}
+
+      {dentroDe30Dias && esVenta && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border-2 border-orange-300 bg-orange-50 px-4 py-3">
+          <Ban size={20} className="shrink-0 text-orange-600" />
+          <p className="text-sm font-bold text-orange-700">
+            Período de exclusividad — esta propiedad no puede compartirse con otros colegas hasta {formatearFechaLargaGT(new Date(fechaIngreso!.getTime() + 30 * 24 * 60 * 60 * 1000))} (30 días desde su ingreso).
           </p>
         </div>
       )}
