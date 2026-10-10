@@ -183,31 +183,41 @@ export async function ocultarPropiedad(propiedadId: string) {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: propiedad, error: errorObtener } = await supabase
-    .from('propiedades')
-    .select('id, captado_por')
-    .eq('id', propiedadId)
-    .maybeSingle()
-
-  if (!propiedad) {
-    return { ok: false, mensaje: 'Propiedad no encontrada' }
-  }
-
-  if (propiedad.captado_por !== user.id) {
-    return { ok: false, mensaje: 'Solo puedes ocultar propiedades que capturaste' }
-  }
-
   const { error } = await supabase
-    .from('propiedades')
-    .update({ oculta_en_publicaciones: true })
-    .eq('id', propiedadId)
+    .from('propiedades_ocultas_usuario')
+    .insert({
+      usuario_id: user.id,
+      propiedad_id: propiedadId,
+    })
 
   if (error) {
     console.error('--- ERROR AL OCULTAR PROPIEDAD ---', error)
-    if (error.message.includes('oculta_en_publicaciones')) {
-      return { ok: false, mensaje: 'La migración de la base de datos aún no está lista. Por favor intenta de nuevo en unos momentos.' }
+    if (error.code === '23505') {
+      return { ok: false, mensaje: 'Esta propiedad ya está oculta en tu vista' }
     }
     return { ok: false, mensaje: 'Error al ocultar la propiedad' }
+  }
+
+  revalidatePath('/dashboard/cuentas')
+  return { ok: true }
+}
+
+export async function mostrarPropiedad(propiedadId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { error } = await supabase
+    .from('propiedades_ocultas_usuario')
+    .delete()
+    .eq('usuario_id', user.id)
+    .eq('propiedad_id', propiedadId)
+
+  if (error) {
+    console.error('--- ERROR AL MOSTRAR PROPIEDAD ---', error)
+    return { ok: false, mensaje: 'Error al mostrar la propiedad' }
   }
 
   revalidatePath('/dashboard/cuentas')

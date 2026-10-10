@@ -123,7 +123,7 @@ export default async function PanelPublicaciones({
 }) {
   const supabase = await createClient()
 
-  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }] = await Promise.all([
+  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }] = await Promise.all([
     supabase.from('cuentas_sociales').select('id, etiqueta, plataforma, estado').eq('asesor_id', userId).order('creado_en'),
     supabase
       .from('trabajos_publicacion')
@@ -134,7 +134,13 @@ export default async function PanelPublicaciones({
       .in('estado', ESTADOS_PANEL)
       .order('creado_en', { ascending: false })
       .limit(1000),
+    supabase
+      .from('propiedades_ocultas_usuario')
+      .select('propiedad_id')
+      .eq('usuario_id', userId)
   ])
+
+  const ocultasPorUsuario = new Set((ocultasData ?? []).map((o: any) => o.propiedad_id))
 
   const cuentas = (cuentasData ?? []) as { id: string; etiqueta: string | null; plataforma: string; estado: string }[]
   const etiquetaCuenta = new Map(cuentas.map((c) => [c.id, c.etiqueta ?? c.plataforma]))
@@ -245,8 +251,13 @@ export default async function PanelPublicaciones({
       .order('creado_en', { ascending: false })
       .range(desde, desde + POR_PAGINA - 1)
     if (error) errorPropiedades = error.message
-    propiedades = (data ?? []) as typeof propiedades
-    total = count ?? 0
+
+    // Filtrar propiedades ocultas por el usuario
+    propiedades = ((data ?? []) as typeof propiedades).filter((p) => !ocultasPorUsuario.has(p.id))
+
+    // Recalcular total excluyendo ocultas
+    const totalSinOcultas = (count ?? 0) - (ocultasData?.length ?? 0)
+    total = Math.max(0, totalSinOcultas)
   }
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA))
