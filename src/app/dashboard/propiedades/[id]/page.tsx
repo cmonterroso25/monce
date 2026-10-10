@@ -257,6 +257,7 @@ export default async function DetallePropiedad({
     : null
   const dentroDe30Dias = diasDesdeIngreso !== null && diasDesdeIngreso < 30
   const esVenta = propiedad.tipo_operacion === 'venta'
+  const esDirecto = propiedad.modalidad_captacion === 'Directo'
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
@@ -276,7 +277,7 @@ export default async function DetallePropiedad({
         </div>
       )}
 
-      {dentroDe30Dias && esVenta && (
+      {dentroDe30Dias && esVenta && esDirecto && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border-2 border-orange-300 bg-orange-50 px-4 py-3">
           <Ban size={20} className="shrink-0 text-orange-600" />
           <p className="text-sm font-bold text-orange-700">
