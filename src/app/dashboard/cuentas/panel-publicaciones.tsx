@@ -362,9 +362,14 @@ export default async function PanelPublicaciones({
 
           if (isExpandible) {
             return (
-              <details key={k.texto} className={`${CAJA} cursor-pointer hover:border-green-300`}>
-                <summary className="select-none">
-                  {interior}
+              <details key={k.texto} className={`${CAJA} cursor-pointer hover:border-green-300 group relative`}>
+                <summary className="select-none list-none">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">{interior}</div>
+                    <svg className="h-5 w-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
+                  </div>
                 </summary>
                 <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
                   {Array.from(vigentePorCuenta.entries()).map(([cuentaId, count]) => (
