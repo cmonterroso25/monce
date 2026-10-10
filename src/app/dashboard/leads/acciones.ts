@@ -401,7 +401,7 @@ export async function crearActividad(formData: FormData) {
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
       if (chatIdCitas) {
-        const fecha = fechaVisita.toLocaleString('es-GT', {
+        const fecha = fechaVisita.toLocaleDateString('es-GT', {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
