@@ -276,15 +276,15 @@ export default async function ListadoPropiedades({
                        (propiedad.tipo_propiedad === 'casa' || propiedad.tipo_propiedad === 'apartamento') && (
                         <>
                           {propiedad.mascota && propiedad.mascota.toLowerCase() !== 'no' ? (
-                            <span className="shrink-0 rounded-full bg-green-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-xs">
                               🐾
                             </span>
                           ) : propiedad.mascota && propiedad.mascota.toLowerCase() === 'no' ? (
-                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs">
                               🐾
                             </span>
                           ) : (
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
+                            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs">
                               🐾
                             </span>
                           )}
