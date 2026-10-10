@@ -61,6 +61,19 @@ export default async function PaginaSeguimientos() {
 
   const ahora = new Date()
 
+  // Primero obtener TODAS las actividades sin joins
+  const { data: todasActividades, error: errorTodas } = await supabase
+    .from('actividades')
+    .select('id, programada_en, agente_id, contacto_id, lead_id')
+    .not('programada_en', 'is', null)
+
+  console.log('DEBUG - Todas las actividades:', {
+    total: todasActividades?.length ?? 0,
+    error: errorTodas,
+    muestras: todasActividades?.slice(0, 3)
+  })
+
+  // Ahora obtener con todas las relaciones
   const { data: actividadesData, error: errorActividades } = await supabase
     .from('actividades')
     .select(
@@ -73,11 +86,10 @@ export default async function PaginaSeguimientos() {
     console.error('--- ERROR AL CARGAR ACTIVIDADES ---', errorActividades)
   }
 
-  console.log('DEBUG Seguimientos:', {
+  console.log('DEBUG Seguimientos con relaciones:', {
     totalCitas: actividadesData?.length ?? 0,
     ahora: ahora.toISOString(),
-    error: errorActividades,
-    muestras: actividadesData?.slice(0, 2)
+    error: errorActividades
   })
 
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
