@@ -280,7 +280,7 @@ export default async function DetallePropiedad({
         <div className="mb-4 flex items-center gap-2 rounded-lg border-2 border-orange-300 bg-orange-50 px-4 py-3">
           <Ban size={20} className="shrink-0 text-orange-600" />
           <p className="text-sm font-bold text-orange-700">
-            Período de exclusividad — esta propiedad no puede compartirse con otros colegas hasta {formatearFechaLargaGT(new Date(fechaIngreso!.getTime() + 30 * 24 * 60 * 60 * 1000))} (30 días desde su ingreso).
+            Período de exclusividad — esta propiedad no puede compartirse con otros colegas hasta {formatearFechaLargaGT(new Date(fechaIngreso!.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString())} (30 días desde su ingreso).
           </p>
         </div>
       )}
