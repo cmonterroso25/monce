@@ -14,7 +14,6 @@ type Actividad = {
   contacto: { nombre_completo: string; telefono: string | null } | null
   lead: { id: string; etapa: string } | null
   agente: { id: string; nombre_completo: string } | null
-  comentarios_actividad: { id: string; contenido: string; creado_por: { nombre_completo: string } | null; creado_en: string }[] | null
 }
 
 const COLORES_ESTADO_ACTIVIDAD: Record<string, string> = {
@@ -60,37 +59,20 @@ export default async function PaginaSeguimientos() {
   if (!esAdmin) redirect('/dashboard')
 
   const ahora = new Date()
+  const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  // Primero obtener TODAS las actividades sin joins
-  const { data: todasActividades, error: errorTodas } = await supabase
-    .from('actividades')
-    .select('id, programada_en, agente_id, contacto_id, lead_id')
-    .not('programada_en', 'is', null)
-
-  console.log('DEBUG - Todas las actividades:', {
-    total: todasActividades?.length ?? 0,
-    error: errorTodas,
-    muestras: todasActividades?.slice(0, 3)
-  })
-
-  // Ahora obtener con todas las relaciones
   const { data: actividadesData, error: errorActividades } = await supabase
     .from('actividades')
     .select(
-      '*, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles!actividades_agente_id_fkey(id, nombre_completo), comentarios_actividad(id, contenido, creado_en, creado_por:perfiles(nombre_completo))'
+      'id, tipo_actividad, notas, programada_en, completada_en, creado_en, lead_id, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles!actividades_agente_id_fkey(id, nombre_completo)'
     )
     .not('programada_en', 'is', null)
+    .gte('programada_en', hace7Dias.toISOString())
     .order('programada_en', { ascending: true })
 
   if (errorActividades) {
-    console.error('--- ERROR AL CARGAR ACTIVIDADES ---', errorActividades)
+    console.error('--- ERROR AL CARGAR ACTIVIDADES EN SEGUIMIENTOS ---', errorActividades)
   }
-
-  console.log('DEBUG Seguimientos con relaciones:', {
-    totalCitas: actividadesData?.length ?? 0,
-    ahora: ahora.toISOString(),
-    error: errorActividades
-  })
 
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
 

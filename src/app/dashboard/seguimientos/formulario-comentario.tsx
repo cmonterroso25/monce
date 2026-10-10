@@ -5,9 +5,10 @@ import { agregarComentario } from './acciones'
 
 type FormularioComentarioProps = {
   actividadId: string
+  onComentarioAgregado?: () => void
 }
 
-export default function FormularioComentario({ actividadId }: FormularioComentarioProps) {
+export default function FormularioComentario({ actividadId, onComentarioAgregado }: FormularioComentarioProps) {
   const [contenido, setContenido] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
@@ -22,6 +23,7 @@ export default function FormularioComentario({ actividadId }: FormularioComentar
     try {
       await agregarComentario(actividadId, contenido)
       setContenido('')
+      onComentarioAgregado?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {

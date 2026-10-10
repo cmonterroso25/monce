@@ -1,9 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronDown, Phone, ArrowUpRight } from 'lucide-react'
 import FormularioComentario from './formulario-comentario'
+
+type Comentario = {
+  id: string
+  contenido: string
+  creado_en: string
+  creado_por: { nombre_completo: string } | null
+}
 
 type TarjetaCitaProps = {
   actividad: any
@@ -21,6 +28,29 @@ export default function TarjetaCita({
   etiquetasActividad,
 }: TarjetaCitaProps) {
   const [expandida, setExpandida] = useState(false)
+  const [comentarios, setComentarios] = useState<Comentario[]>([])
+  const [cargandoComentarios, setCargandoComentarios] = useState(false)
+
+  useEffect(() => {
+    if (expandida && comentarios.length === 0) {
+      cargarComentarios()
+    }
+  }, [expandida])
+
+  const cargarComentarios = async () => {
+    setCargandoComentarios(true)
+    try {
+      const res = await fetch(`/api/seguimientos/comentarios?actividad_id=${actividad.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setComentarios(data)
+      }
+    } catch (err) {
+      console.error('Error al cargar comentarios:', err)
+    } finally {
+      setCargandoComentarios(false)
+    }
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
@@ -104,31 +134,35 @@ export default function TarjetaCita({
             <div className="border-t border-slate-200 pt-3">
               <h4 className="mb-2 text-sm font-medium text-slate-700">Seguimientos</h4>
 
-              <div className="mb-3 space-y-2 max-h-48 overflow-y-auto">
-                {actividad.comentarios_actividad && actividad.comentarios_actividad.length > 0 ? (
-                  actividad.comentarios_actividad.map((comentario: any) => (
-                    <div key={comentario.id} className="rounded bg-white p-2 text-xs">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-medium text-slate-700">
-                          {comentario.creado_por?.nombre_completo ?? 'Anónimo'}
-                        </span>
-                        <time className="text-slate-400">
-                          {new Date(comentario.creado_en).toLocaleString('es-GT', {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                            timeZone: 'America/Guatemala',
-                          })}
-                        </time>
+              {cargandoComentarios ? (
+                <p className="text-xs text-slate-400">Cargando...</p>
+              ) : (
+                <div className="mb-3 space-y-2 max-h-48 overflow-y-auto">
+                  {comentarios.length > 0 ? (
+                    comentarios.map((comentario) => (
+                      <div key={comentario.id} className="rounded bg-white p-2 text-xs">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-medium text-slate-700">
+                            {comentario.creado_por?.nombre_completo ?? 'Anónimo'}
+                          </span>
+                          <time className="text-slate-400">
+                            {new Date(comentario.creado_en).toLocaleString('es-GT', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                              timeZone: 'America/Guatemala',
+                            })}
+                          </time>
+                        </div>
+                        <p className="mt-1 text-slate-600">{comentario.contenido}</p>
                       </div>
-                      <p className="mt-1 text-slate-600">{comentario.contenido}</p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-400">Sin seguimientos aún.</p>
-                )}
-              </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400">Sin seguimientos aún.</p>
+                  )}
+                </div>
+              )}
 
-              <FormularioComentario actividadId={actividad.id} />
+              <FormularioComentario actividadId={actividad.id} onComentarioAgregado={() => cargarComentarios()} />
             </div>
           </div>
         </div>
