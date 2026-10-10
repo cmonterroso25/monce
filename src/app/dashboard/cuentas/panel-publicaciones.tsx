@@ -179,7 +179,7 @@ export default async function PanelPublicaciones({
       .from('propiedades')
       .select('id')
       .in('id', [...propiedadesPublicadas])
-      .in('estado', ESTADOS_NO_DISPONIBLE)
+      .in('estado', ESTADOS_NO_DISPONIBLE.map((s) => s.toUpperCase()))
     noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
   }
 
