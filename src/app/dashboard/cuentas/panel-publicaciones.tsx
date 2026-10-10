@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { CANALES_DASHBOARD, IconoCanal } from './iconos-canales'
+import BotonOcultar from './boton-ocultar'
 
 const ESTADOS_EN_CURSO = ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED', 'VERIFICANDO']
 // Fallos terminales que se muestran solo VENTANA_ERROR_HORAS (CANCELLED y APPROVAL_EXPIRED no cuentan).
@@ -228,7 +229,7 @@ export default async function PanelPublicaciones({
     idsRestringidos = interseccion(idsRestringidos, idsRevision)
   }
 
-  let propiedades: { id: string; codigo: string | null; titulo: string | null; tipo_operacion: string | null; estado: string | null }[] = []
+  let propiedades: { id: string; codigo: string | null; titulo: string | null; tipo_operacion: string | null; estado: string | null; oculta_en_publicaciones: boolean }[] = []
   let total = 0
   let errorPropiedades: string | null = null
 
@@ -236,10 +237,11 @@ export default async function PanelPublicaciones({
     const desde = (pagina - 1) * POR_PAGINA
     let consulta = supabase
       .from('propiedades')
-      .select('id, codigo, titulo, tipo_operacion, estado', { count: 'exact' })
+      .select('id, codigo, titulo, tipo_operacion, estado, oculta_en_publicaciones', { count: 'exact' })
     if (q) consulta = consulta.ilike('codigo', `%${q}%`)
     if (estado) consulta = consulta.eq('estado', estado)
     if (idsRestringidos) consulta = consulta.in('id', [...idsRestringidos])
+    consulta = consulta.eq('oculta_en_publicaciones', false)
     const { data, count, error } = await consulta
       .order('creado_en', { ascending: false })
       .range(desde, desde + POR_PAGINA - 1)
@@ -474,7 +476,8 @@ export default async function PanelPublicaciones({
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                 <th className="py-2 pr-3 font-medium">Propiedad</th>
                 <th className="py-2 pr-3 font-medium">Estado</th>
-                <th className="py-2 font-medium">Canales</th>
+                <th className="py-2 pr-3 font-medium">Canales</th>
+                <th className="py-2 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -506,7 +509,7 @@ export default async function PanelPublicaciones({
                         <div className="text-xs font-medium text-red-700">Anuncio vigente: retíralo de Facebook</div>
                       )}
                     </td>
-                    <td className="py-2">
+                    <td className="py-2 pr-3">
                       <div className="flex items-center gap-1">
                         {CANALES_DASHBOARD.map((c) => {
                           const delCanal = ts
@@ -555,6 +558,9 @@ export default async function PanelPublicaciones({
                           )
                         })}
                       </div>
+                    </td>
+                    <td className="py-2">
+                      <BotonOcultar propiedadId={p.id} />
                     </td>
                   </tr>
                 )

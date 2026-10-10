@@ -175,3 +175,38 @@ export async function cancelarConexionCuenta(formData: FormData) {
   revalidatePath('/dashboard/cuentas')
   redirect('/dashboard/cuentas?exito=conexion_cancelada')
 }
+
+export async function ocultarPropiedad(propiedadId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: propiedad, error: errorObtener } = await supabase
+    .from('propiedades')
+    .select('id, captado_por')
+    .eq('id', propiedadId)
+    .maybeSingle()
+
+  if (!propiedad) {
+    return { ok: false, mensaje: 'Propiedad no encontrada' }
+  }
+
+  if (propiedad.captado_por !== user.id) {
+    return { ok: false, mensaje: 'Solo puedes ocultar propiedades que capturaste' }
+  }
+
+  const { error } = await supabase
+    .from('propiedades')
+    .update({ oculta_en_publicaciones: true })
+    .eq('id', propiedadId)
+
+  if (error) {
+    console.error('--- ERROR AL OCULTAR PROPIEDAD ---', error)
+    return { ok: false, mensaje: 'Error al ocultar la propiedad' }
+  }
+
+  revalidatePath('/dashboard/cuentas')
+  return { ok: true }
+}
