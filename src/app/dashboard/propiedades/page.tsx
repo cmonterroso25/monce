@@ -258,8 +258,8 @@ export default async function ListadoPropiedades({
                       </span>
                     </div>
 
-                    {/* Hab / Baños / m2 */}
-                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                    {/* Hab / Baños / m2 / Mascota */}
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                       <span className="flex items-center gap-1">
                         <BedDouble size={15} className="text-slate-400" />
                         {propiedad.dormitorios ?? '—'}
@@ -272,6 +272,11 @@ export default async function ListadoPropiedades({
                         <Ruler size={15} className="text-slate-400" />
                         {propiedad.area_construccion_m2 ?? '—'} m²
                       </span>
+                      {propiedad.mascota && (
+                        <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                          🐾
+                        </span>
+                      )}
                     </div>
 
                     {/* Precio */}
