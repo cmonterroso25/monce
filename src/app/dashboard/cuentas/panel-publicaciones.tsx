@@ -229,7 +229,7 @@ export default async function PanelPublicaciones({
     idsRestringidos = interseccion(idsRestringidos, idsRevision)
   }
 
-  let propiedades: { id: string; codigo: string | null; titulo: string | null; tipo_operacion: string | null; estado: string | null; oculta_en_publicaciones: boolean }[] = []
+  let propiedades: { id: string; codigo: string | null; titulo: string | null; tipo_operacion: string | null; estado: string | null }[] = []
   let total = 0
   let errorPropiedades: string | null = null
 
@@ -237,11 +237,10 @@ export default async function PanelPublicaciones({
     const desde = (pagina - 1) * POR_PAGINA
     let consulta = supabase
       .from('propiedades')
-      .select('id, codigo, titulo, tipo_operacion, estado, oculta_en_publicaciones', { count: 'exact' })
+      .select('id, codigo, titulo, tipo_operacion, estado', { count: 'exact' })
     if (q) consulta = consulta.ilike('codigo', `%${q}%`)
     if (estado) consulta = consulta.eq('estado', estado)
     if (idsRestringidos) consulta = consulta.in('id', [...idsRestringidos])
-    consulta = consulta.eq('oculta_en_publicaciones', false)
     const { data, count, error } = await consulta
       .order('creado_en', { ascending: false })
       .range(desde, desde + POR_PAGINA - 1)

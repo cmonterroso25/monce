@@ -35,7 +35,7 @@ export default function BotonOcultar({ propiedadId }: { propiedadId: string }) {
         onClick={manejarOcultar}
         disabled={cargando}
         className="flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-        title="Ocultar de Mis Publicaciones"
+        title="Ocultar esta propiedad de Mis Publicaciones"
       >
         <Eye size={14} />
         {cargando ? 'Ocultando...' : 'Ocultar'}

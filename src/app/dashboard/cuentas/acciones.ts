@@ -204,6 +204,9 @@ export async function ocultarPropiedad(propiedadId: string) {
 
   if (error) {
     console.error('--- ERROR AL OCULTAR PROPIEDAD ---', error)
+    if (error.message.includes('oculta_en_publicaciones')) {
+      return { ok: false, mensaje: 'La migración de la base de datos aún no está lista. Por favor intenta de nuevo en unos momentos.' }
+    }
     return { ok: false, mensaje: 'Error al ocultar la propiedad' }
   }
 
