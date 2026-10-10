@@ -123,7 +123,7 @@ export default async function PanelPublicaciones({
 }) {
   const supabase = await createClient()
 
-  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }, { data: noDisponiblesData }] = await Promise.all([
+  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }] = await Promise.all([
     supabase.from('cuentas_sociales').select('id, etiqueta, plataforma, estado').eq('asesor_id', userId).order('creado_en'),
     supabase
       .from('trabajos_publicacion')
@@ -137,16 +137,10 @@ export default async function PanelPublicaciones({
     supabase
       .from('propiedades_ocultas_usuario')
       .select('propiedad_id')
-      .eq('usuario_id', userId),
-    supabase
-      .from('propiedades')
-      .select('id')
-      .eq('asesor_id', userId)
-      .in('estado', ESTADOS_NO_DISPONIBLE)
+      .eq('usuario_id', userId)
   ])
 
   const ocultasPorUsuario = new Set((ocultasData ?? []).map((o: any) => o.propiedad_id))
-  const noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
 
   const cuentas = (cuentasData ?? []) as { id: string; etiqueta: string | null; plataforma: string; estado: string }[]
   const etiquetaCuenta = new Map(cuentas.map((c) => [c.id, c.etiqueta ?? c.plataforma]))
@@ -176,6 +170,18 @@ export default async function PanelPublicaciones({
 
   // Envíos que cuentan para el resumen, el tope y los canales en color (sin errores).
   const trabajos = todos.filter((t) => !ESTADOS_ERROR.includes(t.estado))
+
+  // Contar propiedades no disponibles que el usuario ha publicado y que están visibles
+  const propiedadesPublicadas = new Set(trabajos.map((t) => t.propiedadId))
+  let noDisponiblesVisibles = 0
+  if (propiedadesPublicadas.size > 0) {
+    const { data: noDisponiblesData } = await supabase
+      .from('propiedades')
+      .select('id')
+      .in('id', [...propiedadesPublicadas])
+      .in('estado', ESTADOS_NO_DISPONIBLE)
+    noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
+  }
 
   // Errores visibles: solo las últimas 24 h y sin un reintento posterior de la misma propiedad/canal/cuenta.
   const limiteError = ahora - VENTANA_ERROR_HORAS * MS_HORA
@@ -345,22 +351,33 @@ export default async function PanelPublicaciones({
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tarjetas.map((k) => {
+          const isExpandible = k.texto === 'Anuncios vigentes' && vigentePorCuenta.size > 0
           const interior = (
             <>
               <div className={`text-2xl font-bold ${k.clase}`}>{k.valor}</div>
               <div className="text-xs text-slate-500">{k.texto}</div>
               {k.href && <div className="mt-1 text-xs text-amber-700 underline">Ver propiedades</div>}
-              {k.texto === 'Anuncios vigentes' && vigentePorCuenta.size > 0 && (
-                <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+            </>
+          )
+
+          if (isExpandible) {
+            return (
+              <details key={k.texto} className={`${CAJA} cursor-pointer hover:border-green-300`}>
+                <summary className="select-none">
+                  {interior}
+                </summary>
+                <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
                   {Array.from(vigentePorCuenta.entries()).map(([cuentaId, count]) => (
-                    <div key={cuentaId}>
-                      • {etiquetaCuenta.get(cuentaId)}: {count}
+                    <div key={cuentaId} className="flex items-center justify-between">
+                      <span>{etiquetaCuenta.get(cuentaId)}</span>
+                      <span className="font-medium text-slate-700">{count}</span>
                     </div>
                   ))}
                 </div>
-              )}
-            </>
-          )
+              </details>
+            )
+          }
+
           return k.href ? (
             <Link key={k.texto} href={k.href} className={`${CAJA} hover:border-amber-300`}>
               {interior}
