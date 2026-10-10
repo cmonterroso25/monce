@@ -401,21 +401,25 @@ export async function crearActividad(formData: FormData) {
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
       if (chatIdCitas) {
-        const fechaTexto = fechaVisita.toLocaleString('es-GT', {
+        const fecha = fechaVisita.toLocaleString('es-GT', {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
+          timeZone: 'America/Guatemala',
+        })
+        const hora = fechaVisita.toLocaleString('es-GT', {
           hour: '2-digit',
           minute: '2-digit',
           timeZone: 'America/Guatemala',
-        }).replace(' a las ', ' - ')
+        })
         const notas = textoOpcional(formData.get('notas'))
         const mensaje = [
           `📅 *Nueva cita agendada*`,
           `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
           `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
           colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
-          `🕐 ${fechaTexto}`,
+          `📆 ${fecha}`,
+          `🕐 ${hora}`,
           notas ? `📝 ${notas}` : null,
         ].filter(Boolean).join('\n')
 
