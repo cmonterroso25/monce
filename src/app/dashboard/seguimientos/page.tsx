@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Phone, ArrowUpRight } from 'lucide-react'
 import TarjetaCita from './tarjeta-cita'
 import { ETIQUETAS_ACTIVIDAD } from '../leads/constantes'
 
@@ -61,12 +59,16 @@ export default async function PaginaSeguimientos() {
 
   if (!esAdmin) redirect('/dashboard')
 
+  const ahora = new Date()
+  const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000)
+
   const { data: actividadesData, error: errorActividades } = await supabase
     .from('actividades')
     .select(
       '*, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles!actividades_agente_id_fkey(id, nombre_completo), comentarios_actividad(id, contenido, creado_en, creado_por:perfiles(nombre_completo))'
     )
     .not('programada_en', 'is', null)
+    .gte('programada_en', hace7Dias.toISOString())
     .order('programada_en', { ascending: true })
 
   if (errorActividades) {
@@ -75,7 +77,6 @@ export default async function PaginaSeguimientos() {
 
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
 
-  const ahora = new Date()
   const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
   const finHoy = new Date(inicioHoy.getTime() + 24 * 60 * 60 * 1000)
 

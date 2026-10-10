@@ -58,6 +58,8 @@ export default async function ListadoActividades() {
     .maybeSingle()
   const esAdmin = miPerfil?.rol === 'administrador'
 
+  if (!esAdmin) redirect('/dashboard')
+
   let query = supabase
     .from('actividades')
     .select(
