@@ -123,7 +123,7 @@ export default async function PanelPublicaciones({
 }) {
   const supabase = await createClient()
 
-  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }] = await Promise.all([
+  const [{ data: cuentasData }, { data: trabajosData, error: errorTrabajos }, { data: ocultasData }, { data: noDisponiblesData }] = await Promise.all([
     supabase.from('cuentas_sociales').select('id, etiqueta, plataforma, estado').eq('asesor_id', userId).order('creado_en'),
     supabase
       .from('trabajos_publicacion')
@@ -137,13 +137,20 @@ export default async function PanelPublicaciones({
     supabase
       .from('propiedades_ocultas_usuario')
       .select('propiedad_id')
-      .eq('usuario_id', userId)
+      .eq('usuario_id', userId),
+    supabase
+      .from('propiedades')
+      .select('id')
+      .eq('asesor_id', userId)
+      .in('estado', ESTADOS_NO_DISPONIBLE)
   ])
 
   const ocultasPorUsuario = new Set((ocultasData ?? []).map((o: any) => o.propiedad_id))
+  const noDisponiblesVisibles = ((noDisponiblesData ?? []) as any[]).filter((p) => !ocultasPorUsuario.has(p.id)).length
 
   const cuentas = (cuentasData ?? []) as { id: string; etiqueta: string | null; plataforma: string; estado: string }[]
   const etiquetaCuenta = new Map(cuentas.map((c) => [c.id, c.etiqueta ?? c.plataforma]))
+  const cuentasDisponibles = cuentas.filter((c) => !ESTADOS_CUENTA_NO_DISPONIBLE.includes(c.estado))
   const cuentasDisponiblesPorPlataforma = new Map<string, string[]>()
   for (const c of cuentas) {
     if (ESTADOS_CUENTA_NO_DISPONIBLE.includes(c.estado)) continue
@@ -208,11 +215,17 @@ export default async function PanelPublicaciones({
 
   // Resumen
   const vigentes = trabajos.filter((t) => t.estado === 'PUBLICADO').length
-  const enCurso = trabajos.filter((t) => ESTADOS_EN_CURSO.includes(t.estado)).length
+  const vigentePorCuenta = new Map<string, number>()
+  for (const c of cuentasDisponibles) {
+    const count = trabajos.filter((t) => t.estado === 'PUBLICADO' && t.cuentaId === c.id).length
+    if (count > 0) vigentePorCuenta.set(c.id, count)
+  }
   const porRevisar = idsRevision.size
-  const ultimos7 = trabajos.filter(
-    (t) => t.estado === 'PUBLICADO' && t.publicadoEn && new Date(t.publicadoEn).getTime() >= ahora - 168 * MS_HORA
-  ).length
+
+  // Porcentaje de cobertura: 100% = todas las cuentas × propiedades con anuncio × canales
+  const propiedadesConAnuncio = new Set(trabajos.map((t) => t.propiedadId))
+  const totalTeórico = propiedadesConAnuncio.size * cuentasDisponibles.length * CANALES_DASHBOARD.length
+  const porcentajeCobertura = totalTeórico > 0 ? Math.round((vigentes / totalTeórico) * 100) : 0
 
   // Filtros
   const q = (filtros.q ?? '').trim().slice(0, 30).replace(/[%_,()]/g, '')
@@ -283,11 +296,11 @@ export default async function PanelPublicaciones({
 
   const hayFiltros = Boolean(q || estado || canal || cuentaFiltro || soloRevision)
 
-  const tarjetas: { texto: string; valor: number; clase: string; href?: string }[] = [
+  const tarjetas: { texto: string; valor: number | string; clase: string; href?: string }[] = [
     { texto: 'Anuncios vigentes', valor: vigentes, clase: 'text-green-700' },
-    { texto: 'En curso', valor: enCurso, clase: 'text-blue-700' },
+    { texto: 'No disponibles (visibles)', valor: noDisponiblesVisibles, clase: 'text-red-700' },
     { texto: 'Requieren revisión', valor: porRevisar, clase: 'text-amber-700', href: '/dashboard/cuentas?revision=1' },
-    { texto: 'Publicados en 7 días', valor: ultimos7, clase: 'text-[#2C3E50]' },
+    { texto: 'Cobertura', valor: `${porcentajeCobertura}%`, clase: 'text-[#2C3E50]' },
   ]
   const CAJA = 'block rounded-lg border border-slate-200 bg-white p-4 shadow-sm'
 
@@ -337,6 +350,15 @@ export default async function PanelPublicaciones({
               <div className={`text-2xl font-bold ${k.clase}`}>{k.valor}</div>
               <div className="text-xs text-slate-500">{k.texto}</div>
               {k.href && <div className="mt-1 text-xs text-amber-700 underline">Ver propiedades</div>}
+              {k.texto === 'Anuncios vigentes' && vigentePorCuenta.size > 0 && (
+                <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+                  {Array.from(vigentePorCuenta.entries()).map(([cuentaId, count]) => (
+                    <div key={cuentaId}>
+                      • {etiquetaCuenta.get(cuentaId)}: {count}
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )
           return k.href ? (
@@ -359,10 +381,10 @@ export default async function PanelPublicaciones({
           <ul className="space-y-3">
             {cuentas.map((c) => {
               const mios = trabajos.filter((t) => t.cuentaId === c.id)
-              const vig = mios.filter((t) => t.estado === 'PUBLICADO')
               const en24 = mios.filter((t) => new Date(t.creadoEn).getTime() >= ahora - 24 * MS_HORA).length
               const ultima =
-                vig
+                mios
+                  .filter((t) => t.estado === 'PUBLICADO')
                   .map((t) => t.publicadoEn)
                   .filter((f): f is string => Boolean(f))
                   .sort()
@@ -373,7 +395,7 @@ export default async function PanelPublicaciones({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium text-[#2C3E50]">{c.etiqueta ?? c.plataforma}</span>
                     <span className="text-xs text-slate-500">
-                      {vig.length} vigentes · {en24} / {TOPE_24H} en 24 h · última: {fechaGT(ultima)}
+                      {en24} / {TOPE_24H} en 24 h · última: {fechaGT(ultima)}
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100">
