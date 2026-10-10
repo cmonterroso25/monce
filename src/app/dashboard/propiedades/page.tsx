@@ -272,7 +272,7 @@ export default async function ListadoPropiedades({
                         <Ruler size={15} className="text-slate-400" />
                         {propiedad.area_construccion_m2 ?? '—'} m²
                       </span>
-                      {propiedad.mascota && (
+                      {propiedad.mascota && propiedad.mascota.toLowerCase() !== 'no' && (
                         <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
                           🐾
                         </span>
