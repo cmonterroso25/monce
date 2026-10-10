@@ -172,7 +172,7 @@ export default async function PanelPublicaciones({
   const trabajos = todos.filter((t) => !ESTADOS_ERROR.includes(t.estado))
 
   // Contar propiedades no disponibles que el usuario ha publicado y que están visibles
-  const propiedadesPublicadas = new Set(trabajos.map((t) => t.propiedadId))
+  const propiedadesPublicadas = new Set(todos.map((t) => t.propiedadId))
   let noDisponiblesVisibles = 0
   if (propiedadesPublicadas.size > 0) {
     const { data: noDisponiblesData } = await supabase
