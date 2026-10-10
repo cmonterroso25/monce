@@ -35,12 +35,12 @@ const MODULOS_BASE: Modulo[] = [
   { nombre: 'Contactos', href: '/dashboard/contactos', icono: UserCircle, construido: true },
   { nombre: 'Leads', href: '/dashboard/leads', icono: ClipboardList, construido: true },
   { nombre: 'Calendario', href: '/dashboard/calendario', icono: CalendarDays, construido: true },
-  { nombre: 'Actividades', href: '/dashboard/actividades', icono: CalendarClock, construido: true },
   { nombre: 'Tareas', href: '/dashboard/tareas', icono: CheckSquare, construido: true },
   { nombre: 'Mis cuentas', href: '/dashboard/cuentas', icono: Share2, construido: true },
 ]
 
 const MODULOS_SOLO_ADMIN: Modulo[] = [
+  { nombre: 'Seguimientos', href: '/dashboard/seguimientos', icono: CalendarClock, construido: true },
   { nombre: 'Agentes', href: '/dashboard/agentes', icono: Users, construido: true },
   { nombre: 'Configuración', href: '/dashboard/configuracion', icono: Settings, construido: true },
 ]
