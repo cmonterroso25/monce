@@ -60,7 +60,6 @@ export default async function PaginaSeguimientos() {
   if (!esAdmin) redirect('/dashboard')
 
   const ahora = new Date()
-  const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000)
 
   const { data: actividadesData, error: errorActividades } = await supabase
     .from('actividades')
@@ -68,12 +67,18 @@ export default async function PaginaSeguimientos() {
       '*, contacto:contactos(nombre_completo, telefono), lead:leads(id, etapa), agente:perfiles!actividades_agente_id_fkey(id, nombre_completo), comentarios_actividad(id, contenido, creado_en, creado_por:perfiles(nombre_completo))'
     )
     .not('programada_en', 'is', null)
-    .gte('programada_en', hace7Dias.toISOString())
     .order('programada_en', { ascending: true })
 
   if (errorActividades) {
     console.error('--- ERROR AL CARGAR ACTIVIDADES ---', errorActividades)
   }
+
+  console.log('DEBUG Seguimientos:', {
+    totalCitas: actividadesData?.length ?? 0,
+    ahora: ahora.toISOString(),
+    error: errorActividades,
+    muestras: actividadesData?.slice(0, 2)
+  })
 
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
 
