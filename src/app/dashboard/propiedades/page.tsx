@@ -6,6 +6,7 @@ import FiltrosPropiedades from './filtros-propiedades'
 import BotonEliminarPropiedad from './boton-eliminar'
 import RefrescarSiEnCurso from './refrescar-si-en-curso'
 import { listarEnviosEnCurso } from './envios-en-curso'
+import { formatearZona } from '@/lib/formato-zona'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -252,7 +253,7 @@ export default async function ListadoPropiedades({
                     <div className="flex min-w-0 items-center gap-1 text-sm text-slate-600">
                       <MapPin size={14} className="flex-shrink-0 text-slate-400" />
                       <span className="truncate">
-                        {propiedad.zona ? `${propiedad.zona}, ` : ''}
+                        {propiedad.zona ? `${formatearZona(propiedad.zona)}, ` : ''}
                         {propiedad.municipio?.nombre ?? propiedad.ciudad}
                       </span>
                     </div>

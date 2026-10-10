@@ -361,7 +361,7 @@ export default async function DetallePropiedad({
             )}
           </p>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center sm:gap-3">
+          <div className="mt-4 grid grid-cols-4 gap-2 text-center sm:gap-3">
             <div className="rounded-lg border border-slate-200 py-3">
               <p className="text-lg font-semibold text-[#2C3E50]">
                 {propiedad.dormitorios ?? '—'}
@@ -379,6 +379,12 @@ export default async function DetallePropiedad({
                 {propiedad.area_construccion_m2 ?? '—'} m²
               </p>
               <p className="text-xs text-slate-500">Área</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 py-3">
+              <p className="text-lg font-semibold text-[#2C3E50]">
+                {propiedad.mascota ? 'Sí' : 'No'}
+              </p>
+              <p className="text-xs text-slate-500">Mascota</p>
             </div>
           </div>
 
