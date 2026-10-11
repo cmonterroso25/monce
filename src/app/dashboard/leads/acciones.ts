@@ -286,7 +286,7 @@ export async function reenviarUltimaCita() {
   if (!perfil?.organization_id) return { ok: false, mensaje: 'No se encontró tu perfil' }
 
   // Obtener la última cita (de cualquier usuario) de la organización
-  const { data: ultimaCita } = await supabase
+  const { data: ultimaCita, error: errorCita } = await supabase
     .from('actividades')
     .select(
       'id, tipo_actividad, programada_en, contacto_id, agente_id, notas, colega_id'
@@ -297,7 +297,13 @@ export async function reenviarUltimaCita() {
     .limit(1)
     .single()
 
-  if (!ultimaCita) return { ok: false, mensaje: 'No se encontró ninguna cita' }
+  console.log('DEBUG reenviarUltimaCita:', {
+    organizationId: perfil.organization_id,
+    ultimaCita,
+    errorCita: errorCita?.message,
+  })
+
+  if (!ultimaCita) return { ok: false, mensaje: `No se encontró ninguna cita: ${errorCita?.message}` }
 
   const { data: contacto } = await supabaseAdmin
     .from('contactos')
