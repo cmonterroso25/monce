@@ -40,10 +40,8 @@ export async function notificarWhatsapp(params: {
   imagenUrl?: string | null
 }) {
   // No esperamos la respuesta para no bloquear. Se envía de forma asíncrona con timeout.
-  console.log('notificarWhatsapp: iniciando fetch a', FUNCTIONS_URL)
-
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 segundos timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 segundos timeout
 
   fetch(FUNCTIONS_URL, {
     method: 'POST',
@@ -68,13 +66,14 @@ export async function notificarWhatsapp(params: {
   })
     .then((res) => {
       clearTimeout(timeoutId)
-      console.log('notificarWhatsapp: fetch respondió con status', res.status)
       if (!res.ok) {
         console.error('notificarWhatsapp: error HTTP', res.status)
       }
     })
     .catch((err) => {
       clearTimeout(timeoutId)
-      console.error('notificarWhatsapp: error:', err.message)
+      if (err.name !== 'AbortError') {
+        console.error('notificarWhatsapp: error de red:', err.message)
+      }
     })
 }
