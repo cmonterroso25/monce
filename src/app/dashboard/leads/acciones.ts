@@ -298,13 +298,7 @@ export async function reenviarUltimaCita() {
     .limit(1)
     .single()
 
-  console.log('DEBUG reenviarUltimaCita:', {
-    organizationId: perfil.organization_id,
-    ultimaCita,
-    errorCita: errorCita?.message,
-  })
-
-  if (!ultimaCita) return { ok: false, mensaje: `No se encontró ninguna cita: ${errorCita?.message}` }
+  if (!ultimaCita) return { ok: false, mensaje: 'No se encontró ninguna cita' }
 
   const { data: contacto } = await supabaseAdmin
     .from('contactos')
