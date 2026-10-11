@@ -440,7 +440,9 @@ export async function crearActividad(formData: FormData) {
     }
   }
 
+  console.log('DEBUG crearActividad:', { tipoActividad, programadaEn })
   if ((tipoActividad === 'cita' || tipoActividad === 'reunion') && programadaEn) {
+    console.log('DEBUG: Entrando a enviar mensaje WhatsApp')
     // Se usa supabaseAdmin (service role) para esta lectura: quien registra
     // la actividad puede no ser el agente_asignado del contacto (por
     // ejemplo, otro agente que solo quedó asignado a la cita), y la RLS de
@@ -483,7 +485,9 @@ export async function crearActividad(formData: FormData) {
       const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
+      console.log('DEBUG: chatIdCitas =', chatIdCitas)
       if (chatIdCitas) {
+        console.log('DEBUG: Enviando mensaje WhatsApp a grupo citas')
         const fecha = fechaVisita.toLocaleDateString('es-GT', {
           weekday: 'long',
           day: 'numeric',
