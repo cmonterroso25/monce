@@ -285,13 +285,13 @@ export async function reenviarUltimaCita() {
     .single()
   if (!perfil?.organization_id) return { ok: false, mensaje: 'No se encontró tu perfil' }
 
-  // Obtener la última cita creada por este usuario
+  // Obtener la última cita (de cualquier usuario) de la organización
   const { data: ultimaCita } = await supabase
     .from('actividades')
     .select(
       'id, tipo_actividad, programado_en, contacto_id, agente_asignado, notas, colegas_asignados'
     )
-    .eq('creado_por', user.id)
+    .eq('organization_id', perfil.organization_id)
     .in('tipo_actividad', ['cita', 'reunion'])
     .order('creado_en', { ascending: false })
     .limit(1)
