@@ -39,31 +39,27 @@ export async function notificarWhatsapp(params: {
   actividadId?: string | null
   imagenUrl?: string | null
 }) {
-  try {
-    const res = await fetch(FUNCTIONS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET,
+  // No esperamos la respuesta para no bloquear. Se envía de forma asíncrona.
+  fetch(FUNCTIONS_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET,
+    },
+    body: JSON.stringify({
+      chatId: params.chatId,
+      mensaje: params.mensaje,
+      imagenUrl: params.imagenUrl ?? null,
+      registrar: {
+        organization_id: params.organizationId,
+        tipo_notificacion: params.tipoNotificacion,
+        agente_id: params.agenteId ?? null,
+        contacto_id: params.contactoId ?? null,
+        actividad_id: params.actividadId ?? null,
       },
-      body: JSON.stringify({
-        chatId: params.chatId,
-        mensaje: params.mensaje,
-        imagenUrl: params.imagenUrl ?? null,
-        registrar: {
-          organization_id: params.organizationId,
-          tipo_notificacion: params.tipoNotificacion,
-          agente_id: params.agenteId ?? null,
-          contacto_id: params.contactoId ?? null,
-          actividad_id: params.actividadId ?? null,
-        },
-      }),
-    })
-    if (!res.ok) {
-      console.error('Error notificando WhatsApp:', await res.text())
-    }
-  } catch (err) {
+    }),
+  }).catch((err) => {
     console.error('Error de red notificando WhatsApp:', err)
-  }
+  })
 }
