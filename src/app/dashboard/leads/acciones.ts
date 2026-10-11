@@ -271,6 +271,88 @@ export async function cambiarEtapaLead(leadId: string, nuevaEtapa: string) {
   return { ok: true, mensaje: null }
 }
 
+export async function reenviarUltimaCita() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: perfil } = await supabase
+    .from('perfiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+  if (!perfil?.organization_id) return { ok: false, mensaje: 'No se encontró tu perfil' }
+
+  // Obtener la última cita creada por este usuario
+  const { data: ultimaCita } = await supabase
+    .from('actividades')
+    .select(
+      'id, tipo_actividad, programado_en, contacto_id, agente_asignado, notas, colegas_asignados'
+    )
+    .eq('creado_por', user.id)
+    .in('tipo_actividad', ['cita', 'reunion'])
+    .order('creado_en', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (!ultimaCita) return { ok: false, mensaje: 'No se encontró ninguna cita' }
+
+  const { data: contacto } = await supabaseAdmin
+    .from('contactos')
+    .select('nombre_completo')
+    .eq('id', ultimaCita.contacto_id)
+    .single()
+
+  const { data: agente } = await supabase
+    .from('perfiles')
+    .select('nombre_completo')
+    .eq('id', ultimaCita.agente_asignado)
+    .maybeSingle()
+
+  const colegasIds = Array.isArray(ultimaCita.colegas_asignados) ? ultimaCita.colegas_asignados : []
+  const nombresColegas = await nombresDeColegas(supabase, colegasIds)
+  const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
+
+  const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
+  if (!chatIdCitas) return { ok: false, mensaje: 'No se configuró el grupo de WhatsApp para citas' }
+
+  const fechaVisita = new Date(ultimaCita.programado_en)
+  const fecha = fechaVisita.toLocaleDateString('es-GT', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'America/Guatemala',
+  })
+  const hora = fechaVisita.toLocaleTimeString('es-GT', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Guatemala',
+  })
+  const notas = textoOpcional(ultimaCita.notas)
+  const mensaje = [
+    `📅 *Nueva cita agendada*`,
+    `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+    `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
+    colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
+    `📆 ${fecha}`,
+    `🕐 ${hora}`,
+    notas ? `📝 ${notas}` : null,
+  ].filter(Boolean).join('\n')
+
+  await notificarWhatsapp({
+    chatId: chatIdCitas,
+    mensaje,
+    organizationId: perfil.organization_id,
+    tipoNotificacion: 'nueva_cita',
+    agenteId: ultimaCita.agente_asignado,
+    contactoId: ultimaCita.contacto_id,
+  })
+
+  return { ok: true, mensaje: 'Cita reenviada' }
+}
+
 export async function crearActividad(formData: FormData) {
   const supabase = await createClient()
   const {
