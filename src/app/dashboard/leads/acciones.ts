@@ -407,7 +407,7 @@ export async function crearActividad(formData: FormData) {
           month: 'long',
           timeZone: 'America/Guatemala',
         })
-        const hora = fechaVisita.toLocaleString('es-GT', {
+        const hora = fechaVisita.toLocaleTimeString('es-GT', {
           hour: '2-digit',
           minute: '2-digit',
           timeZone: 'America/Guatemala',
