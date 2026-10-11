@@ -440,9 +440,7 @@ export async function crearActividad(formData: FormData) {
     }
   }
 
-  console.log('DEBUG crearActividad:', { tipoActividad, programadaEn })
   if ((tipoActividad === 'cita' || tipoActividad === 'reunion') && programadaEn) {
-    console.log('DEBUG: Entrando a enviar mensaje WhatsApp')
     // Se usa supabaseAdmin (service role) para esta lectura: quien registra
     // la actividad puede no ser el agente_asignado del contacto (por
     // ejemplo, otro agente que solo quedó asignado a la cita), y la RLS de
@@ -485,9 +483,7 @@ export async function crearActividad(formData: FormData) {
       const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
       const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
-      console.log('DEBUG: chatIdCitas =', chatIdCitas)
       if (chatIdCitas) {
-        console.log('DEBUG: Enviando mensaje WhatsApp a grupo citas')
         const fecha = fechaVisita.toLocaleDateString('es-GT', {
           weekday: 'long',
           day: 'numeric',
@@ -510,21 +506,14 @@ export async function crearActividad(formData: FormData) {
           notas ? `📝 ${notas}` : null,
         ].filter(Boolean).join('\n')
 
-        console.log('DEBUG: Mensaje generado:', mensaje)
-        console.log('DEBUG: Llamando a notificarWhatsapp...')
-        try {
-          await notificarWhatsapp({
-            chatId: chatIdCitas,
-            mensaje,
-            organizationId: perfil.organization_id,
-            tipoNotificacion: 'nueva_cita',
-            agenteId: agenteAsignadoId,
-            contactoId,
-          })
-          console.log('DEBUG: notificarWhatsapp completado')
-        } catch (err) {
-          console.error('DEBUG: Error en notificarWhatsapp:', err)
-        }
+        await notificarWhatsapp({
+          chatId: chatIdCitas,
+          mensaje,
+          organizationId: perfil.organization_id,
+          tipoNotificacion: 'nueva_cita',
+          agenteId: agenteAsignadoId,
+          contactoId,
+        })
       }
     }
   }
