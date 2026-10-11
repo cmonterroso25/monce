@@ -66,14 +66,17 @@ export async function notificarWhatsapp(params: {
   })
     .then((res) => {
       clearTimeout(timeoutId)
+      console.log('[WhatsApp] Status:', res.status)
       if (!res.ok) {
-        console.error('notificarWhatsapp: error HTTP', res.status)
+        res.text().then((text) => {
+          console.error('[WhatsApp] Respuesta error:', text)
+        })
       }
     })
     .catch((err) => {
       clearTimeout(timeoutId)
       if (err.name !== 'AbortError') {
-        console.error('notificarWhatsapp: error de red:', err.message)
+        console.error('[WhatsApp] Error de red:', err.message)
       }
     })
 }
