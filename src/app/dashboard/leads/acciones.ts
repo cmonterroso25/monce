@@ -289,7 +289,7 @@ export async function reenviarUltimaCita() {
   const { data: ultimaCita } = await supabase
     .from('actividades')
     .select(
-      'id, tipo_actividad, programado_en, contacto_id, agente_asignado, notas, colegas_asignados'
+      'id, tipo_actividad, programada_en, contacto_id, agente_id, notas, colega_id'
     )
     .eq('organization_id', perfil.organization_id)
     .in('tipo_actividad', ['cita', 'reunion'])
@@ -308,17 +308,17 @@ export async function reenviarUltimaCita() {
   const { data: agente } = await supabase
     .from('perfiles')
     .select('nombre_completo')
-    .eq('id', ultimaCita.agente_asignado)
+    .eq('id', ultimaCita.agente_id)
     .maybeSingle()
 
-  const colegasIds = Array.isArray(ultimaCita.colegas_asignados) ? ultimaCita.colegas_asignados : []
+  const colegasIds = ultimaCita.colega_id ? [ultimaCita.colega_id] : []
   const nombresColegas = await nombresDeColegas(supabase, colegasIds)
   const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
   const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
   if (!chatIdCitas) return { ok: false, mensaje: 'No se configuró el grupo de WhatsApp para citas' }
 
-  const fechaVisita = new Date(ultimaCita.programado_en)
+  const fechaVisita = new Date(ultimaCita.programada_en)
   const fecha = fechaVisita.toLocaleDateString('es-GT', {
     weekday: 'long',
     day: 'numeric',
@@ -346,7 +346,7 @@ export async function reenviarUltimaCita() {
     mensaje,
     organizationId: perfil.organization_id,
     tipoNotificacion: 'nueva_cita',
-    agenteId: ultimaCita.agente_asignado,
+    agenteId: ultimaCita.agente_id,
     contactoId: ultimaCita.contacto_id,
   })
 
