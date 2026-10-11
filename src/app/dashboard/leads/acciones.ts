@@ -457,17 +457,18 @@ export async function crearActividad(formData: FormData) {
     const fechaVisita = new Date(programadaEn)
     const recordatorio = new Date(fechaVisita.getTime() - 60 * 60 * 1000)
 
+    console.log('[Cita] Contacto:', { id: contactoId, nombre: contacto?.nombre_completo, telefono: contacto?.telefono })
     if (contacto?.telefono) {
-      await supabase.from('notificaciones_whatsapp').insert({
+      const { data, error } = await supabase.from('notificaciones_whatsapp').insert({
         contacto_id: contactoId,
         telefono: contacto.telefono,
         mensaje: `Hola ${contacto.nombre_completo}, te recordamos tu cita hoy a las ${fechaVisita.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })}.`,
         programado_para: recordatorio.toISOString(),
         organization_id: perfil?.organization_id,
       })
-      // Nota: esta fila queda en cola pero el cron de envío NO está
-      // activado todavía (ver explicación de cuota de Green API). No se
-      // pierde, simplemente no se envía hasta que subas de plan.
+      console.log('[Cita] Notificación guardada:', { data, error: error?.message })
+    } else {
+      console.log('[Cita] Contacto sin teléfono, no se guarda notificación')
     }
 
     if (perfil?.organization_id) {
