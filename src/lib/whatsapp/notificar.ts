@@ -40,6 +40,7 @@ export async function notificarWhatsapp(params: {
   imagenUrl?: string | null
 }) {
   // No esperamos la respuesta para no bloquear. Se envía de forma asíncrona.
+  console.log('notificarWhatsapp: iniciando fetch a', FUNCTIONS_URL)
   fetch(FUNCTIONS_URL, {
     method: 'POST',
     headers: {
@@ -59,7 +60,14 @@ export async function notificarWhatsapp(params: {
         actividad_id: params.actividadId ?? null,
       },
     }),
-  }).catch((err) => {
-    console.error('Error de red notificando WhatsApp:', err)
   })
+    .then((res) => {
+      console.log('notificarWhatsapp: fetch respondió con status', res.status)
+      if (!res.ok) {
+        console.error('notificarWhatsapp: error HTTP', res.status)
+      }
+    })
+    .catch((err) => {
+      console.error('notificarWhatsapp: error de red:', err.message)
+    })
 }
