@@ -510,14 +510,21 @@ export async function crearActividad(formData: FormData) {
           notas ? `📝 ${notas}` : null,
         ].filter(Boolean).join('\n')
 
-        await notificarWhatsapp({
-          chatId: chatIdCitas,
-          mensaje,
-          organizationId: perfil.organization_id,
-          tipoNotificacion: 'nueva_cita',
-          agenteId: agenteAsignadoId,
-          contactoId,
-        })
+        console.log('DEBUG: Mensaje generado:', mensaje)
+        console.log('DEBUG: Llamando a notificarWhatsapp...')
+        try {
+          await notificarWhatsapp({
+            chatId: chatIdCitas,
+            mensaje,
+            organizationId: perfil.organization_id,
+            tipoNotificacion: 'nueva_cita',
+            agenteId: agenteAsignadoId,
+            contactoId,
+          })
+          console.log('DEBUG: notificarWhatsapp completado')
+        } catch (err) {
+          console.error('DEBUG: Error en notificarWhatsapp:', err)
+        }
       }
     }
   }
