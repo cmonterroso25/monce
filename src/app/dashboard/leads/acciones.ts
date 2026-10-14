@@ -457,18 +457,14 @@ export async function crearActividad(formData: FormData) {
     const fechaVisita = new Date(programadaEn)
     const recordatorio = new Date(fechaVisita.getTime() - 60 * 60 * 1000)
 
-    console.log('[Cita] Contacto:', { id: contactoId, nombre: contacto?.nombre_completo, telefono: contacto?.telefono })
     if (contacto?.telefono) {
-      const { data, error } = await supabase.from('notificaciones_whatsapp').insert({
+      await supabase.from('notificaciones_whatsapp').insert({
         contacto_id: contactoId,
         telefono: contacto.telefono,
         mensaje: `Hola ${contacto.nombre_completo}, te recordamos tu cita hoy a las ${fechaVisita.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })}.`,
         programado_para: recordatorio.toISOString(),
         organization_id: perfil?.organization_id,
       })
-      console.log('[Cita] Notificación guardada:', { data, error: error?.message })
-    } else {
-      console.log('[Cita] Contacto sin teléfono, no se guarda notificación')
     }
 
     if (perfil?.organization_id) {
@@ -483,8 +479,39 @@ export async function crearActividad(formData: FormData) {
       const nombresColegas = await nombresDeColegas(supabase, colegasIds)
       const colega = nombresColegas.length > 0 ? { nombre: nombresColegas.join(', ') } : null
 
-      // El mensaje se guarda en notificaciones_whatsapp y será procesado por el cron
-      // No es necesario llamar a notificarWhatsapp() aquí
+      const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
+      if (chatIdCitas) {
+        const fecha = fechaVisita.toLocaleDateString('es-GT', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          timeZone: 'America/Guatemala',
+        })
+        const hora = fechaVisita.toLocaleTimeString('es-GT', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Guatemala',
+        })
+        const notas = textoOpcional(formData.get('notas'))
+        const mensaje = [
+          `📅 *Nueva cita agendada*`,
+          `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+          `🧑‍💼 Atiende: ${agente?.nombre_completo ?? 'Sin asignar'}`,
+          colega?.nombre ? `🧑🏻‍💼 Colega: ${colega.nombre}` : null,
+          `📆 ${fecha}`,
+          `🕐 ${hora}`,
+          notas ? `📝 ${notas}` : null,
+        ].filter(Boolean).join('\n')
+
+        await notificarWhatsapp({
+          chatId: chatIdCitas,
+          mensaje,
+          organizationId: perfil.organization_id,
+          tipoNotificacion: 'nueva_cita',
+          agenteId: agenteAsignadoId,
+          contactoId,
+        })
+      }
     }
   }
 
