@@ -3,6 +3,8 @@ import { BedDouble, Bath, Ruler, MapPin, ExternalLink } from 'lucide-react'
 import TabsPropiedades from '../tabs-propiedades'
 import FiltrosExternas from './filtros-externas'
 import FilaSeguimiento from './fila-seguimiento'
+import BotonScraper from './boton-scraper'
+import { obtenerUltimoTrabajoScraperExternas } from './acciones'
 
 const TIPOS_OPERACION = ['venta', 'renta']
 const TIPOS_PROPIEDAD = [
@@ -80,6 +82,8 @@ export default async function ListadoPropiedadesExternas({
   const { data: propiedadesExternas } = await query
   const total = propiedadesExternas?.length ?? 0
 
+  const trabajoScraper = await obtenerUltimoTrabajoScraperExternas()
+
   // Se resuelve "Contactado por" con una consulta aparte a perfiles (no
   // se usa el embed de Supabase perfiles!agente_que_contacto porque no
   // está confirmado que exista esa FK en el esquema; así se evita un
@@ -111,6 +115,8 @@ export default async function ListadoPropiedadesExternas({
       </div>
 
       <TabsPropiedades />
+
+      <BotonScraper trabajoInicial={trabajoScraper} />
 
       <FiltrosExternas
         fuentes={fuentes}

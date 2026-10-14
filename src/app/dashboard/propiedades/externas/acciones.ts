@@ -3,6 +3,63 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+export type TrabajoScraperExternas = {
+  id: string
+  estado: 'SOLICITADO' | 'EN_PROGRESO' | 'COMPLETADO' | 'FALLIDO'
+  solicitado_en: string
+  completado_en: string | null
+  resultado: { guardadas: number; posiblesBajas: number; eliminadas: number; errores: string[] } | null
+  mensaje_error: string | null
+}
+
+// El monce-worker (Playwright, en la Mac) es el único que puede reclamar y
+// ejecutar el scraping real: fetch() simple ya no pasa el bloqueo de
+// Cloudflare de Encuentra24. Este botón solo deja la "solicitud" en la cola.
+export async function solicitarScrapingExternas(): Promise<{ ok: boolean; mensaje?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, mensaje: 'No autenticado.' }
+
+  const { data: enCurso } = await supabase
+    .from('trabajos_scraper_externas')
+    .select('id')
+    .in('estado', ['SOLICITADO', 'EN_PROGRESO'])
+    .eq('portal', 'encuentra24')
+    .limit(1)
+    .maybeSingle()
+
+  if (enCurso) {
+    return { ok: false, mensaje: 'Ya hay un scraping solicitado o en curso. Espera a que termine.' }
+  }
+
+  const { error } = await supabase.from('trabajos_scraper_externas').insert({
+    portal: 'encuentra24',
+    solicitado_por: user.id,
+  })
+
+  if (error) {
+    console.error('--- ERROR AL SOLICITAR SCRAPING DE EXTERNAS ---', error)
+    return { ok: false, mensaje: error.message }
+  }
+
+  revalidatePath('/dashboard/propiedades/externas')
+  return { ok: true }
+}
+
+export async function obtenerUltimoTrabajoScraperExternas(): Promise<TrabajoScraperExternas | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('trabajos_scraper_externas')
+    .select('id, estado, solicitado_en, completado_en, resultado, mensaje_error')
+    .eq('portal', 'encuentra24')
+    .order('solicitado_en', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (data as TrabajoScraperExternas) ?? null
+}
+
 export async function actualizarSeguimientoExterna(formData: FormData): Promise<{
   ok: boolean
   mensaje?: string
