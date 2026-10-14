@@ -42,6 +42,12 @@ const coloresModalidad: Record<string, string> = {
 const ESTADOS = ['disponible', 'reservada', 'vendida', 'rentada', 'inactiva']
 const ESTADOS_VISIBLES_PORTAL = ['disponible', 'reservada']
 
+// Un error solo se muestra en el historial de la ficha durante VENTANA_ERROR_HORAS
+// desde su última actualización.
+const ESTADOS_ERROR = ['FAILED', 'VALIDATION_ERROR', 'ADAPTER_MISMATCH']
+const VENTANA_ERROR_HORAS = 72
+const MS_HORA = 3600000
+
 const ETIQUETAS_ENVIO: Record<string, string> = {
   QUEUED: 'En cola',
   PUBLICANDO: 'Publicando',
@@ -184,7 +190,7 @@ export default async function DetallePropiedad({
   let consultaHistorial = supabase
     .from('trabajos_publicacion')
     .select(
-      'id, estado, mensaje_error, creado_en, expira_en, cuenta_social_id, canal:canales_publicacion (nombre, plataforma), cuenta:cuentas_sociales (etiqueta)'
+      'id, estado, mensaje_error, creado_en, actualizado_en, expira_en, cuenta_social_id, canal_id, canal:canales_publicacion (nombre, plataforma), cuenta:cuentas_sociales (etiqueta)'
     )
     .eq('propiedad_id', propiedad.id)
   if (!esAdmin && user) consultaHistorial = consultaHistorial.eq('asesor_id', user.id)
@@ -226,10 +232,23 @@ export default async function DetallePropiedad({
     ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED'].includes(x.estado)
   )
 
-  // El historial muestra solo lo publicado, más NEEDS_REVIEW (bloquea la propiedad y ahí vive el botón de liberar).
-  // Los fallidos no se muestran; los envíos en curso se ven en el panel y en la tarjeta de aprobación.
-  const historialVisible = (historialPublicaciones ?? [])
-    .filter((x) => ['PUBLICADO', 'NEEDS_REVIEW'].includes(x.estado))
+  // El historial muestra lo publicado, NEEDS_REVIEW (bloquea la propiedad y ahí vive el botón de liberar)
+  // y los errores de las últimas 24 h (mismo criterio que el panel de "Mis cuentas"), siempre que no
+  // haya un reintento posterior del mismo canal/cuenta que ya los deje obsoletos.
+  const todosLosEnvios = historialPublicaciones ?? []
+  const limiteError = Date.now() - VENTANA_ERROR_HORAS * MS_HORA
+  const historialVisible = todosLosEnvios
+    .filter((x) => {
+      if (['PUBLICADO', 'NEEDS_REVIEW'].includes(x.estado)) return true
+      if (!ESTADOS_ERROR.includes(x.estado)) return false
+      if (new Date(x.actualizado_en ?? x.creado_en).getTime() < limiteError) return false
+      return !todosLosEnvios.some(
+        (otro) =>
+          otro.canal_id === x.canal_id &&
+          otro.cuenta_social_id === x.cuenta_social_id &&
+          new Date(otro.creado_en).getTime() > new Date(x.creado_en).getTime()
+      )
+    })
     .slice(0, 10)
 
   const hayInformacionPrivada =
@@ -561,11 +580,16 @@ export default async function DetallePropiedad({
                   const canal = Array.isArray(envio.canal) ? envio.canal[0] : envio.canal
                   const cuenta = Array.isArray(envio.cuenta) ? envio.cuenta[0] : envio.cuenta
                   const etiqueta = ETIQUETAS_ENVIO[envio.estado] ?? envio.estado
+                  const esError = ESTADOS_ERROR.includes(envio.estado)
                   return (
                     <li key={envio.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-medium text-[#2C3E50]">{canal?.nombre ?? 'Canal'}</span>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            esError ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
                           {etiqueta}
                         </span>
                       </div>
@@ -577,7 +601,7 @@ export default async function DetallePropiedad({
                         {new Date(envio.creado_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}
                       </p>
                       {envio.mensaje_error && (
-                        <p className="mt-1 text-xs text-slate-500">{envio.mensaje_error}</p>
+                        <p className={`mt-1 text-xs ${esError ? 'text-red-600' : 'text-slate-500'}`}>{envio.mensaje_error}</p>
                       )}
                       {esAdmin && ['PUBLICADO', 'NEEDS_REVIEW'].includes(envio.estado) && (
                         <LiberarEnvio trabajoId={envio.id} propiedadId={propiedad.id} estado={envio.estado} />
