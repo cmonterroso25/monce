@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import TarjetaCita from './tarjeta-cita'
 import { ETIQUETAS_ACTIVIDAD } from '../leads/constantes'
 
@@ -118,13 +119,21 @@ export default async function PaginaSeguimientos() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Seguimientos de citas</h1>
-        <p className="text-sm text-slate-500">
-          {totalPendientes === 0
-            ? 'No hay citas pendientes.'
-            : `${totalPendientes} cita(s) pendiente(s).`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-[#2C3E50] sm:text-2xl">Seguimientos de citas</h1>
+          <p className="text-sm text-slate-500">
+            {totalPendientes === 0
+              ? 'No hay citas pendientes.'
+              : `${totalPendientes} cita(s) pendiente(s).`}
+          </p>
+        </div>
+        <Link
+          href="/dashboard/seguimientos/probar-ia"
+          className="flex-shrink-0 rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        >
+          Probar agente IA
+        </Link>
       </div>
 
       {filasConEstado.length === 0 && (
