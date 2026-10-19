@@ -18,6 +18,21 @@ type TarjetaCitaProps = {
   colores: Record<string, string>
   etiquetas: Record<string, string>
   etiquetasActividad: Record<string, string>
+  estadoIA?: { estado: string; fase: string } | null
+}
+
+const ETIQUETA_ESTADO_IA: Record<string, string> = {
+  pendiente: 'IA: esperando respuesta del asesor',
+  respondido: 'IA: procesando respuesta',
+  cerrado: 'IA: seguimiento cerrado',
+  vencido: 'IA: vencida (sin respuesta del asesor)',
+}
+
+const CLASE_ESTADO_IA: Record<string, string> = {
+  pendiente: 'bg-blue-100 text-blue-700',
+  respondido: 'bg-blue-100 text-blue-700',
+  cerrado: 'bg-slate-100 text-slate-600',
+  vencido: 'bg-red-100 text-red-700',
 }
 
 export default function TarjetaCita({
@@ -26,6 +41,7 @@ export default function TarjetaCita({
   colores,
   etiquetas,
   etiquetasActividad,
+  estadoIA,
 }: TarjetaCitaProps) {
   const [expandida, setExpandida] = useState(false)
   const [comentarios, setComentarios] = useState<Comentario[]>([])
@@ -59,12 +75,19 @@ export default function TarjetaCita({
         className="w-full"
       >
         <div className="flex items-center gap-4 px-4 py-3 sm:px-5">
-          <div className="flex-shrink-0">
+          <div className="flex flex-shrink-0 flex-col items-start gap-1">
             <span
               className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${colores[estado]}`}
             >
               {etiquetas[estado]}
             </span>
+            {estadoIA && (
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${CLASE_ESTADO_IA[estadoIA.estado] ?? 'bg-slate-100 text-slate-600'}`}
+              >
+                {ETIQUETA_ESTADO_IA[estadoIA.estado] ?? `IA: ${estadoIA.estado}`}
+              </span>
+            )}
           </div>
 
           <div className="min-w-0 flex-1 text-left">
@@ -143,7 +166,7 @@ export default function TarjetaCita({
                       <div key={comentario.id} className="rounded bg-white p-2 text-xs">
                         <div className="flex items-baseline gap-2">
                           <span className="font-medium text-slate-700">
-                            {comentario.creado_por?.nombre_completo ?? 'Anónimo'}
+                            {comentario.creado_por?.nombre_completo ?? 'Agente de seguimiento'}
                           </span>
                           <time className="text-slate-400">
                             {new Date(comentario.creado_en).toLocaleString('es-GT', {

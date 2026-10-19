@@ -70,11 +70,12 @@ Deno.serve(async (req) => {
   if (!payload.chatId || !payload.mensaje) {
     return new Response('Faltan chatId o mensaje', { status: 400 })
   }
+  let respuestaGreenApi: { idMessage?: string } = {}
   try {
     if (payload.imagenUrl) {
-      await enviarImagenPorUrlGreenApi(payload.chatId, payload.imagenUrl, payload.mensaje)
+      respuestaGreenApi = await enviarImagenPorUrlGreenApi(payload.chatId, payload.imagenUrl, payload.mensaje)
     } else {
-      await enviarGreenApi(payload.chatId, payload.mensaje)
+      respuestaGreenApi = await enviarGreenApi(payload.chatId, payload.mensaje)
     }
   } catch (err) {
     console.error('Error enviando WhatsApp:', err)
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
     })
     if (error) console.error('Error registrando auditoría:', error)
   }
-  return new Response(JSON.stringify({ ok: true }), {
+  return new Response(JSON.stringify({ ok: true, idMessage: respuestaGreenApi.idMessage ?? null }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })

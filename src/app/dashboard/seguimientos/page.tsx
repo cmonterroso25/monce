@@ -76,6 +76,20 @@ export default async function PaginaSeguimientos() {
 
   const actividades = (actividadesData ?? []) as unknown as Actividad[]
 
+  // Estado del agente de seguimiento IA por actividad (la fila más reciente,
+  // ya que puede haber varias si hubo reintentos/fases a lo largo del tiempo).
+  const mapaEstadoIA = new Map<string, { estado: string; fase: string }>()
+  if (actividades.length > 0) {
+    const { data: seguimientosIA } = await supabase
+      .from('seguimientos_ia')
+      .select('actividad_id, estado, fase, creado_en')
+      .in('actividad_id', actividades.map((a) => a.id))
+      .order('creado_en', { ascending: false })
+    for (const s of seguimientosIA ?? []) {
+      if (!mapaEstadoIA.has(s.actividad_id)) mapaEstadoIA.set(s.actividad_id, { estado: s.estado, fase: s.fase })
+    }
+  }
+
   const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
   const finHoy = new Date(inicioHoy.getTime() + 24 * 60 * 60 * 1000)
 
@@ -129,6 +143,7 @@ export default async function PaginaSeguimientos() {
               colores={COLORES_ESTADO_ACTIVIDAD}
               etiquetas={ETIQUETAS_ESTADO_ACTIVIDAD}
               etiquetasActividad={ETIQUETAS_ACTIVIDAD}
+              estadoIA={mapaEstadoIA.get(a.id) ?? null}
             />
           ))}
         </div>
