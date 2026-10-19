@@ -5,7 +5,14 @@ import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
 import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad, aPropiedadMarketplace, SELECT_PROPIEDAD_CON_MUNICIPIO } from '@/lib/whatsapp/notificar-propiedad'
 import { generarTextoMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
-const ESTADOS_NO_DISPONIBLE = ['vendida', 'rentada', 'inactiva']
+// Mensaje que se envía al grupo de WhatsApp al entrar a cada estado. "reservada"
+// tiene su propio aviso (distinto de las bajas definitivas) porque es reversible.
+const AVISO_CAMBIO_ESTADO: Record<string, { encabezado: string; tipoNotificacion: string }> = {
+  vendida: { encabezado: '🚫 Propiedad no disponible', tipoNotificacion: 'propiedad_no_disponible' },
+  rentada: { encabezado: '🚫 Propiedad no disponible', tipoNotificacion: 'propiedad_no_disponible' },
+  inactiva: { encabezado: '🚫 Propiedad no disponible', tipoNotificacion: 'propiedad_no_disponible' },
+  reservada: { encabezado: '⏳ Propiedad reservada', tipoNotificacion: 'propiedad_reservada' },
+}
 export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado: string) {
   const supabase = await createClient()
   const { data: propiedad } = await supabase
@@ -32,19 +39,17 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
     return { ok: false, mensaje: error.message }
   }
   const grupo = propiedad ? grupoParaOperacion(propiedad.tipo_operacion) : null
-  if (propiedad && grupo && ESTADOS_NO_DISPONIBLE.includes(nuevoEstado)) {
+  const aviso = AVISO_CAMBIO_ESTADO[nuevoEstado]
+  if (propiedad && grupo && aviso) {
     const chatId = await obtenerChatIdGrupo(supabase, propiedad.organization_id, grupo)
     if (chatId) {
-      // Los 3 estados (vendida, rentada, inactiva) comparten el mismo texto
-      // genérico "Propiedad no disponible" — decisión explícita del usuario,
-      // no se distinguen entre sí en el mensaje. Se agregan "Ingresado por"
-      // y "Colega" para saber a quién pertenecía la propiedad que se está
-      // dando de baja.
+      // Se agregan "Ingresado por" y "Colega" para saber a quién pertenecía
+      // la propiedad que cambió de estado.
       const enlace = urlPropiedadParaWhatsapp(propiedadId)
       const ingresadoPorNombre = (propiedad as any).ingresado_por?.nombre_completo ?? null
       const colegaNombre = (propiedad as any).colega?.nombre ?? null
       const mensaje = [
-        '🚫 Propiedad no disponible',
+        aviso.encabezado,
         propiedad.codigo ?? propiedadId,
         propiedad.titulo,
         ingresadoPorNombre ? `Ingresado por: ${ingresadoPorNombre}` : null,
@@ -56,7 +61,7 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
         chatId,
         mensaje,
         organizationId: propiedad.organization_id,
-        tipoNotificacion: 'propiedad_no_disponible',
+        tipoNotificacion: aviso.tipoNotificacion,
         imagenUrl,
       })
     }
