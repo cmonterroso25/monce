@@ -15,6 +15,9 @@ const ETIQUETA_TIPO: Record<string, string> = {
   cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada', firma_contrato: 'firma de contrato',
 }
 
+const MENSAJE_PERDIDA = 'Entendido, no te preocupes — ¡seguro pronto llega el cliente ideal! 💪 Gracias por el seguimiento.'
+const MENSAJE_GANADA = '🎉🎉 ¡FELICIDADES!! Lograste cerrar el trato, excelente trabajo 🙌🏆 Moví el lead a Ganada. ¡Gracias por todo el seguimiento que le diste!'
+
 export const PREGUNTA_INICIAL = (agenteNombre: string, tipoActividad: string, contactoNombre: string) =>
   [
     `Hola ${agenteNombre}, ¿qué pasó con tu ${ETIQUETA_TIPO[tipoActividad] ?? tipoActividad} con ${contactoNombre}?`,
@@ -193,20 +196,20 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
     if (clasificacion.requiere_revision_documentos) {
       return {
         clasificacion,
-        accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se registra "Documentación en revisión." y entra al ciclo recurrente: en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?", y así cada 24h hasta Ganada/Perdida.',
+        accion_descrita: `El lead se queda en "Visita realizada" (NO se mueve a Reservada). Mensaje al asesor: "¡Qué bien que le haya gustado! 😊 Quedo pendiente de la documentación — te escribo en 24 horas para ver cómo va. ¡Gracias por el seguimiento!" Entra al ciclo recurrente hasta Ganada/Perdida.`,
         siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
         terminal: true, // en la simulación se trata como fin de turno; el próximo aviso real llega en 24h, fuera de este chat de prueba
       }
     }
     return {
       clasificacion,
-      accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se crea una TAREA "Llamar para gestionar la reserva" con vencimiento en 24 horas, y entra al ciclo recurrente: en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?", y así cada 24h hasta Ganada/Perdida.',
+      accion_descrita: `El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se crea una TAREA "Llamar para gestionar la reserva" en 24h. Mensaje al asesor: "¡Excelente noticia! 🙌 Ya programé un recordatorio para llamarlo en 24 horas y cerrar la reserva. Te escribo para ver cómo va. ¡Gracias por el seguimiento!" Entra al ciclo recurrente hasta Ganada/Perdida.`,
       siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
       terminal: true,
     }
   }
   if (clasificacion.resultado_cliente === 'perdido') {
-    return { clasificacion, accion_descrita: `Se mueve el lead a "Perdida". Resumen registrado: "${clasificacion.resumen}".`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `Se mueve el lead a "Perdida". Mensaje al asesor: "${MENSAJE_PERDIDA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (clasificacion.resultado_cliente === 'indeciso_sin_decision') {
     return {
@@ -264,47 +267,47 @@ function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean
         terminal: false,
       }
     }
-    return { clasificacion, accion_descrita: `Se crea una nueva CITA para ${fechaIso}, el lead vuelve a "Visita agendada". El ciclo se repetirá 2h después de esa fecha.`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `Se crea una nueva CITA para ${fechaIso}, el lead vuelve a "Visita agendada". Mensaje al asesor: "¡Perfecto! 📅 Ya agendé la nueva visita. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
 
   if (decision === 'ninguno_por_ahora') {
-    return { clasificacion, accion_descrita: 'El asesor prefiere no agendar nada por ahora: no se mueve el lead, pero entra al ciclo recurrente (en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?").', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: 'El asesor prefiere no agendar nada por ahora: no se mueve el lead. Mensaje al asesor: "Entendido, sin problema 😊 Te escribo en 24 horas para ver si hay novedades. ¡Gracias por mantenerme al tanto!" Entra al ciclo recurrente.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (decision === 'perdido') {
-    return { clasificacion, accion_descrita: 'El cliente ya no está interesado: se mueve el lead a "Perdida".', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `El cliente ya no está interesado: se mueve el lead a "Perdida". Mensaje al asesor: "${MENSAJE_PERDIDA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (decision === 'enviar_opciones') {
     return {
       clasificacion,
-      accion_descrita: `Se crea una TAREA "Enviarle más opciones" con vencimiento ${fechaIso}. 1 hora después de esa fecha se le preguntará al asesor si ya las envió (y de nuevo 2h y 3h después si sigue sin confirmar).`,
+      accion_descrita: `Se crea una TAREA "Enviarle más opciones" con vencimiento ${fechaIso}. Mensaje al asesor: "¡Genial! 👍 Te pregunto en 1 hora después de esa hora para ver si ya se las enviaste. ¡Gracias por el seguimiento!" (y de nuevo 2h y 3h después si sigue sin confirmar).`,
       siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
     }
   }
   const tipo = decision === 'llamada' ? 'llamada' : 'cita'
-  return { clasificacion, accion_descrita: `Se crea una nueva ${ETIQUETA_TIPO[tipo]} de seguimiento para ${fechaIso}. El ciclo se repetirá 2h después de esa fecha.`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  return { clasificacion, accion_descrita: `Se crea una nueva ${ETIQUETA_TIPO[tipo]} de seguimiento para ${fechaIso}. Mensaje al asesor: "¡Perfecto! 📅 Ya agendé la ${ETIQUETA_TIPO[tipo]}. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
 }
 
 function evaluarConfirmarReintento24h(clasificacion: any): Resultado {
   if (clasificacion.volver_a_consultar) {
     return {
       clasificacion,
-      accion_descrita: 'Se le avisa al asesor que se le preguntará de nuevo en 24 horas (no se envía nada ahora; el aviso se programa para dentro de 24h).',
+      accion_descrita: 'Mensaje al asesor: "¡Va! 😊 Te pregunto de nuevo en 24 horas. Gracias por el seguimiento." (no se envía la siguiente pregunta ahora; se programa para dentro de 24h).',
       siguiente_fase: 'reprogramar',
       siguiente_pregunta: '¿Qué me cuentas, pudieron reprogramar la visita con el cliente? Responde citando este mensaje.',
       es_reintento_aclaracion_siguiente: false,
       terminal: true, // en la simulación se trata como fin de turno; el aviso real llega 24h después, fuera de este chat de prueba
     }
   }
-  return { clasificacion, accion_descrita: 'El cliente no quiere reprogramar: se mueve el lead a "Perdida".', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  return { clasificacion, accion_descrita: `El cliente no quiere reprogramar: se mueve el lead a "Perdida". Mensaje al asesor: "${MENSAJE_PERDIDA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
 }
 
 function evaluarConfirmarEnvioPropiedades(clasificacion: any): Resultado {
   if (clasificacion.enviadas) {
-    return { clasificacion, accion_descrita: 'El asesor confirmó que ya envió las propiedades: no se mueve el lead, pero entra al ciclo recurrente (en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?").', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: 'El asesor confirmó que ya envió las propiedades: no se mueve el lead. Mensaje al asesor: "¡Genial! 🙌 Te escribo en 24 horas para ver cómo va. ¡Gracias por el seguimiento!" Entra al ciclo recurrente.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   return {
     clasificacion,
-    accion_descrita: 'El asesor dice que aún no las envía: se reabre la espera y se le volverá a preguntar en el siguiente aviso programado (2h o 3h después, según cuál aviso sea).',
+    accion_descrita: 'El asesor dice que aún no las envía. Mensaje al asesor: "Entendido, sin prisa 😊 Te pregunto de nuevo más tarde." Se reabre la espera para el siguiente aviso programado (2h o 3h después, según cuál aviso sea).',
     siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
     terminal: true, // en la simulación se trata como fin de turno; el siguiente aviso real llega más tarde, fuera de este chat de prueba
   }
@@ -327,18 +330,18 @@ function evaluarSeguimientoRecurrente(clasificacion: any, esAclaracion: boolean)
         terminal: false,
       }
     }
-    return { clasificacion, accion_descrita: `Se crea una nueva actividad "firma de contrato" para ${fechaIso}. El ciclo se repetirá 2h después preguntando si se realizó.`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `Se crea una nueva actividad "firma de contrato" para ${fechaIso}. Mensaje al asesor: "¡Qué buena noticia! 🎉 Ya agendé la firma de contrato — ¡felicidades por este avance! Te escribo después para confirmar que todo salió bien." El ciclo se repetirá 2h después preguntando si se realizó.`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (clasificacion.resultado === 'ganada') {
-    return { clasificacion, accion_descrita: 'Se mueve el lead a "Ganada" 🎉. Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `Se mueve el lead a "Ganada" 🎉. Fin del ciclo. Mensaje al asesor: "${MENSAJE_GANADA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (clasificacion.resultado === 'perdida') {
-    return { clasificacion, accion_descrita: 'Se mueve el lead a "Perdida". Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `Se mueve el lead a "Perdida". Fin del ciclo. Mensaje al asesor: "${MENSAJE_PERDIDA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   // seguir_esperando
   return {
     clasificacion,
-    accion_descrita: 'No hay nada nuevo: se reprograma la MISMA pregunta recurrente para dentro de 24h (sin límite de rondas mientras el asesor siga respondiendo).',
+    accion_descrita: 'No hay nada nuevo. Mensaje al asesor: "Entendido, sin problema 😊 Te pregunto de nuevo en 24 horas. ¡Gracias por mantenerme al tanto!" Se reprograma la MISMA pregunta para dentro de 24h (sin límite de rondas mientras el asesor siga respondiendo).',
     siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
     terminal: true, // en la simulación se trata como fin de turno; el próximo aviso real llega en 24h
   }
@@ -346,7 +349,7 @@ function evaluarSeguimientoRecurrente(clasificacion: any, esAclaracion: boolean)
 
 function evaluarResultadoFirma(clasificacion: any): Resultado {
   if (clasificacion.se_firmo) {
-    return { clasificacion, accion_descrita: '¡Se mueve el lead a "Ganada"! 🎉 Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: `¡Se mueve el lead a "Ganada"! 🎉 Fin del ciclo. Mensaje al asesor: "${MENSAJE_GANADA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   return {
     clasificacion,

@@ -85,6 +85,11 @@ const ETIQUETA_TIPO: Record<string, string> = {
   cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada', firma_contrato: 'firma de contrato',
 }
 
+// Mensajes reutilizados en los cierres de "Perdida" y "Ganada" en varias
+// fases, para que el tono sea siempre el mismo (ánimo vs. celebración).
+const MENSAJE_PERDIDA = 'Entendido, no te preocupes — ¡seguro pronto llega el cliente ideal! 💪 Gracias por el seguimiento.'
+const MENSAJE_GANADA = '🎉🎉 ¡FELICIDADES!! Lograste cerrar el trato, excelente trabajo 🙌🏆 Moví el lead a Ganada. ¡Gracias por todo el seguimiento que le diste!'
+
 function fechaHoraGuatemalaTexto(): string {
   const ahora = new Date()
   const fecha = ahora.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Guatemala' })
@@ -395,7 +400,7 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
     let mensajeRespuesta: string
     if (clasificacion.requiere_revision_documentos) {
       await registrarComentario(seguimiento.actividad_id, 'Documentación en revisión.')
-      mensajeRespuesta = 'Entendido, quedo pendiente de la documentación. Te escribiré en 24 horas para ver cómo va.'
+      mensajeRespuesta = '¡Qué bien que le haya gustado! 😊 Quedo pendiente de la documentación — te escribo en 24 horas para ver cómo va. ¡Gracias por el seguimiento!'
     } else {
       await registrarComentario(seguimiento.actividad_id, `Cliente interesado en reservar. ${clasificacion.resumen}`)
       const nombreContacto = await obtenerNombreContacto(seguimiento.contacto_id)
@@ -408,7 +413,7 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
         fechaLimite: new Date(Date.now() + 24 * 3600_000).toISOString(),
         prioridad: 'alta',
       })
-      mensajeRespuesta = 'Perfecto, programé un recordatorio para llamarlo en 24 horas y gestionar la reserva. Te escribiré para ver cómo va.'
+      mensajeRespuesta = '¡Excelente noticia! 🙌 Ya programé un recordatorio para llamarlo en 24 horas y cerrar la reserva. Te escribo para ver cómo va. ¡Gracias por el seguimiento!'
     }
     await responderAsesor(seguimiento.chat_id_asesor, mensajeRespuesta, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     const preguntaRecurrente = await preguntaSeguimientoRecurrente(seguimiento.contacto_id)
@@ -418,7 +423,7 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
   if (clasificacion.resultado_cliente === 'perdido') {
     await registrarComentario(seguimiento.actividad_id, clasificacion.resumen)
     await moverEtapa(seguimiento.lead_id, 'perdida')
-    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, marqué el lead como Perdido.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
@@ -478,7 +483,7 @@ async function procesarConFecha(
     await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: 'cita', programadaEn: fechaIso! })
     await moverEtapa(seguimiento.lead_id, 'visita_agendada')
     await registrarComentario(seguimiento.actividad_id, `Se reprogramó la visita para ${fechaIso}.`)
-    await responderAsesor(seguimiento.chat_id_asesor, `Listo, agendé la nueva visita. Te escribiré de nuevo un par de horas después para dar seguimiento.`, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, '¡Perfecto! 📅 Ya agendé la nueva visita. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
@@ -486,7 +491,7 @@ async function procesarConFecha(
   // ofrecer_siguiente_paso
   if (decision === 'ninguno_por_ahora') {
     await registrarComentario(seguimiento.actividad_id, 'El asesor prefiere no agendar nada por ahora.')
-    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, te escribiré en 24 horas para ver cómo va.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, sin problema 😊 Te escribo en 24 horas para ver si hay novedades. ¡Gracias por mantenerme al tanto!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     const preguntaRecurrente = await preguntaSeguimientoRecurrente(seguimiento.contacto_id)
     await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', preguntaRecurrente, new Date(Date.now() + 24 * 3600_000))
     return
@@ -494,7 +499,7 @@ async function procesarConFecha(
   if (decision === 'perdido') {
     await moverEtapa(seguimiento.lead_id, 'perdida')
     await registrarComentario(seguimiento.actividad_id, 'El cliente ya no está interesado.')
-    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, marqué el lead como Perdido.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
@@ -510,7 +515,7 @@ async function procesarConFecha(
       prioridad: 'media',
     })
     await registrarComentario(seguimiento.actividad_id, `Se programó enviar más opciones el ${fechaIso}; se dará seguimiento del envío.`)
-    await responderAsesor(seguimiento.chat_id_asesor, 'Listo, te pregunto en 1 hora después de esa hora si ya se las enviaste.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, '¡Genial! 👍 Te pregunto en 1 hora después de esa hora para ver si ya se las enviaste. ¡Gracias por el seguimiento!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     const horaEnvio = new Date(fechaIso!)
     await programarPreguntaFutura(
       seguimiento,
@@ -524,7 +529,7 @@ async function procesarConFecha(
   const tipo = decision === 'llamada' ? 'llamada' : 'cita'
   await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: tipo, programadaEn: fechaIso! })
   await registrarComentario(seguimiento.actividad_id, `Se agendó ${ETIQUETA_TIPO[tipo]} de seguimiento para ${fechaIso}.`)
-  await responderAsesor(seguimiento.chat_id_asesor, `Listo, agendé la ${ETIQUETA_TIPO[tipo]}. Te escribiré de nuevo un par de horas después para dar seguimiento.`, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+  await responderAsesor(seguimiento.chat_id_asesor, `¡Perfecto! 📅 Ya agendé la ${ETIQUETA_TIPO[tipo]}. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!`, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
 }
 
@@ -534,7 +539,7 @@ async function procesarConfirmarReintento24h(seguimiento: SeguimientoRow, mensaj
   ) as { volver_a_consultar: boolean }
 
   if (clasificacion.volver_a_consultar) {
-    await responderAsesor(seguimiento.chat_id_asesor, 'Listo, te preguntaré de nuevo en 24 horas.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, '¡Va! 😊 Te pregunto de nuevo en 24 horas. Gracias por el seguimiento.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await programarPreguntaFutura(
       seguimiento,
       'reprogramar',
@@ -545,7 +550,7 @@ async function procesarConfirmarReintento24h(seguimiento: SeguimientoRow, mensaj
   }
   await registrarComentario(seguimiento.actividad_id, 'El cliente no quiere reprogramar.')
   await moverEtapa(seguimiento.lead_id, 'perdida')
-  await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, marqué el lead como Perdido.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+  await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
 }
 
@@ -556,7 +561,7 @@ async function procesarConfirmarEnvioPropiedades(seguimiento: SeguimientoRow, me
 
   if (clasificacion.enviadas) {
     await registrarComentario(seguimiento.actividad_id, 'El asesor confirmó que ya envió las propiedades.')
-    await responderAsesor(seguimiento.chat_id_asesor, '¡Perfecto! Te escribiré en 24 horas para ver cómo va.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, '¡Genial! 🙌 Te escribo en 24 horas para ver cómo va. ¡Gracias por el seguimiento!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     const preguntaRecurrente = await preguntaSeguimientoRecurrente(seguimiento.contacto_id)
     await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', preguntaRecurrente, new Date(Date.now() + 24 * 3600_000))
     return
@@ -565,7 +570,7 @@ async function procesarConfirmarEnvioPropiedades(seguimiento: SeguimientoRow, me
   // proximo_reintento_en — esos ya quedaron bien calculados por el cron al
   // enviar este aviso (1h / +2h / +3h), así que el próximo aviso programado
   // sigue su curso tal cual.
-  await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, te preguntaré de nuevo más tarde.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+  await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, sin prisa 😊 Te pregunto de nuevo más tarde.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   await supabase.from('seguimientos_ia').update({ estado: 'pendiente', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
 }
 
@@ -591,28 +596,28 @@ async function procesarSeguimientoRecurrente(seguimiento: SeguimientoRow, mensaj
     }
     await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: 'firma_contrato', programadaEn: clasificacion.fecha_hora_iso })
     await registrarComentario(seguimiento.actividad_id, `Se agendó la firma de contrato para ${clasificacion.fecha_hora_iso}.`)
-    await responderAsesor(seguimiento.chat_id_asesor, 'Listo, agendé la firma de contrato. Te escribiré después para confirmar que se realizó.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, '¡Qué buena noticia! 🎉 Ya agendé la firma de contrato — ¡felicidades por este avance! Te escribo después para confirmar que todo salió bien.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   if (clasificacion.resultado === 'ganada') {
     await moverEtapa(seguimiento.lead_id, 'ganada')
     await registrarComentario(seguimiento.actividad_id, 'El trato se cerró como Ganado 🎉.')
-    await responderAsesor(seguimiento.chat_id_asesor, '¡Felicidades! Moví el lead a Ganada 🎉', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_GANADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   if (clasificacion.resultado === 'perdida') {
     await moverEtapa(seguimiento.lead_id, 'perdida')
     await registrarComentario(seguimiento.actividad_id, 'El trato se marcó como Perdido.')
-    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, marqué el lead como Perdido.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   // seguir_esperando: se responde ahora y se reprograma la MISMA pregunta
   // para dentro de 24h (intento se reinicia, así que un asesor que sigue
   // respondiendo nunca llega a "vencido" por esta vía).
-  await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, te pregunto de nuevo en 24 horas.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+  await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, sin problema 😊 Te pregunto de nuevo en 24 horas. ¡Gracias por mantenerme al tanto!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   const pregunta = await preguntaSeguimientoRecurrente(seguimiento.contacto_id)
   await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', pregunta, new Date(Date.now() + 24 * 3600_000))
 }
@@ -625,7 +630,7 @@ async function procesarResultadoFirma(seguimiento: SeguimientoRow, mensajeAsesor
   if (clasificacion.se_firmo) {
     await moverEtapa(seguimiento.lead_id, 'ganada')
     await registrarComentario(seguimiento.actividad_id, `Firma de contrato realizada. ${clasificacion.resumen}`)
-    await responderAsesor(seguimiento.chat_id_asesor, '¡Felicidades! Moví el lead a Ganada 🎉', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_GANADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
