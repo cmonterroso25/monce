@@ -150,9 +150,9 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
     contextoFecha,
     esAclaracion
       ? 'El asesor ya dijo qué siguiente paso quiere, pero su mensaje anterior no dejó clara la fecha/hora. Se le volvió a preguntar.'
-      : 'El cliente quedó indeciso tras la visita. Se le preguntó al asesor si programan una llamada, una nueva visita, o si va a enviarle más opciones de propiedades, y para cuándo.',
+      : 'El cliente quedó indeciso tras la visita (o aún no dio una respuesta). Se le preguntó al asesor si programan una llamada (sugiriendo un plazo de 24 horas), una nueva visita, o si va a enviarle más opciones de propiedades, y para cuándo.',
     `Respuesta del asesor: "${mensajeAsesor}"`,
-    'Determina proximo_paso, distinguiendo con cuidado: "llamada" SOLO si el asesor menciona explícitamente una llamada telefónica o videollamada con el cliente; "nueva_visita" si menciona una cita, visita o verse en persona de nuevo (NO es una llamada); "enviar_opciones" si lo que va a pasar es que el asesor le va a enviar/mostrar más propiedades u opciones al cliente (una tarea del asesor, no una reunión con el cliente); "ninguno_por_ahora" si no quiere agendar nada todavía; "perdido" si en realidad el cliente ya no sigue interesado. Para "llamada", "nueva_visita" o "enviar_opciones", conviértelo a fecha_hora_iso igual que arriba, con confianza_fecha. No inventes una fecha si no la mencionó.',
+    'Determina proximo_paso, distinguiendo con cuidado: "llamada" SOLO si el asesor menciona explícitamente una llamada telefónica o videollamada con el cliente; "nueva_visita" si menciona una cita, visita o verse en persona de nuevo (NO es una llamada); "enviar_opciones" si lo que va a pasar es que el asesor le va a enviar/mostrar más propiedades u opciones al cliente (una tarea del asesor, no una reunión con el cliente); "ninguno_por_ahora" si no quiere agendar nada todavía; "perdido" si en realidad el cliente ya no sigue interesado. Para "llamada", "nueva_visita" o "enviar_opciones", conviértelo a fecha_hora_iso igual que arriba, con confianza_fecha. No inventes una fecha si no la mencionó — EXCEPCIÓN: si la pregunta que se le hizo al asesor ya sugería un plazo concreto (ej. "en 24 horas") y el asesor solo confirma sin dar otra fecha (ej. "sí", "dale", "está bien"), usa ese plazo sugerido desde la fecha actual de arriba, con confianza_fecha "alta".',
     'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"proximo_paso": "llamada"|"nueva_visita"|"enviar_opciones"|"ninguno_por_ahora"|"perdido", "fecha_hora_iso": "YYYY-MM-DDTHH:mm:ss-06:00"|null, "confianza_fecha": "alta"|"media"|"baja"|"ninguna"}.',
   ].join('\n')
 }
@@ -394,20 +394,10 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
 
   if (clasificacion.resultado_cliente === 'indeciso_sin_decision') {
     // El cliente aún no da una respuesta (lo está pensando, quedó
-    // pendiente) — se sugiere y programa directamente una llamada de
-    // seguimiento en 24h, en vez de preguntar qué hacer.
-    const nombreContacto = await obtenerNombreContacto(seguimiento.contacto_id)
-    await crearTarea({
-      leadId: seguimiento.lead_id,
-      contactoId: seguimiento.contacto_id,
-      agenteId: seguimiento.agente_id,
-      organizationId: seguimiento.organization_id,
-      titulo: `Llamar a ${nombreContacto} para seguimiento (aún sin respuesta)`,
-      fechaLimite: new Date(Date.now() + 24 * 3600_000).toISOString(),
-      prioridad: 'media',
-    })
-    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, te programé una llamada de seguimiento en 24 horas para ver qué decidió.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
-    await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+    // pendiente) — se sugiere una llamada en 24h pero se pregunta antes
+    // de crear nada, por si el asesor prefiere otra cosa.
+    const pregunta = '¿Programamos una llamada de seguimiento en 24 horas, o prefieres hacer algo diferente? Si es algo distinto, dime qué y para cuándo. Responde citando este mensaje.'
+    await reabrirConNuevaFase(seguimiento, 'ofrecer_siguiente_paso', pregunta, false)
     return
   }
 
