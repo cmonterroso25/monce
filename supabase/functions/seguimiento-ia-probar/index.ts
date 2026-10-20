@@ -12,7 +12,7 @@ const GROQ_MODEL = 'openai/gpt-oss-120b'
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 const ETIQUETA_TIPO: Record<string, string> = {
-  cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada',
+  cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada', firma_contrato: 'firma de contrato',
 }
 
 export const PREGUNTA_INICIAL = (agenteNombre: string, tipoActividad: string, contactoNombre: string) =>
@@ -116,6 +116,26 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
       'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente este campo: {"enviadas": true|false}.',
     ].join('\n')
   }
+  if (fase === 'seguimiento_recurrente') {
+    return [
+      contextoFecha,
+      esAclaracion
+        ? 'El asesor ya dijo que van a agendar la firma de contrato, pero su mensaje anterior no dejó clara la fecha/hora. Se le volvió a preguntar.'
+        : 'Se le preguntó al asesor cómo va el trato con el cliente: si ya agendaron la firma de contrato, si el trato ya se ganó, si se perdió, o si siguen esperando sin nada nuevo todavía.',
+      `Respuesta del asesor: "${mensajeAsesor}"`,
+      'Determina resultado: "agendar_firma" (van a agendar o ya agendaron la firma de contrato — conviértelo a fecha_hora_iso si dio fecha, con confianza_fecha), "ganada" (el trato ya se cerró/ganó), "perdida" (el cliente ya no sigue, se pierde el trato), o "seguir_esperando" (no hay nada nuevo todavía, sigue en lo mismo). No inventes una fecha si no la mencionó.',
+      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"resultado": "agendar_firma"|"ganada"|"perdida"|"seguir_esperando", "fecha_hora_iso": "YYYY-MM-DDTHH:mm:ss-06:00"|null, "confianza_fecha": "alta"|"media"|"baja"|"ninguna"}.',
+    ].join('\n')
+  }
+  if (fase === 'resultado_firma') {
+    return [
+      contextoFecha,
+      'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿se realizó la firma de contrato con el cliente?".',
+      `Respuesta del asesor: "${mensajeAsesor}"`,
+      'Determina se_firmo: true solo si confirma que la firma ya se realizó; false en cualquier otro caso (no se hizo, se posterga, respuesta ambigua, etc.).',
+      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"se_firmo": true|false, "resumen": "texto breve"}.',
+    ].join('\n')
+  }
   // ofrecer_siguiente_paso
   return [
     contextoFecha,
@@ -173,14 +193,16 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
     if (clasificacion.requiere_revision_documentos) {
       return {
         clasificacion,
-        accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se registra el comentario "Documentación en revisión."',
-        siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
+        accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se registra "Documentación en revisión." y entra al ciclo recurrente: en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?", y así cada 24h hasta Ganada/Perdida.',
+        siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
+        terminal: true, // en la simulación se trata como fin de turno; el próximo aviso real llega en 24h, fuera de este chat de prueba
       }
     }
     return {
       clasificacion,
-      accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se crea una TAREA "Llamar para gestionar la reserva" con vencimiento en 24 horas.',
-      siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
+      accion_descrita: 'El lead se queda en "Visita realizada" (NO se mueve a Reservada). Se crea una TAREA "Llamar para gestionar la reserva" con vencimiento en 24 horas, y entra al ciclo recurrente: en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?", y así cada 24h hasta Ganada/Perdida.',
+      siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
+      terminal: true,
     }
   }
   if (clasificacion.resultado_cliente === 'perdido') {
@@ -246,7 +268,7 @@ function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean
   }
 
   if (decision === 'ninguno_por_ahora') {
-    return { clasificacion, accion_descrita: 'El asesor prefiere no agendar nada por ahora: no se mueve el lead, el seguimiento se cierra.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: 'El asesor prefiere no agendar nada por ahora: no se mueve el lead, pero entra al ciclo recurrente (en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?").', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   if (decision === 'perdido') {
     return { clasificacion, accion_descrita: 'El cliente ya no está interesado: se mueve el lead a "Perdida".', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
@@ -278,13 +300,61 @@ function evaluarConfirmarReintento24h(clasificacion: any): Resultado {
 
 function evaluarConfirmarEnvioPropiedades(clasificacion: any): Resultado {
   if (clasificacion.enviadas) {
-    return { clasificacion, accion_descrita: 'El asesor confirmó que ya envió las propiedades: se cierra el seguimiento, no se mueve el lead.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return { clasificacion, accion_descrita: 'El asesor confirmó que ya envió las propiedades: no se mueve el lead, pero entra al ciclo recurrente (en 24h se le preguntará "¿cómo va? ¿firma, ganada, perdida, o seguimos esperando?").', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
   return {
     clasificacion,
     accion_descrita: 'El asesor dice que aún no las envía: se reabre la espera y se le volverá a preguntar en el siguiente aviso programado (2h o 3h después, según cuál aviso sea).',
     siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
     terminal: true, // en la simulación se trata como fin de turno; el siguiente aviso real llega más tarde, fuera de este chat de prueba
+  }
+}
+
+function evaluarSeguimientoRecurrente(clasificacion: any, esAclaracion: boolean): Resultado {
+  if (clasificacion.resultado === 'agendar_firma') {
+    const confianza = clasificacion.confianza_fecha as string
+    const fechaIso = clasificacion.fecha_hora_iso as string | null
+    if (confianza === 'baja' || confianza === 'ninguna' || !fechaIso) {
+      if (esAclaracion) {
+        return { clasificacion, accion_descrita: 'La fecha de la firma sigue sin ser clara tras una aclaración: se CIERRA para revisión manual del admin.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+      }
+      return {
+        clasificacion,
+        accion_descrita: 'No quedó clara la fecha de la firma: se pide una aclaración (una sola vez).',
+        siguiente_fase: 'seguimiento_recurrente',
+        siguiente_pregunta: '¿Para qué fecha y hora exactas quedó la firma de contrato? Responde citando este mensaje.',
+        es_reintento_aclaracion_siguiente: true,
+        terminal: false,
+      }
+    }
+    return { clasificacion, accion_descrita: `Se crea una nueva actividad "firma de contrato" para ${fechaIso}. El ciclo se repetirá 2h después preguntando si se realizó.`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  }
+  if (clasificacion.resultado === 'ganada') {
+    return { clasificacion, accion_descrita: 'Se mueve el lead a "Ganada" 🎉. Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  }
+  if (clasificacion.resultado === 'perdida') {
+    return { clasificacion, accion_descrita: 'Se mueve el lead a "Perdida". Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  }
+  // seguir_esperando
+  return {
+    clasificacion,
+    accion_descrita: 'No hay nada nuevo: se reprograma la MISMA pregunta recurrente para dentro de 24h (sin límite de rondas mientras el asesor siga respondiendo).',
+    siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false,
+    terminal: true, // en la simulación se trata como fin de turno; el próximo aviso real llega en 24h
+  }
+}
+
+function evaluarResultadoFirma(clasificacion: any): Resultado {
+  if (clasificacion.se_firmo) {
+    return { clasificacion, accion_descrita: '¡Se mueve el lead a "Ganada"! 🎉 Fin del ciclo de seguimiento.', siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+  }
+  return {
+    clasificacion,
+    accion_descrita: 'La firma no se realizó: se pasa al ciclo recurrente preguntando si reagendan, se ganó de otra forma, se perdió, o siguen esperando.',
+    siguiente_fase: 'seguimiento_recurrente',
+    siguiente_pregunta: '¿Reagendamos la firma de contrato, se ganó de otra forma, se perdió, o seguimos esperando? Si reagendan, dime para cuándo. Responde citando este mensaje.',
+    es_reintento_aclaracion_siguiente: false,
+    terminal: false,
   }
 }
 
@@ -326,7 +396,10 @@ Deno.serve(async (req) => {
   if (!mensajeAsesor.trim()) {
     return new Response(JSON.stringify({ ok: false, error: 'Falta mensaje_asesor' }), { status: 400 })
   }
-  const FASES_VALIDAS = ['resultado_visita', 'reprogramar', 'ofrecer_siguiente_paso', 'confirmar_reintento_24h', 'confirmar_envio_propiedades']
+  const FASES_VALIDAS = [
+    'resultado_visita', 'reprogramar', 'ofrecer_siguiente_paso', 'confirmar_reintento_24h',
+    'confirmar_envio_propiedades', 'seguimiento_recurrente', 'resultado_firma',
+  ]
   if (!FASES_VALIDAS.includes(fase)) {
     return new Response(JSON.stringify({ ok: false, error: `Fase desconocida: ${fase}` }), { status: 400 })
   }
@@ -338,7 +411,9 @@ Deno.serve(async (req) => {
       fase === 'resultado_visita' ? evaluarResultadoVisita(clasificacion, esAclaracion) :
       fase === 'reprogramar' || fase === 'ofrecer_siguiente_paso' ? evaluarConFecha(fase, clasificacion, esAclaracion) :
       fase === 'confirmar_reintento_24h' ? evaluarConfirmarReintento24h(clasificacion) :
-      evaluarConfirmarEnvioPropiedades(clasificacion)
+      fase === 'confirmar_envio_propiedades' ? evaluarConfirmarEnvioPropiedades(clasificacion) :
+      fase === 'seguimiento_recurrente' ? evaluarSeguimientoRecurrente(clasificacion, esAclaracion) :
+      evaluarResultadoFirma(clasificacion)
 
     return new Response(JSON.stringify({ ok: true, prompt_enviado_a_ia: prompt, ...resultado }), {
       status: 200,

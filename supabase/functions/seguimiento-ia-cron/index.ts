@@ -21,8 +21,8 @@ const WHATSAPP_ENVIAR_URL = `${SUPABASE_URL}/functions/v1/whatsapp-enviar`
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-const TIPOS_SEGUIMIENTO = ['cita', 'reunion', 'video_llamada', 'llamada']
-const ETAPAS_TERMINALES = ['reservada', 'perdida']
+const TIPOS_SEGUIMIENTO = ['cita', 'reunion', 'video_llamada', 'llamada', 'firma_contrato']
+const ETAPAS_TERMINALES = ['ganada', 'reservada', 'perdida']
 
 // Cadencia de reintentos por fase: la mayoría son "no respondió, insiste
 // cada 24h hasta 3 veces". confirmar_envio_propiedades es distinta: el
@@ -43,6 +43,7 @@ const ETIQUETA_TIPO: Record<string, string> = {
   reunion: 'reunión',
   video_llamada: 'video llamada',
   llamada: 'llamada',
+  firma_contrato: 'firma de contrato',
 }
 
 // 8 dígitos locales de Guatemala -> chatId individual de Green API.
@@ -127,10 +128,16 @@ async function procesarCandidatasNuevas() {
     }
 
     const chatId = telefonoAChatId(agente.telefono)
-    const mensaje = [
-      `Hola ${agente.nombre_completo ?? ''}, ¿qué pasó con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
-      'Cuéntame si se realizó y cómo te fue. Responde citando este mensaje 🙂',
-    ].join('\n')
+    const esFirma = a.tipo_actividad === 'firma_contrato'
+    const mensaje = esFirma
+      ? [
+          `Hola ${agente.nombre_completo ?? ''}, ¿se realizó la firma de contrato con ${contacto?.nombre_completo ?? 'el cliente'}?`,
+          'Responde citando este mensaje 🙂',
+        ].join('\n')
+      : [
+          `Hola ${agente.nombre_completo ?? ''}, ¿qué pasó con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
+          'Cuéntame si se realizó y cómo te fue. Responde citando este mensaje 🙂',
+        ].join('\n')
 
     const idMessage = await enviarWhatsapp({
       chatId,
@@ -146,7 +153,7 @@ async function procesarCandidatasNuevas() {
       agente_id: a.agente_id,
       contacto_id: a.contacto_id,
       organization_id: a.organization_id,
-      fase: 'resultado_visita',
+      fase: esFirma ? 'resultado_firma' : 'resultado_visita',
       estado: 'pendiente',
       pregunta_texto: mensaje,
       chat_id_asesor: chatId,

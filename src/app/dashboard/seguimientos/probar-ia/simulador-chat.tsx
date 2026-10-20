@@ -11,10 +11,21 @@ type Mensaje =
 
 const TIPOS_ACTIVIDAD_PRUEBA = ['cita', 'reunion', 'video_llamada', 'llamada']
 
+const FASES_INICIALES = [
+  { valor: 'resultado_visita', etiqueta: 'Resultado de visita (flujo normal)' },
+  { valor: 'reprogramar', etiqueta: 'Reprogramar (cliente no asistió)' },
+  { valor: 'ofrecer_siguiente_paso', etiqueta: 'Ofrecer siguiente paso (indeciso)' },
+  { valor: 'confirmar_reintento_24h', etiqueta: 'Confirmar reintento 24h' },
+  { valor: 'confirmar_envio_propiedades', etiqueta: 'Confirmar envío de propiedades' },
+  { valor: 'seguimiento_recurrente', etiqueta: 'Seguimiento recurrente (firma/ganada/perdida)' },
+  { valor: 'resultado_firma', etiqueta: 'Resultado de firma de contrato' },
+]
+
 export default function SimuladorChat() {
   const [agenteNombre, setAgenteNombre] = useState('Laura')
   const [contactoNombre, setContactoNombre] = useState('Juan Pérez')
   const [tipoActividad, setTipoActividad] = useState('cita')
+  const [faseInicial, setFaseInicial] = useState('resultado_visita')
 
   const [iniciado, setIniciado] = useState(false)
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
@@ -29,11 +40,18 @@ export default function SimuladorChat() {
     setError(null)
     setCargando(true)
     try {
-      const r = await obtenerPreguntaInicialIA(agenteNombre, tipoActividad, contactoNombre)
-      if (!r.ok) throw new Error(r.error ?? 'Error desconocido')
-      setMensajes([{ rol: 'ia', texto: r.pregunta }])
+      if (faseInicial === 'resultado_visita') {
+        const r = await obtenerPreguntaInicialIA(agenteNombre, tipoActividad, contactoNombre)
+        if (!r.ok) throw new Error(r.error ?? 'Error desconocido')
+        setMensajes([{ rol: 'ia', texto: r.pregunta }])
+      } else {
+        // Las demás fases no tienen una pregunta fija de arranque en el
+        // simulador (en el sistema real llegan desde otra fase) — se
+        // empieza directo escribiendo la respuesta del asesor para esa fase.
+        setMensajes([{ rol: 'sistema', texto: `Simulando desde la fase: ${faseInicial}` }])
+      }
       setIniciado(true)
-      setFaseActual('resultado_visita')
+      setFaseActual(faseInicial)
       setEsReintentoAclaracion(false)
       setTerminal(false)
     } catch (e) {
@@ -83,6 +101,8 @@ export default function SimuladorChat() {
     setRespuestaAsesor('')
   }
 
+  const mostrarSelectorTipo = faseInicial === 'resultado_visita'
+
   return (
     <div className="max-w-2xl">
       {!iniciado && (
@@ -104,18 +124,32 @@ export default function SimuladorChat() {
                 className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Tipo de actividad</label>
-              <select
-                value={tipoActividad}
-                onChange={(e) => setTipoActividad(e.target.value)}
-                className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-              >
-                {TIPOS_ACTIVIDAD_PRUEBA.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
+            {mostrarSelectorTipo && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Tipo de actividad</label>
+                <select
+                  value={tipoActividad}
+                  onChange={(e) => setTipoActividad(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  {TIPOS_ACTIVIDAD_PRUEBA.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Fase inicial</label>
+            <select
+              value={faseInicial}
+              onChange={(e) => setFaseInicial(e.target.value)}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm sm:w-auto"
+            >
+              {FASES_INICIALES.map((f) => (
+                <option key={f.valor} value={f.valor}>{f.etiqueta}</option>
+              ))}
+            </select>
           </div>
           <button
             type="button"
