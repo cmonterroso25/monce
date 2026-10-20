@@ -28,7 +28,7 @@ export async function obtenerPreguntaInicialIA(agenteNombre: string, tipoActivid
 export type ResultadoPruebaIA = {
   ok: boolean
   error?: string
-  prompt_enviado_a_gemini?: string
+  prompt_enviado_a_ia?: string
   clasificacion?: Record<string, unknown>
   accion_descrita?: string
   siguiente_fase?: string | null

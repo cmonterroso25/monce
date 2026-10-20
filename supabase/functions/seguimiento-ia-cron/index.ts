@@ -23,7 +23,20 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 const TIPOS_SEGUIMIENTO = ['cita', 'reunion', 'video_llamada', 'llamada']
 const ETAPAS_TERMINALES = ['reservada', 'perdida']
-const MAX_INTENTOS = 3
+
+// Cadencia de reintentos por fase: la mayoría son "no respondió, insiste
+// cada 24h hasta 3 veces". confirmar_envio_propiedades es distinta: el
+// primer aviso ya se programó al crear la fila (1h después de la hora en
+// que el asesor dijo que enviaría las propiedades); desde ahí, el segundo
+// aviso va 2h después del primero y el tercero 3h después del segundo.
+const CONFIG_REINTENTO: Record<string, { maxIntentos: number; gapsHoras: number[] }> = {
+  default: { maxIntentos: 3, gapsHoras: [24, 24] },
+  confirmar_envio_propiedades: { maxIntentos: 3, gapsHoras: [2, 3] },
+}
+
+function configReintento(fase: string) {
+  return CONFIG_REINTENTO[fase] ?? CONFIG_REINTENTO.default
+}
 
 const ETIQUETA_TIPO: Record<string, string> = {
   cita: 'cita',
@@ -131,6 +144,7 @@ async function procesarCandidatasNuevas() {
       actividad_id: a.id,
       lead_id: a.lead_id,
       agente_id: a.agente_id,
+      contacto_id: a.contacto_id,
       organization_id: a.organization_id,
       fase: 'resultado_visita',
       estado: 'pendiente',
@@ -149,7 +163,7 @@ async function procesarCandidatasNuevas() {
 async function procesarReintentosYVencidos() {
   const { data: pendientes, error } = await supabase
     .from('seguimientos_ia')
-    .select('id, pregunta_texto, chat_id_asesor, organization_id, agente_id, actividad_id, intento')
+    .select('id, fase, pregunta_texto, chat_id_asesor, organization_id, agente_id, actividad_id, intento')
     .eq('estado', 'pendiente')
     .lte('proximo_reintento_en', new Date().toISOString())
 
@@ -161,7 +175,8 @@ async function procesarReintentosYVencidos() {
   let reenviadas = 0
   let vencidas = 0
   for (const s of pendientes ?? []) {
-    if (s.intento >= MAX_INTENTOS) {
+    const { maxIntentos, gapsHoras } = configReintento(s.fase)
+    if (s.intento >= maxIntentos) {
       await supabase.from('seguimientos_ia').update({ estado: 'vencido', actualizado_en: new Date().toISOString() }).eq('id', s.id)
       vencidas++
       continue
@@ -173,11 +188,16 @@ async function procesarReintentosYVencidos() {
       agenteId: s.agente_id,
       actividadId: s.actividad_id,
     })
+    // gapsHoras[0] es el intervalo a usar después del PRIMER envío de este
+    // ciclo de reintentos (cuando s.intento, antes de incrementar, vale 0
+    // para confirmar_envio_propiedades o 1 para el resto, que ya envió el
+    // primer mensaje al crear la fila); así sucesivamente.
+    const gapHoras = gapsHoras[s.intento] ?? gapsHoras[gapsHoras.length - 1] ?? 24
     await supabase
       .from('seguimientos_ia')
       .update({
         intento: s.intento + 1,
-        proximo_reintento_en: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        proximo_reintento_en: new Date(Date.now() + gapHoras * 3600_000).toISOString(),
         actualizado_en: new Date().toISOString(),
       })
       .eq('id', s.id)
