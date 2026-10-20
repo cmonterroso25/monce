@@ -95,7 +95,7 @@ async function procesarCandidatasNuevas() {
   const { data: actividades, error } = await supabase
     .from('actividades')
     .select(
-      'id, lead_id, agente_id, contacto_id, tipo_actividad, organization_id, ' +
+      'id, lead_id, agente_id, contacto_id, tipo_actividad, organization_id, creado_por, ' +
         'contacto:contactos(nombre_completo), agente:perfiles!actividades_agente_id_fkey(nombre_completo, telefono), lead:leads(etapa)'
     )
     .not('lead_id', 'is', null)
@@ -153,6 +153,7 @@ async function procesarCandidatasNuevas() {
       agente_id: a.agente_id,
       contacto_id: a.contacto_id,
       organization_id: a.organization_id,
+      creado_por: a.creado_por ?? null,
       fase: esFirma ? 'resultado_firma' : 'resultado_visita',
       estado: 'pendiente',
       pregunta_texto: mensaje,

@@ -85,6 +85,19 @@ const ETIQUETA_TIPO: Record<string, string> = {
   cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada', firma_contrato: 'firma de contrato',
 }
 
+const ETIQUETAS_ETAPA: Record<string, string> = {
+  contacto_inicial: 'Contacto inicial', visita_agendada: 'Visita agendada', visita_realizada: 'Visita realizada',
+  reservada: 'Reservada', ganada: 'Ganada', perdida: 'Perdida',
+}
+
+// 8 dígitos locales de Guatemala -> chatId individual de Green API. Mismo
+// criterio que telefonoAChatId en seguimiento-ia-cron.
+function telefonoAChatId(telefono: string): string {
+  const soloDigitos = telefono.replace(/\D/g, '')
+  const conCodigoPais = soloDigitos.length === 8 ? `502${soloDigitos}` : soloDigitos
+  return `${conCodigoPais}@c.us`
+}
+
 // Mensajes reutilizados en los cierres de "Perdida" y "Ganada" en varias
 // fases, para que el tono sea siempre el mismo (ánimo vs. celebración).
 const MENSAJE_PERDIDA = 'Entendido, no te preocupes — ¡seguro pronto llega el cliente ideal! 💪 Gracias por el seguimiento.'
@@ -186,12 +199,59 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
 // Acciones de negocio
 // ---------------------------------------------------------------------
 
-async function moverEtapa(leadId: string, nuevaEtapa: string) {
-  await supabase
+// Un asesor puede agendar la cita (actividades.creado_por) y otro cubrirla
+// (actividades.agente_id, a quien Ben siempre le pregunta directamente). Cada
+// vez que el lead efectivamente cambia de etapa, se le manda al que agendó
+// un resumen cálido con el estado actual — nunca en pasos intermedios como
+// "se agendó una llamada de seguimiento" (eso no mueve la etapa).
+async function moverEtapa(seguimiento: SeguimientoRow, nuevaEtapa: string, resumenParaCreador: string) {
+  const { data } = await supabase
     .from('leads')
     .update({ etapa: nuevaEtapa, actualizado_en: new Date().toISOString() })
-    .eq('id', leadId)
+    .eq('id', seguimiento.lead_id)
     .not('etapa', 'in', `(${ETAPAS_TERMINALES.join(',')})`)
+    .select('id')
+  if (data && data.length > 0) {
+    await notificarCreadorCita(seguimiento, nuevaEtapa, resumenParaCreador)
+  }
+}
+
+async function notificarCreadorCita(seguimiento: SeguimientoRow, nuevaEtapa: string, resumen: string) {
+  if (!seguimiento.creado_por || seguimiento.creado_por === seguimiento.agente_id) return
+  const { data: creador } = await supabase.from('perfiles').select('telefono').eq('id', seguimiento.creado_por).maybeSingle()
+  if (!creador?.telefono) return
+
+  const nombreContacto = await obtenerNombreContacto(seguimiento.contacto_id)
+  const etiquetaEtapa = ETIQUETAS_ETAPA[nuevaEtapa] ?? nuevaEtapa
+
+  let mensaje: string
+  if (nuevaEtapa === 'ganada') {
+    mensaje = `¡Hola! Soy Ben 😊 Excelente noticia: el lead de ${nombreContacto} que agendaste se cerró como 🎉 GANADO 🎉. ${resumen} ¡Felicidades, gran trabajo en equipo! 🙌`
+  } else if (nuevaEtapa === 'perdida') {
+    mensaje = `Hola, soy Ben 😊 Te cuento que el lead de ${nombreContacto} que agendaste se marcó como Perdido. ${resumen} No te preocupes, ¡seguro llegan más oportunidades pronto! 💪`
+  } else {
+    mensaje = `Hola, soy Ben 😊 Novedades del lead de ${nombreContacto} que agendaste: ${resumen} Estado actual: ${etiquetaEtapa}.`
+  }
+
+  const res = await fetch(WHATSAPP_ENVIAR_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET,
+    },
+    body: JSON.stringify({
+      chatId: telefonoAChatId(creador.telefono),
+      mensaje,
+      registrar: {
+        organization_id: seguimiento.organization_id,
+        tipo_notificacion: 'seguimiento_ia_resumen_creador',
+        agente_id: seguimiento.creado_por,
+        actividad_id: seguimiento.actividad_id,
+      },
+    }),
+  })
+  if (!res.ok) console.error(`No se pudo notificar al asesor que agendó la cita (whatsapp-enviar respondió ${res.status}):`, await res.text())
 }
 
 async function registrarComentario(actividadId: string, texto: string) {
@@ -234,6 +294,7 @@ type SeguimientoRow = {
   fase: string
   chat_id_asesor: string
   es_reintento_aclaracion: boolean
+  creado_por: string | null
 }
 
 async function obtenerNombreContacto(contactoId: string | null): Promise<string> {
@@ -277,6 +338,12 @@ async function crearSiguienteActividad(params: {
   leadId: string
   organizationId: string
   agenteId: string
+  // Quien agendó la cita ORIGINAL — se propaga tal cual a cada actividad
+  // nueva que Ben agenda, para que ese asesor siga recibiendo el resumen
+  // de novedades durante todo el ciclo de seguimiento (no solo de la
+  // primera cita). Si no hay dato (actividades antiguas sin creado_por),
+  // se usa el asesor que cubre como respaldo.
+  creadoPor: string | null
   tipoActividad: string
   programadaEn: string
 }) {
@@ -294,7 +361,7 @@ async function crearSiguienteActividad(params: {
     contacto_id: actividadPrevia?.contacto_id ?? null,
     lead_id: params.leadId,
     agente_id: params.agenteId,
-    creado_por: params.agenteId,
+    creado_por: params.creadoPor ?? params.agenteId,
     colega_id: actividadPrevia?.colega_id ?? null,
     tipo_actividad: params.tipoActividad,
     programada_en: params.programadaEn,
@@ -396,7 +463,7 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
     // formalizada — el lead se queda en "visita_realizada" y se gestiona
     // con una acción de seguimiento. Nunca se salta directo a "reservada",
     // y el ciclo de 24h sigue (seguimiento_recurrente) hasta Ganada/Perdida.
-    await moverEtapa(seguimiento.lead_id, 'visita_realizada')
+    await moverEtapa(seguimiento, 'visita_realizada', clasificacion.resumen)
     let mensajeRespuesta: string
     if (clasificacion.requiere_revision_documentos) {
       await registrarComentario(seguimiento.actividad_id, 'Documentación en revisión.')
@@ -422,13 +489,13 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
   }
   if (clasificacion.resultado_cliente === 'perdido') {
     await registrarComentario(seguimiento.actividad_id, clasificacion.resumen)
-    await moverEtapa(seguimiento.lead_id, 'perdida')
+    await moverEtapa(seguimiento, 'perdida', clasificacion.resumen)
     await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   await registrarComentario(seguimiento.actividad_id, clasificacion.resumen)
-  await moverEtapa(seguimiento.lead_id, 'visita_realizada')
+  await moverEtapa(seguimiento, 'visita_realizada', clasificacion.resumen)
 
   if (clasificacion.resultado_cliente === 'indeciso_sin_decision') {
     // El cliente aún no da una respuesta (lo está pensando, quedó
@@ -480,8 +547,8 @@ async function procesarConFecha(
       await reabrirConNuevaFase(seguimiento, 'confirmar_reintento_24h', pregunta, false)
       return
     }
-    await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: 'cita', programadaEn: fechaIso! })
-    await moverEtapa(seguimiento.lead_id, 'visita_agendada')
+    await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, creadoPor: seguimiento.creado_por, tipoActividad: 'cita', programadaEn: fechaIso! })
+    await moverEtapa(seguimiento, 'visita_agendada', `Se reprogramó la visita para ${fechaIso}.`)
     await registrarComentario(seguimiento.actividad_id, `Se reprogramó la visita para ${fechaIso}.`)
     await responderAsesor(seguimiento.chat_id_asesor, '¡Perfecto! 📅 Ya agendé la nueva visita. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
@@ -497,7 +564,7 @@ async function procesarConFecha(
     return
   }
   if (decision === 'perdido') {
-    await moverEtapa(seguimiento.lead_id, 'perdida')
+    await moverEtapa(seguimiento, 'perdida', 'El cliente ya no está interesado.')
     await registrarComentario(seguimiento.actividad_id, 'El cliente ya no está interesado.')
     await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
@@ -527,7 +594,7 @@ async function procesarConFecha(
   }
   // llamada / nueva_visita
   const tipo = decision === 'llamada' ? 'llamada' : 'cita'
-  await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: tipo, programadaEn: fechaIso! })
+  await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, creadoPor: seguimiento.creado_por, tipoActividad: tipo, programadaEn: fechaIso! })
   await registrarComentario(seguimiento.actividad_id, `Se agendó ${ETIQUETA_TIPO[tipo]} de seguimiento para ${fechaIso}.`)
   await responderAsesor(seguimiento.chat_id_asesor, `¡Perfecto! 📅 Ya agendé la ${ETIQUETA_TIPO[tipo]}. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!`, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
@@ -549,7 +616,7 @@ async function procesarConfirmarReintento24h(seguimiento: SeguimientoRow, mensaj
     return
   }
   await registrarComentario(seguimiento.actividad_id, 'El cliente no quiere reprogramar.')
-  await moverEtapa(seguimiento.lead_id, 'perdida')
+  await moverEtapa(seguimiento, 'perdida', 'El cliente no quiere reprogramar.')
   await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
   await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
 }
@@ -594,21 +661,21 @@ async function procesarSeguimientoRecurrente(seguimiento: SeguimientoRow, mensaj
       await reabrirConNuevaFase(seguimiento, 'seguimiento_recurrente', pregunta, true)
       return
     }
-    await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, tipoActividad: 'firma_contrato', programadaEn: clasificacion.fecha_hora_iso })
+    await crearSiguienteActividad({ leadId: seguimiento.lead_id, organizationId: seguimiento.organization_id, agenteId: seguimiento.agente_id, creadoPor: seguimiento.creado_por, tipoActividad: 'firma_contrato', programadaEn: clasificacion.fecha_hora_iso })
     await registrarComentario(seguimiento.actividad_id, `Se agendó la firma de contrato para ${clasificacion.fecha_hora_iso}.`)
     await responderAsesor(seguimiento.chat_id_asesor, '¡Qué buena noticia! 🎉 Ya agendé la firma de contrato — ¡felicidades por este avance! Te escribo después para confirmar que todo salió bien.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   if (clasificacion.resultado === 'ganada') {
-    await moverEtapa(seguimiento.lead_id, 'ganada')
+    await moverEtapa(seguimiento, 'ganada', 'El trato se cerró como Ganado 🎉.')
     await registrarComentario(seguimiento.actividad_id, 'El trato se cerró como Ganado 🎉.')
     await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_GANADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
   if (clasificacion.resultado === 'perdida') {
-    await moverEtapa(seguimiento.lead_id, 'perdida')
+    await moverEtapa(seguimiento, 'perdida', 'El trato se marcó como Perdido.')
     await registrarComentario(seguimiento.actividad_id, 'El trato se marcó como Perdido.')
     await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_PERDIDA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
@@ -628,7 +695,7 @@ async function procesarResultadoFirma(seguimiento: SeguimientoRow, mensajeAsesor
   ) as { se_firmo: boolean; resumen: string }
 
   if (clasificacion.se_firmo) {
-    await moverEtapa(seguimiento.lead_id, 'ganada')
+    await moverEtapa(seguimiento, 'ganada', `Firma de contrato realizada. ${clasificacion.resumen}`)
     await registrarComentario(seguimiento.actividad_id, `Firma de contrato realizada. ${clasificacion.resumen}`)
     await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_GANADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
@@ -664,7 +731,7 @@ async function procesarRespuesta(seguimiento: SeguimientoRow, mensajeAsesor: str
 async function resolverSeguimientoPendiente(chatId: string, stanzaIdCitado: string | null): Promise<SeguimientoRow | null> {
   const { data: pendientes } = await supabase
     .from('seguimientos_ia')
-    .select('id, actividad_id, lead_id, agente_id, contacto_id, organization_id, fase, chat_id_asesor, es_reintento_aclaracion, green_api_message_id')
+    .select('id, actividad_id, lead_id, agente_id, contacto_id, organization_id, fase, chat_id_asesor, es_reintento_aclaracion, green_api_message_id, creado_por')
     .eq('chat_id_asesor', chatId)
     .eq('estado', 'pendiente')
     .order('creado_en', { ascending: false })
