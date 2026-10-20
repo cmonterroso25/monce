@@ -70,13 +70,20 @@ function fechaHoraGuatemalaTexto(): string {
 function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: boolean): string {
   const contextoFecha = `Fecha y hora actuales en Guatemala: ${fechaHoraGuatemalaTexto()}.`
   if (fase === 'resultado_visita') {
+    if (esAclaracion) {
+      return [
+        contextoFecha,
+        'Ya se confirmó que el cliente SÍ asistió/atendió la cita o llamada. Un asesor inmobiliario respondió algo ambiguo sobre el RESULTADO de esa visita, y se le pidió que aclarara.',
+        `Respuesta del asesor: "${mensajeAsesor}"`,
+        'Clasifica cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto sigue sin permitir determinarlo. Marca requiere_revision_documentos=true solo si menciona papelería/documentos pendientes de revisar.',
+        'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
+      ].join('\n')
+    }
     return [
       contextoFecha,
-      esAclaracion
-        ? 'Un asesor inmobiliario respondió algo ambiguo a la pregunta "¿qué pasó con tu cita/llamada con el cliente?" y se le pidió que aclarara.'
-        : 'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿qué pasó con tu cita/llamada con el cliente?".',
+      'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿qué pasó con tu cita/llamada con el cliente?".',
       `Respuesta del asesor: "${mensajeAsesor}"`,
-      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar — no que ya reservó formalmente, solo que esa es su intención), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (no se decide, sin pedir más opciones), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false.',
+      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar — no que ya reservó formalmente, solo que esa es su intención), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false.',
       'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true|false, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
     ].join('\n')
   }
@@ -131,6 +138,10 @@ type Resultado = {
 }
 
 function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resultado {
+  // En una aclaración de esta fase, "asistio" ya es un hecho confirmado
+  // del turno anterior — se fuerza para no dejar que el modelo lo
+  // reclasifique mal con un texto que ya no habla de eso.
+  if (esAclaracion) clasificacion.asistio = true
   if (!clasificacion.asistio) {
     return {
       clasificacion,
@@ -175,7 +186,14 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
   if (clasificacion.resultado_cliente === 'perdido') {
     return { clasificacion, accion_descrita: `Se mueve el lead a "Perdida". Resumen registrado: "${clasificacion.resumen}".`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
   }
-  // indeciso_mas_opciones / indeciso_sin_decision
+  if (clasificacion.resultado_cliente === 'indeciso_sin_decision') {
+    return {
+      clasificacion,
+      accion_descrita: `Se mueve el lead a "Visita realizada". Se crea una TAREA "Llamar para seguimiento (aún sin respuesta)" con vencimiento en 24 horas (no se pregunta, se sugiere/programa directo).`,
+      siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
+    }
+  }
+  // indeciso_mas_opciones
   return {
     clasificacion,
     accion_descrita: `Se mueve el lead a "Visita realizada". Resumen registrado: "${clasificacion.resumen}".`,

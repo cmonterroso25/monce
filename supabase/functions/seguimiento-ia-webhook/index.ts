@@ -95,13 +95,24 @@ function fechaHoraGuatemalaTexto(): string {
 function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: boolean): string {
   const contextoFecha = `Fecha y hora actuales en Guatemala: ${fechaHoraGuatemalaTexto()}.`
   if (fase === 'resultado_visita') {
+    if (esAclaracion) {
+      // Ya se confirmó asistio=true en el turno anterior (si no hubiera
+      // asistido, el flujo habría pasado a la fase "reprogramar", no a
+      // una aclaración aquí). No se le vuelve a preguntar eso — solo el
+      // resultado — para que no lo reclasifique mal con el texto nuevo.
+      return [
+        contextoFecha,
+        'Ya se confirmó que el cliente SÍ asistió/atendió la cita o llamada. Un asesor inmobiliario respondió algo ambiguo sobre el RESULTADO de esa visita, y se le pidió que aclarara.',
+        `Respuesta del asesor: "${mensajeAsesor}"`,
+        'Clasifica cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto sigue sin permitir determinarlo. Marca requiere_revision_documentos=true solo si menciona papelería/documentos pendientes de revisar.',
+        'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
+      ].join('\n')
+    }
     return [
       contextoFecha,
-      esAclaracion
-        ? 'Un asesor inmobiliario respondió algo ambiguo a la pregunta "¿qué pasó con tu cita/llamada con el cliente?" y se le pidió que aclarara.'
-        : 'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿qué pasó con tu cita/llamada con el cliente?".',
+      'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿qué pasó con tu cita/llamada con el cliente?".',
       `Respuesta del asesor: "${mensajeAsesor}"`,
-      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar — no que ya reservó formalmente, solo que esa es su intención), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (no se decide, sin pedir más opciones), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false.',
+      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar — no que ya reservó formalmente, solo que esa es su intención), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false.',
       'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true|false, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
     ].join('\n')
   }
@@ -323,6 +334,12 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
     await llamarGroq(construirPrompt('resultado_visita', mensajeAsesor, seguimiento.es_reintento_aclaracion))
   ) as { asistio: boolean; resultado_cliente: string; requiere_revision_documentos: boolean; resumen: string }
 
+  // En una aclaración de esta misma fase, "asistio" ya es un hecho
+  // confirmado del turno anterior (si no hubiera asistido, ya estaríamos
+  // en la fase "reprogramar") — se fuerza para no dejar que el modelo lo
+  // reclasifique mal con un texto que ya no habla de eso.
+  if (seguimiento.es_reintento_aclaracion) clasificacion.asistio = true
+
   if (!clasificacion.asistio) {
     const pregunta = '¿Quieren reprogramar la visita? Si es así, dime para cuándo. Responde citando este mensaje.'
     await registrarComentario(seguimiento.actividad_id, `El cliente no asistió/atendió. ${clasificacion.resumen}`)
@@ -372,9 +389,29 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
     await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
     return
   }
-  // indeciso_mas_opciones / indeciso_sin_decision
   await registrarComentario(seguimiento.actividad_id, clasificacion.resumen)
   await moverEtapa(seguimiento.lead_id, 'visita_realizada')
+
+  if (clasificacion.resultado_cliente === 'indeciso_sin_decision') {
+    // El cliente aún no da una respuesta (lo está pensando, quedó
+    // pendiente) — se sugiere y programa directamente una llamada de
+    // seguimiento en 24h, en vez de preguntar qué hacer.
+    const nombreContacto = await obtenerNombreContacto(seguimiento.contacto_id)
+    await crearTarea({
+      leadId: seguimiento.lead_id,
+      contactoId: seguimiento.contacto_id,
+      agenteId: seguimiento.agente_id,
+      organizationId: seguimiento.organization_id,
+      titulo: `Llamar a ${nombreContacto} para seguimiento (aún sin respuesta)`,
+      fechaLimite: new Date(Date.now() + 24 * 3600_000).toISOString(),
+      prioridad: 'media',
+    })
+    await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, te programé una llamada de seguimiento en 24 horas para ver qué decidió.', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+    return
+  }
+
+  // indeciso_mas_opciones
   const pregunta = '¿Programamos una llamada o una nueva visita de seguimiento? Si es así, dime para cuándo. Responde citando este mensaje.'
   await reabrirConNuevaFase(seguimiento, 'ofrecer_siguiente_paso', pregunta, false)
 }
