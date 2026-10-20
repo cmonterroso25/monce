@@ -131,11 +131,11 @@ async function procesarCandidatasNuevas() {
     const esFirma = a.tipo_actividad === 'firma_contrato'
     const mensaje = esFirma
       ? [
-          `Hola ${agente.nombre_completo ?? ''}, ¿se realizó la firma de contrato con ${contacto?.nombre_completo ?? 'el cliente'}?`,
-          'Responde citando este mensaje 🙂',
+          `¡Hola ${agente.nombre_completo ?? ''}! 😊 ¿Cómo te fue con la firma de contrato de ${contacto?.nombre_completo ?? 'el cliente'}? ¿Ya se realizó?`,
+          'Cuéntame cómo te fue. Responde citando este mensaje 🙂',
         ].join('\n')
       : [
-          `Hola ${agente.nombre_completo ?? ''}, ¿qué pasó con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
+          `¡Hola ${agente.nombre_completo ?? ''}! 😊 ¿Cómo te fue con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
           'Cuéntame si se realizó y cómo te fue. Responde citando este mensaje 🙂',
         ].join('\n')
 

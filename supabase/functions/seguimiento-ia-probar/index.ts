@@ -20,7 +20,7 @@ const MENSAJE_GANADA = '🎉🎉 ¡FELICIDADES!! Lograste cerrar el trato, excel
 
 export const PREGUNTA_INICIAL = (agenteNombre: string, tipoActividad: string, contactoNombre: string) =>
   [
-    `Hola ${agenteNombre}, ¿qué pasó con tu ${ETIQUETA_TIPO[tipoActividad] ?? tipoActividad} con ${contactoNombre}?`,
+    `¡Hola ${agenteNombre}! 😊 ¿Cómo te fue con tu ${ETIQUETA_TIPO[tipoActividad] ?? tipoActividad} con ${contactoNombre}?`,
     'Cuéntame si se realizó y cómo te fue. Responde citando este mensaje 🙂',
   ].join('\n')
 
