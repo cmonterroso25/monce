@@ -96,7 +96,7 @@ async function procesarCandidatasNuevas() {
     .from('actividades')
     .select(
       'id, lead_id, agente_id, contacto_id, tipo_actividad, organization_id, ' +
-        'contacto:contactos(nombre_completo), agente:perfiles(nombre_completo, telefono), lead:leads(etapa)'
+        'contacto:contactos(nombre_completo), agente:perfiles!actividades_agente_id_fkey(nombre_completo, telefono), lead:leads(etapa)'
     )
     .not('lead_id', 'is', null)
     .in('tipo_actividad', TIPOS_SEGUIMIENTO)
@@ -131,11 +131,11 @@ async function procesarCandidatasNuevas() {
     const esFirma = a.tipo_actividad === 'firma_contrato'
     const mensaje = esFirma
       ? [
-          `¡Hola ${agente.nombre_completo ?? ''}! 😊 ¿Cómo te fue con la firma de contrato de ${contacto?.nombre_completo ?? 'el cliente'}? ¿Ya se realizó?`,
+          `Hola ${agente.nombre_completo ?? ''}, soy Ben, tu asistente inmobiliario 😊 ¿Cómo te fue con la firma de contrato de ${contacto?.nombre_completo ?? 'el cliente'}? ¿Ya se realizó?`,
           'Cuéntame cómo te fue. Responde citando este mensaje 🙂',
         ].join('\n')
       : [
-          `¡Hola ${agente.nombre_completo ?? ''}! 😊 ¿Cómo te fue con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
+          `Hola ${agente.nombre_completo ?? ''}, soy Ben, tu asistente inmobiliario 😊 ¿Cómo te fue con tu ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}?`,
           'Cuéntame si se realizó y cómo te fue. Responde citando este mensaje 🙂',
         ].join('\n')
 
