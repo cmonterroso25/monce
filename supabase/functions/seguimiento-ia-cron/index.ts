@@ -59,7 +59,8 @@ async function enviarWhatsapp(params: {
   mensaje: string
   organizationId: string
   agenteId: string
-  actividadId: string
+  actividadId: string | null
+  tipoNotificacion?: string
 }): Promise<string | null> {
   const res = await fetch(WHATSAPP_ENVIAR_URL, {
     method: 'POST',
@@ -73,7 +74,7 @@ async function enviarWhatsapp(params: {
       mensaje: params.mensaje,
       registrar: {
         organization_id: params.organizationId,
-        tipo_notificacion: 'seguimiento_ia_pregunta',
+        tipo_notificacion: params.tipoNotificacion ?? 'seguimiento_ia_pregunta',
         agente_id: params.agenteId,
         actividad_id: params.actividadId,
       },
@@ -214,6 +215,62 @@ async function procesarReintentosYVencidos() {
   return { reenviadas, vencidas }
 }
 
+// Recordatorios de tareas creadas por Ben (ej. "Llamar a X para gestionar
+// la reserva"): recordatorio_proximo_en se siembra con la fecha_limite al
+// crear la tarea (seguimiento-ia-webhook) y se recorre +4h en cada envío —
+// sin límite de reintentos, hasta que el asesor confirme por WhatsApp que
+// ya la hizo (seguimiento-ia-webhook marca estado='completada').
+async function procesarRecordatoriosDeTareas() {
+  const { data: tareas, error } = await supabase
+    .from('tareas')
+    .select(
+      'id, titulo, asignado_a, organization_id, ' +
+        'asesor:perfiles!tareas_asignado_a_fkey(nombre_completo, telefono)'
+    )
+    .eq('creado_por_ia', true)
+    .eq('estado', 'pendiente')
+    .not('recordatorio_proximo_en', 'is', null)
+    .lte('recordatorio_proximo_en', new Date().toISOString())
+
+  if (error) {
+    console.error('Error consultando recordatorios de tareas:', error)
+    return { recordatoriosTareas: 0 }
+  }
+  if (!tareas || tareas.length === 0) return { recordatoriosTareas: 0 }
+
+  let enviados = 0
+  for (const t of tareas) {
+    const asesor = Array.isArray(t.asesor) ? t.asesor[0] : t.asesor
+    if (!asesor?.telefono) {
+      console.error(`Tarea ${t.id}: el asesor ${t.asignado_a} no tiene teléfono registrado, se omite.`)
+      continue
+    }
+    const chatId = telefonoAChatId(asesor.telefono)
+    const mensaje = `Hola ${asesor.nombre_completo ?? ''}, soy Ben 😊 ¿Ya pudiste completar esto: "${t.titulo}"? Responde citando este mensaje 🙂`
+
+    const idMessage = await enviarWhatsapp({
+      chatId,
+      mensaje,
+      organizationId: t.organization_id,
+      agenteId: t.asignado_a,
+      actividadId: null,
+      tipoNotificacion: 'tareas_recordatorio_ia',
+    })
+
+    await supabase
+      .from('tareas')
+      .update({
+        recordatorio_chat_id: chatId,
+        recordatorio_green_api_message_id: idMessage,
+        recordatorio_enviado_en: new Date().toISOString(),
+        recordatorio_proximo_en: new Date(Date.now() + 4 * 3600_000).toISOString(),
+      })
+      .eq('id', t.id)
+    enviados++
+  }
+  return { recordatoriosTareas: enviados }
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-notificacion-secret') !== FUNCTION_SECRET) {
     return new Response('No autorizado', { status: 401 })
@@ -221,9 +278,10 @@ Deno.serve(async (req) => {
 
   const nuevas = await procesarCandidatasNuevas()
   const reintentos = await procesarReintentosYVencidos()
+  const tareas = await procesarRecordatoriosDeTareas()
 
   return new Response(
-    JSON.stringify({ ok: true, ...nuevas, ...reintentos }),
+    JSON.stringify({ ok: true, ...nuevas, ...reintentos, ...tareas }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   )
 })

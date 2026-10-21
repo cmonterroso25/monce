@@ -263,7 +263,14 @@ async function registrarComentario(actividadId: string, texto: string) {
   if (error) console.error('No se pudo registrar comentario de seguimiento IA:', error)
 }
 
-async function responderAsesor(chatId: string, mensaje: string, organizationId: string, agenteId: string, actividadId: string): Promise<string | null> {
+async function responderAsesor(
+  chatId: string,
+  mensaje: string,
+  organizationId: string,
+  agenteId: string,
+  actividadId: string | null,
+  tipoNotificacion = 'seguimiento_ia_respuesta'
+): Promise<string | null> {
   const res = await fetch(WHATSAPP_ENVIAR_URL, {
     method: 'POST',
     headers: {
@@ -274,7 +281,7 @@ async function responderAsesor(chatId: string, mensaje: string, organizationId: 
     body: JSON.stringify({
       chatId,
       mensaje,
-      registrar: { organization_id: organizationId, tipo_notificacion: 'seguimiento_ia_respuesta', agente_id: agenteId, actividad_id: actividadId },
+      registrar: { organization_id: organizationId, tipo_notificacion: tipoNotificacion, agente_id: agenteId, actividad_id: actividadId },
     }),
   })
   if (!res.ok) {
@@ -321,6 +328,9 @@ async function crearTarea(params: {
   fechaLimite: string
   prioridad: 'baja' | 'media' | 'alta'
 }) {
+  // creado_por_ia marca que Ben debe recordar esta tarea por WhatsApp al
+  // vencer — recordatorio_proximo_en se siembra con la misma fecha_limite
+  // (el cron la recoge de ahí la primera vez, igual que seguimientos_ia).
   const { error } = await supabase.from('tareas').insert({
     asignado_a: params.agenteId,
     contacto_id: params.contactoId,
@@ -330,6 +340,8 @@ async function crearTarea(params: {
     estado: 'pendiente',
     prioridad: params.prioridad,
     organization_id: params.organizationId,
+    creado_por_ia: true,
+    recordatorio_proximo_en: params.fechaLimite,
   })
   if (error) console.error('No se pudo crear la tarea de seguimiento IA:', error)
 }
@@ -755,6 +767,99 @@ async function resolverSeguimientoPendiente(chatId: string, stanzaIdCitado: stri
 }
 
 // ---------------------------------------------------------------------
+// Recordatorio de tareas creadas por Ben (ej. "Llamar a X para gestionar
+// la reserva"). Flujo independiente del árbol de fases de seguimientos_ia:
+// el cron ya siembra/reprograma tareas.recordatorio_proximo_en (ver
+// seguimiento-ia-cron), aquí solo se procesa la respuesta del asesor.
+// ---------------------------------------------------------------------
+
+type TareaRow = {
+  id: string
+  titulo: string
+  asignado_a: string
+  organization_id: string
+  recordatorio_chat_id: string
+  recordatorio_green_api_message_id: string | null
+  recordatorio_enviado_en: string | null
+}
+
+function construirPromptConfirmarTarea(titulo: string, mensajeAsesor: string): string {
+  return [
+    `Se le preguntó al asesor si ya completó esta tarea: "${titulo}".`,
+    `Respuesta del asesor: "${mensajeAsesor}"`,
+    'Determina completada: true solo si confirma que ya la hizo; false en cualquier otro caso (todavía no, está por hacerlo, respuesta ambigua, etc.) — ante la duda, false.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente este campo: {"completada": true|false}.',
+  ].join('\n')
+}
+
+async function resolverTareaPendiente(chatId: string, stanzaIdCitado: string | null): Promise<TareaRow | null> {
+  const { data: pendientes } = await supabase
+    .from('tareas')
+    .select('id, titulo, asignado_a, organization_id, recordatorio_chat_id, recordatorio_green_api_message_id, recordatorio_enviado_en')
+    .eq('creado_por_ia', true)
+    .eq('estado', 'pendiente')
+    .eq('recordatorio_chat_id', chatId)
+    .not('recordatorio_enviado_en', 'is', null)
+    .order('recordatorio_enviado_en', { ascending: false })
+
+  if (!pendientes || pendientes.length === 0) return null
+  if (pendientes.length === 1) return pendientes[0] as TareaRow
+
+  if (stanzaIdCitado) {
+    const porCita = pendientes.find((p) => p.recordatorio_green_api_message_id === stanzaIdCitado)
+    if (porCita) return porCita as TareaRow
+  }
+  return pendientes[0] as TareaRow
+}
+
+// Claim atómico: recordatorio_proximo_en no nulo = disponible para
+// reclamar (equivalente al "pendiente" de seguimientos_ia). Se pone en
+// null mientras se procesa, para que una reentrega de Green API no
+// reprocese la misma respuesta dos veces.
+async function reclamarRecordatorioTarea(tareaId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('tareas')
+    .update({ recordatorio_proximo_en: null })
+    .eq('id', tareaId)
+    .not('recordatorio_proximo_en', 'is', null)
+    .select('id')
+  return !!data && data.length > 0
+}
+
+async function procesarRespuestaTarea(tarea: TareaRow, mensajeAsesor: string) {
+  const clasificacion = parsearRespuestaGroq(
+    await llamarGroq(construirPromptConfirmarTarea(tarea.titulo, mensajeAsesor))
+  ) as { completada: boolean }
+
+  if (clasificacion.completada) {
+    await supabase.from('tareas').update({ estado: 'completada' }).eq('id', tarea.id)
+    await responderAsesor(
+      tarea.recordatorio_chat_id,
+      '¡Genial, gracias por confirmarlo! ✅ Ya marqué la tarea como completada.',
+      tarea.organization_id,
+      tarea.asignado_a,
+      null,
+      'tareas_recordatorio_ia_respuesta'
+    )
+    return
+  }
+  // Sigue pendiente: se reprograma el recordatorio para dentro de 4h, sin
+  // límite de reintentos — nunca se cierra sola sin confirmación.
+  await supabase
+    .from('tareas')
+    .update({ recordatorio_proximo_en: new Date(Date.now() + 4 * 3600_000).toISOString() })
+    .eq('id', tarea.id)
+  await responderAsesor(
+    tarea.recordatorio_chat_id,
+    'Entendido, sin problema 😊 Te recuerdo de nuevo en unas horas.',
+    tarea.organization_id,
+    tarea.asignado_a,
+    null,
+    'tareas_recordatorio_ia_respuesta'
+  )
+}
+
+// ---------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------
 
@@ -795,23 +900,41 @@ Deno.serve(async (req) => {
   }
 
   const seguimiento = await resolverSeguimientoPendiente(chatId, stanzaIdCitado)
-  if (!seguimiento) {
-    // Mensaje de alguien sin seguimiento pendiente: no es asunto de este agente.
-    return new Response(JSON.stringify({ ok: true, ignorado: 'sin seguimiento pendiente' }), { status: 200 })
+  if (seguimiento) {
+    const reclamado = await reclamarSeguimiento(seguimiento.id, textoMensaje)
+    if (!reclamado) {
+      // Ya fue procesado por una entrega anterior del mismo webhook (Green
+      // API puede reentregar); no se reprocesa.
+      return new Response(JSON.stringify({ ok: true, duplicado: true }), { status: 200 })
+    }
+    try {
+      await procesarRespuesta(seguimiento, textoMensaje)
+    } catch (err) {
+      console.error(`Error procesando seguimiento ${seguimiento.id}:`, err)
+      await cerrarParaRevisionManual(seguimiento, `Error al procesar la respuesta con IA: ${err instanceof Error ? err.message : String(err)}.`)
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
-  const reclamado = await reclamarSeguimiento(seguimiento.id, textoMensaje)
-  if (!reclamado) {
-    // Ya fue procesado por una entrega anterior del mismo webhook (Green
-    // API puede reentregar); no se reprocesa.
+  // Sin seguimiento de cita pendiente: puede ser la respuesta a un
+  // recordatorio de tarea ("¿ya llamaste a X?").
+  const tarea = await resolverTareaPendiente(chatId, stanzaIdCitado)
+  if (!tarea) {
+    // Mensaje de alguien sin seguimiento ni recordatorio pendiente: no es asunto de este agente.
+    return new Response(JSON.stringify({ ok: true, ignorado: 'sin seguimiento ni recordatorio pendiente' }), { status: 200 })
+  }
+
+  const reclamada = await reclamarRecordatorioTarea(tarea.id)
+  if (!reclamada) {
     return new Response(JSON.stringify({ ok: true, duplicado: true }), { status: 200 })
   }
-
   try {
-    await procesarRespuesta(seguimiento, textoMensaje)
+    await procesarRespuestaTarea(tarea, textoMensaje)
   } catch (err) {
-    console.error(`Error procesando seguimiento ${seguimiento.id}:`, err)
-    await cerrarParaRevisionManual(seguimiento, `Error al procesar la respuesta con IA: ${err instanceof Error ? err.message : String(err)}.`)
+    console.error(`Error procesando recordatorio de tarea ${tarea.id}:`, err)
+    // Ante un error, se reprograma el recordatorio en vez de dejarlo
+    // "trabado" sin recordatorio_proximo_en (que lo sacaría del cron).
+    await supabase.from('tareas').update({ recordatorio_proximo_en: new Date(Date.now() + 4 * 3600_000).toISOString() }).eq('id', tarea.id)
   }
 
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
