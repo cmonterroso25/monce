@@ -23,16 +23,9 @@ import { REQUISITOS_RENTA, type CodigoRequisitosRenta } from '../requisitos-rent
 import { formatearZona } from '@/lib/formato-zona'
 import { formatearPrecioRenta } from '@/lib/formato-precio'
 import { formatearFechaLargaGT } from '@/lib/fecha-gt'
+import { coloresEstadoPropiedad } from '@/lib/colores-estado-propiedad'
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
-
-const coloresEstado: Record<string, string> = {
-  disponible: 'bg-green-100 text-green-700',
-  reservada: 'bg-yellow-100 text-yellow-700',
-  vendida: 'bg-slate-200 text-slate-700',
-  rentada: 'bg-blue-100 text-blue-700',
-  inactiva: 'bg-red-100 text-red-700',
-}
 
 const coloresModalidad: Record<string, string> = {
   Directo: 'bg-emerald-100 text-emerald-700',
@@ -330,7 +323,7 @@ export default async function DetallePropiedad({
             <div className="flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-                  coloresEstado[propiedad.estado] || 'bg-slate-100 text-slate-700'
+                  coloresEstadoPropiedad[propiedad.estado] || 'bg-slate-100 text-slate-700'
                 }`}
               >
                 {propiedad.estado}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { CANALES_DASHBOARD, IconoCanal } from './iconos-canales'
 import BotonOcultar from './boton-ocultar'
+import { coloresEstadoPropiedad } from '@/lib/colores-estado-propiedad'
 
 const ESTADOS_EN_CURSO = ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED', 'VERIFICANDO']
 // Fallos terminales que se muestran solo VENTANA_ERROR_HORAS (CANCELLED y APPROVAL_EXPIRED no cuentan).
@@ -562,7 +563,13 @@ export default async function PanelPublicaciones({
                       </div>
                     </td>
                     <td className="py-2 pr-3">
-                      <span className="text-xs text-slate-600">{ESTADOS_PROPIEDAD[p.estado ?? ''] ?? p.estado ?? '—'}</span>
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          coloresEstadoPropiedad[p.estado ?? ''] ?? 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {ESTADOS_PROPIEDAD[p.estado ?? ''] ?? p.estado ?? '—'}
+                      </span>
                       {retirar && (
                         <div className="text-xs font-medium text-red-700">Anuncio vigente: retíralo de Facebook</div>
                       )}
