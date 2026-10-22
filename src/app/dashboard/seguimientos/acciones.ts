@@ -51,6 +51,49 @@ export async function probarSeguimientoIA(
   return res.json()
 }
 
+export async function listarPerfilesParaPrueba() {
+  await requerirAdmin()
+  const supabase = await createClient()
+  const { data } = await supabase.from('perfiles').select('id, nombre_completo, rol').order('nombre_completo')
+  return data ?? []
+}
+
+export type ResultadoAsistenteGeneralPrueba = {
+  ok: boolean
+  error?: string
+  prompt_enviado_a_ia?: string
+  clasificacion?: Record<string, unknown>
+  mensaje_respuesta?: string
+  accion_descrita?: string
+  requiere_aclaracion?: boolean
+  siguiente_pregunta?: string | null
+  contexto_para_siguiente_turno?: { titulo_tarea: string; nombre_contacto: string | null; prioridad_tarea: string } | null
+}
+
+export async function probarAsistenteGeneral(perfilId: string, mensaje: string): Promise<ResultadoAsistenteGeneralPrueba> {
+  await requerirAdmin()
+  const res = await fetch(PROBAR_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET },
+    body: JSON.stringify({ modo: 'asistente_general', perfil_id: perfilId, mensaje_asesor: mensaje }),
+  })
+  return res.json()
+}
+
+export async function probarAsistenteGeneralAclaracion(
+  perfilId: string,
+  mensaje: string,
+  contextoPrevio: { titulo_tarea: string; nombre_contacto: string | null; prioridad_tarea: string }
+): Promise<ResultadoAsistenteGeneralPrueba> {
+  await requerirAdmin()
+  const res = await fetch(PROBAR_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-notificacion-secret': WHATSAPP_FUNCTION_SECRET },
+    body: JSON.stringify({ modo: 'asistente_general_aclaracion', perfil_id: perfilId, mensaje_asesor: mensaje, contexto_previo: contextoPrevio }),
+  })
+  return res.json()
+}
+
 export async function agregarComentario(actividadId: string, contenido: string) {
   const supabase = await createClient()
 

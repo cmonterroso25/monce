@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2, RotateCcw, Bot, User, Info } from 'lucide-react'
 import { obtenerPreguntaInicialIA, probarSeguimientoIA } from '../acciones'
+import SimuladorChatAsistente from './simulador-chat-asistente'
 
 type Mensaje =
   | { rol: 'ia'; texto: string }
@@ -22,6 +23,7 @@ const FASES_INICIALES = [
 ]
 
 export default function SimuladorChat() {
+  const [modo, setModo] = useState<'citas' | 'asistente'>('citas')
   const [agenteNombre, setAgenteNombre] = useState('Laura')
   const [contactoNombre, setContactoNombre] = useState('Juan Pérez')
   const [tipoActividad, setTipoActividad] = useState('cita')
@@ -105,6 +107,27 @@ export default function SimuladorChat() {
 
   return (
     <div className="max-w-2xl">
+      <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-sm">
+        <button
+          type="button"
+          onClick={() => setModo('citas')}
+          className={`rounded-md px-3 py-1.5 font-medium ${modo === 'citas' ? 'bg-[#38B6FF] text-white' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          Simular seguimiento de cita
+        </button>
+        <button
+          type="button"
+          onClick={() => setModo('asistente')}
+          className={`rounded-md px-3 py-1.5 font-medium ${modo === 'asistente' ? 'bg-[#38B6FF] text-white' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          Simular consulta libre (asistente)
+        </button>
+      </div>
+
+      {modo === 'asistente' && <SimuladorChatAsistente />}
+
+      {modo === 'citas' && (
+      <>
       {!iniciado && (
         <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -226,6 +249,8 @@ export default function SimuladorChat() {
             <RotateCcw size={12} /> Reiniciar simulación
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   )

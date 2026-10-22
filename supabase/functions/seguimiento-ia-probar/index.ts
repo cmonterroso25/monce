@@ -6,10 +6,16 @@
 // carpeta _shared en este proyecto; mismo criterio que el resto de las
 // Edge Functions, que duplican su propio código de llamadas a IA).
 
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
 const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY')!
 const PRUEBA_SECRET = Deno.env.get('WHATSAPP_FUNCTION_SECRET')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const GROQ_MODEL = 'openai/gpt-oss-120b'
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 const ETIQUETA_TIPO: Record<string, string> = {
   cita: 'cita', reunion: 'reunión', video_llamada: 'video llamada', llamada: 'llamada', firma_contrato: 'firma de contrato',
@@ -361,6 +367,284 @@ function evaluarResultadoFirma(clasificacion: any): Resultado {
   }
 }
 
+// ---------------------------------------------------------------------
+// Modo "asistente general": mismos prompts/lógica que
+// seguimiento-ia-webhook/index.ts (manejarConsultaGeneral y vecinos) — si
+// ese archivo cambia esta parte, replicar aquí también. A diferencia del
+// webhook real, las consultas de lectura SÍ ejecutan contra la base real
+// (sin riesgo), y "crear_tarea" nunca inserta — solo describe qué se
+// crearía (dry-run), igual criterio que ya usa el resto de este simulador.
+// ---------------------------------------------------------------------
+
+type PerfilAsistente = { id: string; nombre_completo: string; rol: 'agente' | 'administrador'; organization_id: string }
+
+const ETIQUETAS_ETAPA: Record<string, string> = {
+  contacto_inicial: 'Contacto inicial', visita_agendada: 'Visita agendada', visita_realizada: 'Visita realizada',
+  reservada: 'Reservada', ganada: 'Ganada', perdida: 'Perdida',
+}
+const TIPOS_ACTIVIDAD_CONSULTA = ['cita', 'reunion', 'video_llamada', 'llamada', 'firma_contrato']
+const TIPOS_PROPIEDAD_VALIDOS = ['casa', 'apartamento', 'terreno', 'bodega', 'oficina', 'ofibodega', 'finca', 'granja']
+const ETAPAS_FINALIZADAS_PARA_CONTEO = ['ganada', 'perdida']
+
+function componentesGT(fecha: Date): { anio: number; mes: number; dia: number } {
+  const partes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(fecha)
+  const obtener = (tipo: string) => Number(partes.find((p) => p.type === tipo)?.value)
+  return { anio: obtener('year'), mes: obtener('month'), dia: obtener('day') }
+}
+function inicioDeDiaGT(anio: number, mes: number, dia: number): Date {
+  return new Date(`${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00-06:00`)
+}
+function formatearHoraGT(iso: string): string {
+  return new Date(iso).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })
+}
+function formatearFechaHoraGT(iso: string): string {
+  const fecha = new Date(iso).toLocaleDateString('es-GT', { day: 'numeric', month: 'long', timeZone: 'America/Guatemala' })
+  return `${fecha} a las ${formatearHoraGT(iso)}`
+}
+function formatearZonaDup(zona: string | null | undefined): string | null {
+  if (!zona) return null
+  const valor = zona.trim()
+  if (valor === '') return null
+  if (/zona/i.test(valor)) return valor
+  return `Zona ${valor}`
+}
+
+function construirPromptConsultaGeneral(mensaje: string): string {
+  const contextoFecha = `Fecha y hora actuales en Guatemala: ${fechaHoraGuatemalaTexto()}.`
+  return [
+    contextoFecha,
+    'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
+    `Mensaje: "${mensaje}"`,
+    'Clasifica la intención en exactamente una de estas 5 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
+    '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
+    '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (solo si etapa_lead es "ganada" o "perdida"; si no especificó, usa "este_mes").',
+    '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
+    '- tipo_operacion: "venta"|"renta"|null.',
+    '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|null.',
+    '- zona: el texto de zona/ubicación mencionado, o null.',
+    '- precio_min, precio_max, dormitorios_min, banos_min: número o null.',
+    '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
+    '- nombre_contacto: para crear_tarea, el nombre de la persona mencionada si la tarea es sobre un cliente específico, o null.',
+    '- fecha_hora_iso: para crear_tarea, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
+    '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
+    '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "zona": string|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+  ].join('\n')
+}
+
+function construirPromptAclaracionFecha(mensaje: string): string {
+  const contextoFecha = `Fecha y hora actuales en Guatemala: ${fechaHoraGuatemalaTexto()}.`
+  return [
+    contextoFecha,
+    'El asesor ya pidió crear una tarea/recordatorio, pero no dejó clara la fecha/hora. Se le volvió a preguntar para cuándo.',
+    `Respuesta: "${mensaje}"`,
+    'Convierte la fecha/hora a fecha_hora_iso (ISO 8601, zona -06:00, usando la fecha actual de arriba como referencia). confianza_fecha: "alta" solo si es inequívoca, "media" si falta precisión, "baja" si es muy vaga, "ninguna" si sigue sin mencionar fecha.',
+    'Responde ÚNICAMENTE con un objeto JSON válido: {"fecha_hora_iso": "YYYY-MM-DDTHH:mm:ss-06:00"|null, "confianza_fecha": "alta"|"media"|"baja"|"ninguna"}.',
+  ].join('\n')
+}
+
+function fechaEsConfiable(fechaIso: unknown, confianza: unknown): fechaIso is string {
+  return typeof fechaIso === 'string' && (confianza === 'alta' || confianza === 'media')
+}
+
+function inicioRangoLeadsGT(rango: string): Date | null {
+  const ahora = new Date()
+  const { anio, mes, dia } = componentesGT(ahora)
+  if (rango === 'hoy') return inicioDeDiaGT(anio, mes, dia)
+  if (rango === 'esta_semana') return new Date(ahora.getTime() - 7 * 24 * 3600_000)
+  if (rango === 'este_mes') return inicioDeDiaGT(anio, mes, 1)
+  return null
+}
+
+async function calcularRespuestaConsultaLeads(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+  const etapaLead = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada', 'ganada', 'perdida', 'activos', 'todos'].includes(c.etapa_lead)
+    ? c.etapa_lead
+    : 'activos'
+
+  let query = supabase.from('leads').select('etapa').eq('organization_id', perfil.organization_id)
+  if (perfil.rol === 'agente') query = query.eq('agente_id', perfil.id)
+  if (etapaLead === 'activos') query = query.not('etapa', 'in', `(${ETAPAS_FINALIZADAS_PARA_CONTEO.join(',')})`)
+  else if (etapaLead !== 'todos') query = query.eq('etapa', etapaLead)
+  if (etapaLead === 'ganada' || etapaLead === 'perdida') {
+    const rango = ['hoy', 'esta_semana', 'este_mes', 'todo'].includes(c.rango_fecha_leads) ? c.rango_fecha_leads : 'este_mes'
+    const desde = inicioRangoLeadsGT(rango)
+    if (desde) query = query.gte('actualizado_en', desde.toISOString())
+  }
+
+  const { data, error } = await query
+  if (error) return 'Uy, no pude consultar tus leads en este momento 😓 Intenta de nuevo en un rato.'
+
+  const total = data?.length ?? 0
+  const sujeto = perfil.rol === 'agente' ? 'Tienes' : 'Hay'
+  if (etapaLead === 'activos' || etapaLead === 'todos') {
+    const conteo = (data ?? []).reduce<Record<string, number>>((acc, l) => { acc[l.etapa] = (acc[l.etapa] ?? 0) + 1; return acc }, {})
+    const etapasAMostrar = Object.keys(ETIQUETAS_ETAPA).filter((e) => (etapaLead === 'activos' ? !ETAPAS_FINALIZADAS_PARA_CONTEO.includes(e) : true))
+    return [`📊 ${sujeto} ${total} lead${total === 1 ? '' : 's'} ${etapaLead === 'activos' ? 'activos' : 'en total'}:`, ...etapasAMostrar.map((e) => `• ${ETIQUETAS_ETAPA[e]}: ${conteo[e] ?? 0}`)].join('\n')
+  }
+  const etiquetaRango: Record<string, string> = { hoy: 'hoy', esta_semana: 'esta semana', este_mes: 'este mes', todo: 'en total' }
+  const rangoTxt = etiquetaRango[c.rango_fecha_leads ?? 'este_mes'] ?? 'este mes'
+  return etapaLead === 'ganada'
+    ? `🎉 ${perfil.rol === 'agente' ? 'Llevas' : 'El equipo lleva'} ${total} lead${total === 1 ? '' : 's'} ganado${total === 1 ? '' : 's'} ${rangoTxt}. ¡Sigue así!`
+    : `${total} lead${total === 1 ? '' : 's'} se ${total === 1 ? 'marcó' : 'marcaron'} como perdido${total === 1 ? '' : 's'} ${rangoTxt} 💪. Vamos por los próximos.`
+}
+
+function rangoCitasGT(rango: string): { desde: Date | null; hasta: Date | null; vencidas: boolean } {
+  const ahora = new Date()
+  const { anio, mes, dia } = componentesGT(ahora)
+  const inicioHoy = inicioDeDiaGT(anio, mes, dia)
+  if (rango === 'hoy') return { desde: inicioHoy, hasta: new Date(inicioHoy.getTime() + 24 * 3600_000), vencidas: false }
+  if (rango === 'mañana') { const d = new Date(inicioHoy.getTime() + 24 * 3600_000); return { desde: d, hasta: new Date(d.getTime() + 24 * 3600_000), vencidas: false } }
+  if (rango === 'esta_semana') return { desde: inicioHoy, hasta: new Date(inicioHoy.getTime() + 7 * 24 * 3600_000), vencidas: false }
+  return { desde: null, hasta: null, vencidas: true }
+}
+
+async function calcularRespuestaConsultaCitas(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+  const rango = ['hoy', 'mañana', 'esta_semana', 'vencidas'].includes(c.rango_fecha_citas) ? c.rango_fecha_citas : 'hoy'
+  const { desde, hasta, vencidas } = rangoCitasGT(rango)
+
+  let query = supabase
+    .from('actividades')
+    .select('id, tipo_actividad, programada_en, contacto:contactos(nombre_completo)')
+    .eq('organization_id', perfil.organization_id)
+    .in('tipo_actividad', TIPOS_ACTIVIDAD_CONSULTA)
+    .is('completada_en', null)
+    .order('programada_en', { ascending: true })
+    .limit(20)
+  if (perfil.rol === 'agente') query = query.eq('agente_id', perfil.id)
+  if (vencidas) query = query.lt('programada_en', new Date().toISOString())
+  else query = query.gte('programada_en', desde!.toISOString()).lt('programada_en', hasta!.toISOString())
+
+  const { data, error } = await query
+  if (error) return 'Uy, no pude consultar tus citas en este momento 😓'
+
+  const etiquetaRango: Record<string, string> = { hoy: 'para hoy', mañana: 'para mañana', esta_semana: 'esta semana', vencidas: 'vencidas' }
+  if (!data || data.length === 0) return `No tienes citas ${etiquetaRango[rango]} 🙂`
+  const lineas = data.map((a: any) => {
+    const contacto = Array.isArray(a.contacto) ? a.contacto[0] : a.contacto
+    return `• ${formatearHoraGT(a.programada_en)} — ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}`
+  })
+  return [`📅 Tienes ${data.length} cita${data.length === 1 ? '' : 's'} ${etiquetaRango[rango]}:`, ...lineas].join('\n')
+}
+
+async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+  let query = supabase
+    .from('propiedades')
+    .select('id, titulo, tipo_operacion, zona, ciudad, precio, moneda, dormitorios, banos, area_construccion_m2')
+    .eq('organization_id', perfil.organization_id)
+    .eq('estado', 'disponible')
+    .order('creado_en', { ascending: false })
+    .limit(5)
+  if (c.tipo_operacion === 'venta' || c.tipo_operacion === 'renta') query = query.eq('tipo_operacion', c.tipo_operacion)
+  if (TIPOS_PROPIEDAD_VALIDOS.includes(c.tipo_propiedad)) query = query.eq('tipo_propiedad', c.tipo_propiedad)
+  if (c.zona) query = query.ilike('zona', `%${String(c.zona).trim()}%`)
+  if (typeof c.precio_min === 'number') query = query.gte('precio', c.precio_min)
+  if (typeof c.precio_max === 'number') query = query.lte('precio', c.precio_max)
+  if (typeof c.dormitorios_min === 'number') query = query.gte('dormitorios', c.dormitorios_min)
+  if (typeof c.banos_min === 'number') query = query.gte('banos', c.banos_min)
+
+  const { data, error } = await query
+  if (error) return 'Uy, no pude buscar en el inventario en este momento 😓'
+  if (!data || data.length === 0) return 'No encontré propiedades disponibles con esos criterios 😕 ¿Quieres que busque con otros filtros?'
+  const lineas = data.map((p: any) => {
+    const zonaTxt = formatearZonaDup(p.zona) ?? p.ciudad ?? ''
+    const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
+    const detalles = [p.dormitorios ? `${p.dormitorios} hab` : null, p.banos ? `${p.banos} baños` : null, p.area_construccion_m2 ? `${p.area_construccion_m2} m²` : null].filter(Boolean).join(' · ')
+    return `• ${p.titulo} — ${zonaTxt} — ${precioTxt}${detalles ? ` (${detalles})` : ''} [propiedad ${p.id}]`
+  })
+  return [`🏠 Encontré ${data.length} propiedad${data.length === 1 ? '' : 'es'}:`, '', ...lineas].join('\n')
+}
+
+async function resolverLeadPorNombreContacto(nombreContacto: string | null, perfil: PerfilAsistente): Promise<{ leadId: string; contactoId: string; nombre: string } | null> {
+  if (!nombreContacto || !nombreContacto.trim()) return null
+  const { data: contactosCoincidentes } = await supabase.from('contactos').select('id, nombre_completo').ilike('nombre_completo', `%${nombreContacto.trim()}%`)
+  const contactoIds = (contactosCoincidentes ?? []).map((c) => c.id)
+  if (contactoIds.length === 0) return null
+
+  let query = supabase.from('leads').select('id, contacto_id').eq('organization_id', perfil.organization_id).in('contacto_id', contactoIds).order('actualizado_en', { ascending: false })
+  if (perfil.rol === 'agente') query = query.eq('agente_id', perfil.id)
+  const { data: leadsCoincidentes } = await query
+  if (!leadsCoincidentes || leadsCoincidentes.length === 0) return null
+
+  const contactosDistintos = new Set(leadsCoincidentes.map((l) => l.contacto_id))
+  if (contactosDistintos.size !== 1) return null
+  const masReciente = leadsCoincidentes[0]
+  const nombre = contactosCoincidentes?.find((c) => c.id === masReciente.contacto_id)?.nombre_completo ?? nombreContacto
+  return { leadId: masReciente.id, contactoId: masReciente.contacto_id, nombre }
+}
+
+async function calcularAccionCrearTarea(perfil: PerfilAsistente, titulo: string, nombreContacto: string | null, fechaHoraIso: string, prioridad: string): Promise<string> {
+  const vinculo = await resolverLeadPorNombreContacto(nombreContacto, perfil)
+  const vinculoTxt = nombreContacto ? (vinculo ? ` Vinculada al lead de "${vinculo.nombre}".` : ` No encontré (o hay varios) "${nombreContacto}" entre los leads visibles — quedaría sin vincular.`) : ''
+  return `Se crearía la tarea "${titulo}" (prioridad ${prioridad}) para ${formatearFechaHoraGT(fechaHoraIso)}, asignada a ${perfil.nombre_completo}.${vinculoTxt} Ben la recordaría por WhatsApp automáticamente si no se marca como hecha.`
+}
+
+type ResultadoAsistenteGeneral = {
+  ok: boolean
+  error?: string
+  prompt_enviado_a_ia?: string
+  clasificacion?: Record<string, unknown>
+  mensaje_respuesta?: string
+  accion_descrita?: string
+  requiere_aclaracion?: boolean
+  siguiente_pregunta?: string | null
+  contexto_para_siguiente_turno?: Record<string, unknown> | null
+}
+
+async function manejarAsistenteGeneral(perfil: PerfilAsistente, mensaje: string): Promise<ResultadoAsistenteGeneral> {
+  const prompt = construirPromptConsultaGeneral(mensaje)
+  const c = parsearRespuestaGroq(await llamarGroq(prompt)) as Record<string, any>
+
+  if (c.intencion === 'consultar_leads') {
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularRespuestaConsultaLeads(perfil, c) }
+  }
+  if (c.intencion === 'consultar_citas') {
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularRespuestaConsultaCitas(perfil, c) }
+  }
+  if (c.intencion === 'buscar_propiedades') {
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularRespuestaBusquedaPropiedades(perfil, c) }
+  }
+  if (c.intencion === 'crear_tarea') {
+    const titulo = (c.titulo_tarea && String(c.titulo_tarea).trim()) || 'Tarea de seguimiento'
+    const prioridad = ['baja', 'media', 'alta'].includes(c.prioridad_tarea) ? c.prioridad_tarea : 'media'
+    if (!fechaEsConfiable(c.fecha_hora_iso, c.confianza_fecha)) {
+      return {
+        ok: true, prompt_enviado_a_ia: prompt, clasificacion: c,
+        requiere_aclaracion: true,
+        siguiente_pregunta: '¿Para qué fecha y hora exactas quieres la tarea? Responde citando este mensaje 🙂',
+        contexto_para_siguiente_turno: { titulo_tarea: titulo, nombre_contacto: c.nombre_contacto ?? null, prioridad_tarea: prioridad },
+      }
+    }
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, accion_descrita: await calcularAccionCrearTarea(perfil, titulo, c.nombre_contacto ?? null, c.fecha_hora_iso, prioridad) }
+  }
+  const nombre = perfil.nombre_completo.split(' ')[0]
+  return {
+    ok: true,
+    prompt_enviado_a_ia: prompt,
+    clasificacion: c,
+    mensaje_respuesta: [
+      `¡Hola ${nombre}! 😊 Soy Ben, tu asistente del CRM, puedo ayudarte con cosas como:`,
+      '• "¿Cuántos leads tengo en visita agendada?"',
+      '• "¿Qué citas tengo hoy?"',
+      '• "Busca casas en zona 10 hasta Q1.8M"',
+      '• "Créame una tarea para llamar a Juan mañana a las 10am"',
+      '¿En qué te ayudo? 🙂',
+    ].join('\n'),
+  }
+}
+
+async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaje: string, contextoPrevio: { titulo_tarea: string; nombre_contacto: string | null; prioridad_tarea: string }): Promise<ResultadoAsistenteGeneral> {
+  const prompt = construirPromptAclaracionFecha(mensaje)
+  const clasificacion = parsearRespuestaGroq(await llamarGroq(prompt)) as { fecha_hora_iso: string | null; confianza_fecha: string }
+  if (!fechaEsConfiable(clasificacion.fecha_hora_iso, clasificacion.confianza_fecha)) {
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion, mensaje_respuesta: 'Sigue sin quedarme clara la fecha 😅 Mejor créala manualmente desde el CRM con la fecha exacta que necesitas.' }
+  }
+  return {
+    ok: true, prompt_enviado_a_ia: prompt, clasificacion,
+    accion_descrita: await calcularAccionCrearTarea(perfil, contextoPrevio.titulo_tarea, contextoPrevio.nombre_contacto, clasificacion.fecha_hora_iso, contextoPrevio.prioridad_tarea),
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-notificacion-secret') !== PRUEBA_SECRET) {
     return new Response('No autorizado', { status: 401 })
@@ -370,10 +654,12 @@ Deno.serve(async (req) => {
     fase?: string
     mensaje_asesor?: string
     es_reintento_aclaracion?: boolean
-    modo?: 'pregunta_inicial'
+    modo?: 'pregunta_inicial' | 'asistente_general' | 'asistente_general_aclaracion'
     agente_nombre?: string
     tipo_actividad?: string
     contacto_nombre?: string
+    perfil_id?: string
+    contexto_previo?: { titulo_tarea: string; nombre_contacto: string | null; prioridad_tarea: string }
   }
   try {
     body = await req.json()
@@ -391,6 +677,31 @@ Deno.serve(async (req) => {
       body.contacto_nombre || 'el cliente'
     )
     return new Response(JSON.stringify({ ok: true, pregunta }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  if (body.modo === 'asistente_general' || body.modo === 'asistente_general_aclaracion') {
+    if (!body.perfil_id) return new Response(JSON.stringify({ ok: false, error: 'Falta perfil_id' }), { status: 400 })
+    const mensajeAsesor = body.mensaje_asesor ?? ''
+    if (!mensajeAsesor.trim()) return new Response(JSON.stringify({ ok: false, error: 'Falta mensaje_asesor' }), { status: 400 })
+
+    const { data: perfil, error: errorPerfil } = await supabase
+      .from('perfiles')
+      .select('id, nombre_completo, rol, organization_id')
+      .eq('id', body.perfil_id)
+      .maybeSingle()
+    if (errorPerfil || !perfil) {
+      return new Response(JSON.stringify({ ok: false, error: 'Perfil no encontrado' }), { status: 400 })
+    }
+
+    try {
+      const resultado =
+        body.modo === 'asistente_general'
+          ? await manejarAsistenteGeneral(perfil as PerfilAsistente, mensajeAsesor)
+          : await manejarAsistenteGeneralAclaracion(perfil as PerfilAsistente, mensajeAsesor, body.contexto_previo!)
+      return new Response(JSON.stringify(resultado), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    } catch (err) {
+      return new Response(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    }
   }
 
   const fase = body.fase ?? 'resultado_visita'
