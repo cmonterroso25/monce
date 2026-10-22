@@ -426,10 +426,10 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     contextoFecha,
     'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
     `Mensaje: "${mensaje}"`,
-    'Clasifica la intención en exactamente una de estas 5 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Clasifica la intención en exactamente una de estas 6 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
     'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
     '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
-    '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (solo si etapa_lead es "ganada" o "perdida"; si no especificó, usa "este_mes").',
+    '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
     '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|null.',
@@ -498,6 +498,60 @@ async function calcularRespuestaConsultaLeads(perfil: PerfilAsistente, c: Record
   return etapaLead === 'ganada'
     ? `🎉 ${perfil.rol === 'agente' ? 'Llevas' : 'El equipo lleva'} ${total} lead${total === 1 ? '' : 's'} ganado${total === 1 ? '' : 's'} ${rangoTxt}. ¡Sigue así!`
     : `${total} lead${total === 1 ? '' : 's'} se ${total === 1 ? 'marcó' : 'marcaron'} como perdido${total === 1 ? '' : 's'} ${rangoTxt} 💪. Vamos por los próximos.`
+}
+
+async function calcularReporteDesempeno(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+  if (perfil.rol !== 'administrador') return 'Este reporte está disponible solo para administradores 😊'
+
+  const rango = ['hoy', 'esta_semana', 'este_mes', 'todo'].includes(c.rango_fecha_leads) ? c.rango_fecha_leads : 'este_mes'
+  const desde = inicioRangoLeadsGT(rango)
+
+  let query = supabase
+    .from('leads')
+    .select('etapa, agente_id, motivo_perdida, creado_en, actualizado_en, agente:perfiles!leads_agente_id_fkey(nombre_completo)')
+    .eq('organization_id', perfil.organization_id)
+    .in('etapa', ['ganada', 'perdida'])
+  if (desde) query = query.gte('actualizado_en', desde.toISOString())
+
+  const { data, error } = await query
+  if (error) return 'Uy, no pude armar el reporte en este momento 😓'
+
+  const etiquetaRango: Record<string, string> = { hoy: 'hoy', esta_semana: 'esta semana', este_mes: 'este mes', todo: 'en total' }
+  const rangoTxt = etiquetaRango[rango] ?? 'este mes'
+  if (!data || data.length === 0) return `No hay leads ganados ni perdidos ${rangoTxt} todavía 🙂`
+
+  const porAsesor: Record<string, { nombre: string; ganadas: number; perdidas: number }> = {}
+  const motivos: Record<string, number> = {}
+  let sumaDias = 0
+  for (const l of data as any[]) {
+    const agente = Array.isArray(l.agente) ? l.agente[0] : l.agente
+    const key = l.agente_id ?? 'sin_asesor'
+    if (!porAsesor[key]) porAsesor[key] = { nombre: agente?.nombre_completo ?? 'Sin asesor', ganadas: 0, perdidas: 0 }
+    if (l.etapa === 'ganada') porAsesor[key].ganadas++
+    else {
+      porAsesor[key].perdidas++
+      if (l.motivo_perdida) motivos[l.motivo_perdida] = (motivos[l.motivo_perdida] ?? 0) + 1
+    }
+    sumaDias += (new Date(l.actualizado_en).getTime() - new Date(l.creado_en).getTime()) / 86_400_000
+  }
+
+  const lineasAsesores = Object.values(porAsesor)
+    .sort((a, b) => b.ganadas + b.perdidas - (a.ganadas + a.perdidas))
+    .map((a) => {
+      const total = a.ganadas + a.perdidas
+      const pct = total > 0 ? Math.round((a.ganadas / total) * 100) : 0
+      return `• ${a.nombre}: ${a.ganadas} ganada${a.ganadas === 1 ? '' : 's'} / ${a.perdidas} perdida${a.perdidas === 1 ? '' : 's'} (${pct}%)`
+    })
+  const lineasMotivos = Object.entries(motivos).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([motivo, n]) => `• ${motivo}: ${n}`)
+  const promedioDias = Math.round(sumaDias / data.length)
+
+  const bloques = [
+    `📊 Reporte del equipo (${rangoTxt}):`,
+    ['Conversión por asesor:', ...lineasAsesores].join('\n'),
+    lineasMotivos.length > 0 ? ['Motivos de pérdida más comunes:', ...lineasMotivos].join('\n') : null,
+    `Tiempo promedio de cierre: ${promedioDias} día${promedioDias === 1 ? '' : 's'} (desde que se creó el lead hasta Ganada/Perdida).`,
+  ].filter(Boolean) as string[]
+  return bloques.join('\n\n')
 }
 
 function rangoCitasGT(rango: string): { desde: Date | null; hasta: Date | null; vencidas: boolean } {
@@ -608,6 +662,9 @@ async function manejarAsistenteGeneral(perfil: PerfilAsistente, mensaje: string)
 
   if (c.intencion === 'consultar_leads') {
     return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularRespuestaConsultaLeads(perfil, c) }
+  }
+  if (c.intencion === 'reporte_desempeno') {
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularReporteDesempeno(perfil, c) }
   }
   if (c.intencion === 'consultar_citas') {
     return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, mensaje_respuesta: await calcularRespuestaConsultaCitas(perfil, c) }

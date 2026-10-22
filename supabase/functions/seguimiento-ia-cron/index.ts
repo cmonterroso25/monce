@@ -60,6 +60,19 @@ function formatearFechaHoraGT(iso: string): string {
   })
 }
 
+// Guatemala es UTC-6 fijo, sin horario de verano.
+function componentesGT(fecha: Date): { anio: number; mes: number; dia: number } {
+  const partes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(fecha)
+  const obtener = (tipo: string) => Number(partes.find((p) => p.type === tipo)?.value)
+  return { anio: obtener('year'), mes: obtener('month'), dia: obtener('day') }
+}
+function inicioDeDiaGT(anio: number, mes: number, dia: number): Date {
+  return new Date(`${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T00:00:00-06:00`)
+}
+function formatearHoraGT(iso: string): string {
+  return new Date(iso).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala' })
+}
+
 async function enviarWhatsapp(params: {
   chatId: string
   mensaje: string
@@ -233,7 +246,6 @@ async function procesarRecordatoriosDeTareas() {
       'id, titulo, asignado_a, organization_id, ' +
         'asesor:perfiles!tareas_asignado_a_fkey(nombre_completo, telefono)'
     )
-    .eq('creado_por_ia', true)
     .eq('estado', 'pendiente')
     .not('recordatorio_proximo_en', 'is', null)
     .lte('recordatorio_proximo_en', new Date().toISOString())
@@ -340,18 +352,180 @@ async function procesarRecordatoriosCitaAsesor() {
   return { recordatorios24h, recordatorios2h }
 }
 
+// Leads no terminales que llevan 7+ días sin ningún cambio (leads.actualizado_en
+// se mueve en cada moverEtapa/edición) — Ben le pregunta al dueño del lead
+// qué ha pasado. Aviso puramente informativo (no procesa respuesta): si el
+// lead sigue sin moverse, se repite cada 7 días hasta que algo cambie.
+async function procesarAlertaLeadsInactivos() {
+  const hace7d = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
+  // El contador solo aplica a leads ingresados DE HOY EN ADELANTE — a
+  // propósito, para no disparar una avalancha de alertas sobre el
+  // backlog completo de leads viejos que ya existían. Un lead creado
+  // ayer o antes nunca entra a esta alerta, sin importar cuánto lleve
+  // inactivo.
+  const { anio, mes, dia } = componentesGT(new Date())
+  const inicioHoy = inicioDeDiaGT(anio, mes, dia).toISOString()
+
+  const { data: leads, error } = await supabase
+    .from('leads')
+    .select(
+      'id, agente_id, contacto_id, organization_id, etapa, actualizado_en, ' +
+        'contacto:contactos(nombre_completo), agente:perfiles!leads_agente_id_fkey(nombre_completo, telefono)'
+    )
+    .not('etapa', 'in', `(${ETAPAS_TERMINALES.join(',')})`)
+    .gte('creado_en', inicioHoy)
+    .lte('actualizado_en', hace7d)
+    .or(`alerta_inactividad_enviada_en.is.null,alerta_inactividad_enviada_en.lte.${hace7d}`)
+    // Tope por corrida: por si en algún momento hay varios leads de hoy
+    // calificando a la vez, se reparte entre corridas de 15 min en vez de
+    // mandar todo de una sola vez.
+    .limit(20)
+
+  if (error) {
+    console.error('Error consultando leads inactivos:', error)
+    return { alertasLeadsInactivos: 0 }
+  }
+  if (!leads || leads.length === 0) return { alertasLeadsInactivos: 0 }
+
+  let enviados = 0
+  for (const l of leads) {
+    const agente = Array.isArray(l.agente) ? l.agente[0] : l.agente
+    const contacto = Array.isArray(l.contacto) ? l.contacto[0] : l.contacto
+    if (!agente?.telefono) {
+      console.error(`Lead ${l.id}: el asesor ${l.agente_id} no tiene teléfono registrado, se omite alerta.`)
+      continue
+    }
+    const mensaje = `Hola ${agente.nombre_completo ?? ''}, soy Ben 😊 El lead de ${contacto?.nombre_completo ?? 'un cliente'} lleva más de una semana sin actividad registrada. ¿Qué ha pasado con él? Cuéntame para ayudarte a no perderlo de vista.`
+    await enviarWhatsapp({
+      chatId: telefonoAChatId(agente.telefono),
+      mensaje,
+      organizationId: l.organization_id,
+      agenteId: l.agente_id,
+      actividadId: null,
+      tipoNotificacion: 'alerta_lead_inactivo',
+    })
+    await supabase.from('leads').update({ alerta_inactividad_enviada_en: new Date().toISOString() }).eq('id', l.id)
+    enviados++
+  }
+  return { alertasLeadsInactivos: enviados }
+}
+
+// Resumen diario proactivo: dispara una sola vez al día (pg_cron aparte,
+// ver 20261021150000_cron_resumen_diario.sql) con body {"modo":"resumen_diario"},
+// a diferencia del resto de este archivo que corre cada 15 min. Solo le
+// escribe al asesor si hay algo que reportar — nunca "no tienes nada
+// pendiente" porque sí.
+async function procesarResumenDiario() {
+  const ahora = new Date()
+  const { anio, mes, dia } = componentesGT(ahora)
+  const inicioHoy = inicioDeDiaGT(anio, mes, dia)
+  const finHoy = new Date(inicioHoy.getTime() + 24 * 3600_000)
+  const hace7d = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
+  const ahoraIso = ahora.toISOString()
+
+  const { data: perfiles, error: errorPerfiles } = await supabase
+    .from('perfiles')
+    .select('id, nombre_completo, telefono, organization_id')
+    .eq('activo', true)
+    .not('telefono', 'is', null)
+
+  if (errorPerfiles) {
+    console.error('Error consultando perfiles para el resumen diario:', errorPerfiles)
+    return { resumenesDiarios: 0 }
+  }
+
+  let enviados = 0
+  for (const p of perfiles ?? []) {
+    const [{ data: citas }, { data: tareasVencidas }, { data: leadsFrios }] = await Promise.all([
+      supabase
+        .from('actividades')
+        .select('tipo_actividad, programada_en, contacto:contactos(nombre_completo)')
+        .eq('agente_id', p.id)
+        .in('tipo_actividad', TIPOS_SEGUIMIENTO)
+        .is('completada_en', null)
+        .gte('programada_en', inicioHoy.toISOString())
+        .lt('programada_en', finHoy.toISOString())
+        .order('programada_en', { ascending: true }),
+      supabase
+        .from('tareas')
+        .select('titulo')
+        .eq('asignado_a', p.id)
+        .eq('estado', 'pendiente')
+        .lt('fecha_limite', ahoraIso)
+        .order('fecha_limite', { ascending: true }),
+      supabase
+        .from('leads')
+        .select('id, contacto:contactos(nombre_completo)')
+        .eq('agente_id', p.id)
+        .not('etapa', 'in', `(${ETAPAS_TERMINALES.join(',')})`)
+        .lte('actualizado_en', hace7d),
+    ])
+
+    const numCitas = citas?.length ?? 0
+    const numTareas = tareasVencidas?.length ?? 0
+    const numFrios = leadsFrios?.length ?? 0
+    if (numCitas === 0 && numTareas === 0 && numFrios === 0) continue
+
+    const bloques: string[] = [`¡Buenos días ${p.nombre_completo ?? ''}! 😊 Soy Ben, esto es lo que tienes hoy:`]
+
+    if (numCitas > 0) {
+      const lineas = (citas ?? []).slice(0, 5).map((a: any) => {
+        const contacto = Array.isArray(a.contacto) ? a.contacto[0] : a.contacto
+        return `  • ${formatearHoraGT(a.programada_en)} — ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'}`
+      })
+      bloques.push([`📅 ${numCitas} cita${numCitas === 1 ? '' : 's'} hoy:`, ...lineas].join('\n'))
+    }
+    if (numTareas > 0) {
+      const lineas = (tareasVencidas ?? []).slice(0, 5).map((t: any) => `  • ${t.titulo}`)
+      bloques.push([`⚠️ ${numTareas} tarea${numTareas === 1 ? '' : 's'} vencida${numTareas === 1 ? '' : 's'}:`, ...lineas].join('\n'))
+    }
+    if (numFrios > 0) {
+      const lineas = (leadsFrios ?? []).slice(0, 5).map((l: any) => {
+        const contacto = Array.isArray(l.contacto) ? l.contacto[0] : l.contacto
+        return `  • ${contacto?.nombre_completo ?? 'un lead'}`
+      })
+      bloques.push([`🥶 ${numFrios} lead${numFrios === 1 ? '' : 's'} sin actividad hace 7+ días:`, ...lineas].join('\n'))
+    }
+    bloques.push('¡Que tengas un excelente día! 🙌')
+
+    await enviarWhatsapp({
+      chatId: telefonoAChatId(p.telefono!),
+      mensaje: bloques.join('\n\n'),
+      organizationId: p.organization_id,
+      agenteId: p.id,
+      actividadId: null,
+      tipoNotificacion: 'resumen_diario',
+    })
+    enviados++
+  }
+  return { resumenesDiarios: enviados }
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-notificacion-secret') !== FUNCTION_SECRET) {
     return new Response('No autorizado', { status: 401 })
+  }
+
+  let body: { modo?: string } = {}
+  try {
+    body = await req.json()
+  } catch {
+    // El cron de cada 15 min manda body vacío ('{}') — no es un error.
+  }
+
+  if (body.modo === 'resumen_diario') {
+    const resumen = await procesarResumenDiario()
+    return new Response(JSON.stringify({ ok: true, ...resumen }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
   const nuevas = await procesarCandidatasNuevas()
   const reintentos = await procesarReintentosYVencidos()
   const tareas = await procesarRecordatoriosDeTareas()
   const recordatoriosCita = await procesarRecordatoriosCitaAsesor()
+  const alertasInactivos = await procesarAlertaLeadsInactivos()
 
   return new Response(
-    JSON.stringify({ ok: true, ...nuevas, ...reintentos, ...tareas, ...recordatoriosCita }),
+    JSON.stringify({ ok: true, ...nuevas, ...reintentos, ...tareas, ...recordatoriosCita, ...alertasInactivos }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   )
 })

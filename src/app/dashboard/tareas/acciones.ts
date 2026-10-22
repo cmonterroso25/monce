@@ -19,15 +19,20 @@ export async function crearTarea(formData: FormData) {
     .eq('id', user.id)
     .single()
 
+  const fechaLimite = textoOpcional(formData.get('fecha_limite'))
   const { error } = await supabase.from('tareas').insert({
     titulo: formData.get('titulo') as string,
-    fecha_limite: textoOpcional(formData.get('fecha_limite')),
+    fecha_limite: fechaLimite,
     prioridad: (formData.get('prioridad') as string) || 'media',
     estado: 'pendiente',
     asignado_a: textoOpcional(formData.get('asignado_a')) || user.id,
     contacto_id: textoOpcional(formData.get('contacto_id')),
     lead_id: textoOpcional(formData.get('lead_id')),
     organization_id: perfil?.organization_id,
+    // Ben recuerda por WhatsApp cualquier tarea con fecha límite, no solo
+    // las que él mismo crea — se siembra con la misma fecha, igual
+    // criterio que seguimiento-ia-webhook/index.ts (crearTarea).
+    recordatorio_proximo_en: fechaLimite,
   })
 
   if (error) {
@@ -45,17 +50,25 @@ export async function actualizarTarea(formData: FormData) {
   if (!user) redirect('/login')
 
   const tareaId = formData.get('tarea_id') as string
+  const nuevaFechaLimite = textoOpcional(formData.get('fecha_limite'))
+
+  const { data: antes } = await supabase.from('tareas').select('fecha_limite').eq('id', tareaId).maybeSingle()
+  // Si cambió la fecha límite, se resiembra el recordatorio sobre la
+  // nueva fecha — si no, el cron lo daría por ya enviado/vencido sobre
+  // la fecha vieja.
+  const cambioFecha = antes && antes.fecha_limite !== nuevaFechaLimite
 
   const { error } = await supabase
     .from('tareas')
     .update({
       titulo: formData.get('titulo') as string,
-      fecha_limite: textoOpcional(formData.get('fecha_limite')),
+      fecha_limite: nuevaFechaLimite,
       prioridad: (formData.get('prioridad') as string) || 'media',
       estado: (formData.get('estado') as string) || 'pendiente',
       asignado_a: textoOpcional(formData.get('asignado_a')),
       contacto_id: textoOpcional(formData.get('contacto_id')),
       lead_id: textoOpcional(formData.get('lead_id')),
+      ...(cambioFecha ? { recordatorio_proximo_en: nuevaFechaLimite } : {}),
     })
     .eq('id', tareaId)
 
