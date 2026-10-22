@@ -402,7 +402,7 @@ const ETIQUETAS_ETAPA: Record<string, string> = {
   reservada: 'Reservada', ganada: 'Ganada', perdida: 'Perdida',
 }
 const TIPOS_ACTIVIDAD_CONSULTA = ['cita', 'reunion', 'video_llamada', 'llamada', 'firma_contrato']
-const TIPOS_PROPIEDAD_VALIDOS = ['casa', 'apartamento', 'terreno', 'bodega', 'oficina', 'ofibodega', 'finca', 'granja']
+const TIPOS_PROPIEDAD_VALIDOS = ['casa', 'apartamento', 'terreno', 'bodega', 'oficina', 'ofibodega', 'finca', 'granja', 'local', 'edificio']
 const ETAPAS_FINALIZADAS_PARA_CONTEO = ['ganada', 'perdida']
 
 function componentesGT(fecha: Date): { anio: number; mes: number; dia: number } {
@@ -440,7 +440,7 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
-    '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|null.',
+    '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
     '- zona: el texto de zona/ubicación mencionado, o null.',
     '- precio_min, precio_max, dormitorios_min, banos_min: número o null.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',

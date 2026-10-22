@@ -7,4 +7,6 @@ export const TIPOS_PROPIEDAD = [
   { value: 'ofibodega', label: 'Ofibodega' },
   { value: 'finca', label: 'Finca' },
   { value: 'granja', label: 'Granja' },
+  { value: 'local', label: 'Local' },
+  { value: 'edificio', label: 'Edificio' },
 ] as const

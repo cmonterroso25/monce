@@ -10,6 +10,8 @@ const EMOJI_TIPO: Record<string, string> = {
   ofibodega: '🏭',
   finca: '🌾',
   granja: '🐄',
+  local: '🏬',
+  edificio: '🏙️',
 }
 
 // Umbral (en caracteres) que decide la estructura del texto en
