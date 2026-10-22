@@ -564,6 +564,11 @@ export async function actualizarActividad(formData: FormData) {
     ? await validarColegas(supabase, formData.getAll('colegas_ids') as string[], antes?.organization_id)
     : []
   const nuevoColegaId = hayCajaColegas ? colegasIdsNuevos[0] ?? null : antes?.colega_id ?? null
+  // Si cambió la fecha/hora, se resetean los recordatorios al asesor
+  // (24h/2h antes) para que se vuelvan a calcular sobre la nueva fecha —
+  // si no, el cron los daría por ya enviados y nunca avisaría de la cita
+  // reprogramada.
+  const cambioFecha = Boolean(nuevaProgramadaEn && antes && antes.programada_en !== nuevaProgramadaEn)
 
   const { error } = await supabase
     .from('actividades')
@@ -573,6 +578,7 @@ export async function actualizarActividad(formData: FormData) {
       notas: textoOpcional(formData.get('notas')),
       agente_id: nuevoAgenteId,
       colega_id: nuevoColegaId,
+      ...(cambioFecha ? { recordatorio_agente_24h_enviado_en: null, recordatorio_agente_2h_enviado_en: null } : {}),
     })
     .eq('id', actividadId)
 

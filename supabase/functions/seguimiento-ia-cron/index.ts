@@ -54,6 +54,12 @@ function telefonoAChatId(telefono: string): string {
   return `${conCodigoPais}@c.us`
 }
 
+function formatearFechaHoraGT(iso: string): string {
+  return new Date(iso).toLocaleString('es-GT', {
+    weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Guatemala',
+  })
+}
+
 async function enviarWhatsapp(params: {
   chatId: string
   mensaje: string
@@ -271,6 +277,69 @@ async function procesarRecordatoriosDeTareas() {
   return { recordatoriosTareas: enviados }
 }
 
+// Recordatorio al asesor que CUBRE la cita (agente_id) 24h y 2h antes de
+// que ocurra — no al cliente (fuera de alcance por ahora). Cada tramo se
+// marca con su propio *_enviado_en para no reenviar en cada corrida del
+// cron (cada 15 min); el 24h se omite si ya estamos a menos de 2h (para
+// no duplicar con el aviso de 2h en citas de último momento). Si la cita
+// se reprograma, actualizarActividad (src/app/dashboard/leads/acciones.ts)
+// resetea ambos campos a null para recalcular sobre la nueva fecha.
+async function procesarRecordatoriosCitaAsesor() {
+  const ahora = Date.now()
+  const ahoraIso = new Date(ahora).toISOString()
+  const en2h = new Date(ahora + 2 * 3600_000).toISOString()
+  const en24h = new Date(ahora + 24 * 3600_000).toISOString()
+
+  const SELECT_BASE =
+    'id, lead_id, agente_id, contacto_id, tipo_actividad, programada_en, organization_id, ' +
+    'contacto:contactos(nombre_completo), agente:perfiles!actividades_agente_id_fkey(nombre_completo, telefono)'
+
+  async function enviarTramo(columna: string, desde: string, hasta: string, etiquetaTiempo: string) {
+    const { data: actividades, error } = await supabase
+      .from('actividades')
+      .select(SELECT_BASE)
+      .in('tipo_actividad', TIPOS_SEGUIMIENTO)
+      .is('completada_en', null)
+      .is(columna, null)
+      .gt('programada_en', desde)
+      .lte('programada_en', hasta)
+
+    if (error) {
+      console.error(`Error consultando recordatorios de cita (${columna}):`, error)
+      return 0
+    }
+    let enviados = 0
+    for (const a of actividades ?? []) {
+      const contacto = Array.isArray(a.contacto) ? a.contacto[0] : a.contacto
+      const agente = Array.isArray(a.agente) ? a.agente[0] : a.agente
+      if (!agente?.telefono) {
+        console.error(`Actividad ${a.id}: el asesor ${a.agente_id} no tiene teléfono registrado, se omite recordatorio.`)
+        continue
+      }
+      const mensaje = `¡Hola ${agente.nombre_completo ?? ''}! 😊 Soy Ben, recordatorio${etiquetaTiempo}: tienes ${ETIQUETA_TIPO[a.tipo_actividad] ?? a.tipo_actividad} con ${contacto?.nombre_completo ?? 'el cliente'} el ${formatearFechaHoraGT(a.programada_en)}.`
+      await enviarWhatsapp({
+        chatId: telefonoAChatId(agente.telefono),
+        mensaje,
+        organizationId: a.organization_id,
+        agenteId: a.agente_id,
+        actividadId: a.id,
+        tipoNotificacion: columna === 'recordatorio_agente_24h_enviado_en' ? 'recordatorio_agente_24h' : 'recordatorio_agente_2h',
+      })
+      await supabase.from('actividades').update({ [columna]: new Date().toISOString() }).eq('id', a.id)
+      enviados++
+    }
+    return enviados
+  }
+
+  const recordatorios2h = await enviarTramo('recordatorio_agente_2h_enviado_en', ahoraIso, en2h, ' (en 2 horas)')
+  // El de 24h solo mira citas que todavía están a MÁS de 2h (evita
+  // duplicar con el de 2h en citas de último momento, programadas con
+  // menos de 24h de anticipación).
+  const recordatorios24h = await enviarTramo('recordatorio_agente_24h_enviado_en', en2h, en24h, '')
+
+  return { recordatorios24h, recordatorios2h }
+}
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-notificacion-secret') !== FUNCTION_SECRET) {
     return new Response('No autorizado', { status: 401 })
@@ -279,9 +348,10 @@ Deno.serve(async (req) => {
   const nuevas = await procesarCandidatasNuevas()
   const reintentos = await procesarReintentosYVencidos()
   const tareas = await procesarRecordatoriosDeTareas()
+  const recordatoriosCita = await procesarRecordatoriosCitaAsesor()
 
   return new Response(
-    JSON.stringify({ ok: true, ...nuevas, ...reintentos, ...tareas }),
+    JSON.stringify({ ok: true, ...nuevas, ...reintentos, ...tareas, ...recordatoriosCita }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   )
 })
