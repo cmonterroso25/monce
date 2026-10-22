@@ -102,6 +102,7 @@ function telefonoAChatId(telefono: string): string {
 // fases, para que el tono sea siempre el mismo (ánimo vs. celebración).
 const MENSAJE_PERDIDA = 'Entendido, no te preocupes — ¡seguro pronto llega el cliente ideal! 💪 Gracias por el seguimiento.'
 const MENSAJE_GANADA = '🎉🎉 ¡FELICIDADES!! Lograste cerrar el trato, excelente trabajo 🙌🏆 Moví el lead a Ganada. ¡Gracias por todo el seguimiento que le diste!'
+const MENSAJE_RESERVADA = '🎉 ¡Buenísimo! Registré la reserva — moví el lead a Reservada. ¡Excelente trabajo! Seguimos de cerca hasta la firma.'
 
 function fechaHoraGuatemalaTexto(): string {
   const ahora = new Date()
@@ -122,16 +123,16 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
         contextoFecha,
         'Ya se confirmó que el cliente SÍ asistió/atendió la cita o llamada. Un asesor inmobiliario respondió algo ambiguo sobre el RESULTADO de esa visita, y se le pidió que aclarara.',
         `Respuesta del asesor: "${mensajeAsesor}"`,
-        'Clasifica cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto sigue sin permitir determinarlo. Marca requiere_revision_documentos=true solo si menciona papelería/documentos pendientes de revisar.',
-        'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
+        'Clasifica cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar, o ya reservó), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto sigue sin permitir determinarlo. Marca requiere_revision_documentos=true solo si menciona papelería/documentos pendientes de revisar. Si resultado_cliente es "reservo", determina además ya_reservo: true SOLO si el asesor CONFIRMA que la reserva YA SE REALIZÓ/FORMALIZÓ (ej. "ya reservó", "ya pagó el enganche", "ya firmamos la reserva"), false si todavía es solo intención de reservar ("quiere reservar", "va a reservar", "está interesado"). Para cualquier otro resultado_cliente, pon ya_reservo en false.',
+        'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "ya_reservo": true|false, "resumen": "texto breve"}.',
       ].join('\n')
     }
     return [
       contextoFecha,
       'Un asesor inmobiliario respondió por WhatsApp a la pregunta "¿qué pasó con tu cita/llamada con el cliente?".',
       `Respuesta del asesor: "${mensajeAsesor}"`,
-      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar — no que ya reservó formalmente, solo que esa es su intención), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false.',
-      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true|false, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "resumen": "texto breve"}.',
+      'Clasifica si el cliente asistió/atendió, y si asistió, cuál fue el resultado: "reservo" (el cliente EXPRESÓ que quiere reservar, o ya reservó), "perdido" (no le interesó, definitivo), "indeciso_mas_opciones" (quiere ver más propiedades), "indeciso_sin_decision" (el cliente aún no ha dado una respuesta/decisión — "quedó pendiente", "lo está pensando", "no ha respondido todavía"), o "no_concluyente" si el texto no permite determinarlo con confianza. No asumas "reservo" ni "perdido" salvo que el texto sea claro. Además, marca requiere_revision_documentos=true solo si el asesor menciona que el cliente va a enviar papelería/documentos para que los revisen antes de confirmar la reserva; si no lo menciona, ponlo en false. Si resultado_cliente es "reservo", determina además ya_reservo: true SOLO si el asesor CONFIRMA que la reserva YA SE REALIZÓ/FORMALIZÓ (ej. "ya reservó", "ya pagó el enganche", "ya firmamos la reserva"), false si todavía es solo intención de reservar ("quiere reservar", "va a reservar", "está interesado"). Para cualquier otro resultado_cliente, pon ya_reservo en false.',
+      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"asistio": true|false, "resultado_cliente": "reservo"|"perdido"|"indeciso_mas_opciones"|"indeciso_sin_decision"|"no_concluyente", "requiere_revision_documentos": true|false, "ya_reservo": true|false, "resumen": "texto breve"}.',
     ].join('\n')
   }
   if (fase === 'reprogramar') {
@@ -168,10 +169,10 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
       contextoFecha,
       esAclaracion
         ? 'El asesor ya dijo que van a agendar la firma de contrato, pero su mensaje anterior no dejó clara la fecha/hora. Se le volvió a preguntar.'
-        : 'Se le preguntó al asesor cómo va el trato con el cliente: si ya agendaron la firma de contrato, si el trato ya se ganó, si se perdió, o si siguen esperando sin nada nuevo todavía.',
+        : 'Se le preguntó al asesor cómo va el trato con el cliente: si ya reservó, si ya agendaron la firma de contrato, si el trato ya se ganó, si se perdió, o si siguen esperando sin nada nuevo todavía.',
       `Respuesta del asesor: "${mensajeAsesor}"`,
-      'Determina resultado: "agendar_firma" (van a agendar o ya agendaron la firma de contrato — conviértelo a fecha_hora_iso si dio fecha, con confianza_fecha), "ganada" (el trato ya se cerró/ganó), "perdida" (el cliente ya no sigue, se pierde el trato), o "seguir_esperando" (no hay nada nuevo todavía, sigue en lo mismo). No inventes una fecha si no la mencionó.',
-      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"resultado": "agendar_firma"|"ganada"|"perdida"|"seguir_esperando", "fecha_hora_iso": "YYYY-MM-DDTHH:mm:ss-06:00"|null, "confianza_fecha": "alta"|"media"|"baja"|"ninguna"}.',
+      'Determina resultado: "reservo" (el cliente CONFIRMA que ya reservó/formalizó la reserva, pero aún no se ha firmado el contrato — no uses esto si solo menciona que van a agendar la firma, usa "agendar_firma" en ese caso), "agendar_firma" (van a agendar o ya agendaron la firma de contrato — conviértelo a fecha_hora_iso si dio fecha, con confianza_fecha), "ganada" (el trato ya se cerró/ganó, firma incluida), "perdida" (el cliente ya no sigue, se pierde el trato), o "seguir_esperando" (no hay nada nuevo todavía, sigue en lo mismo). No inventes una fecha si no la mencionó.',
+      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"resultado": "reservo"|"agendar_firma"|"ganada"|"perdida"|"seguir_esperando", "fecha_hora_iso": "YYYY-MM-DDTHH:mm:ss-06:00"|null, "confianza_fecha": "alta"|"media"|"baja"|"ninguna"}.',
     ].join('\n')
   }
   if (fase === 'resultado_firma') {
@@ -316,7 +317,7 @@ async function obtenerNombreContacto(contactoId: string | null): Promise<string>
 // repite cada 24h hasta que el lead llegue a Ganada o Perdida.
 async function preguntaSeguimientoRecurrente(contactoId: string | null): Promise<string> {
   const nombreContacto = await obtenerNombreContacto(contactoId)
-  return `¿Cómo va todo con ${nombreContacto}? ¿Ya agendaron la firma de contrato, se ganó el trato, se perdió, o seguimos esperando? Si agendan la firma, dime para cuándo. Responde citando este mensaje.`
+  return `¿Cómo va todo con ${nombreContacto}? ¿Ya reservó, ya agendaron la firma de contrato, se ganó el trato, se perdió, o seguimos esperando? Si agendan la firma, dime para cuándo. Responde citando este mensaje.`
 }
 
 async function crearTarea(params: {
@@ -445,7 +446,7 @@ async function cerrarParaRevisionManual(seguimiento: SeguimientoRow, motivo: str
 async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAsesor: string) {
   const clasificacion = parsearRespuestaGroq(
     await llamarGroq(construirPrompt('resultado_visita', mensajeAsesor, seguimiento.es_reintento_aclaracion))
-  ) as { asistio: boolean; resultado_cliente: string; requiere_revision_documentos: boolean; resumen: string }
+  ) as { asistio: boolean; resultado_cliente: string; requiere_revision_documentos: boolean; ya_reservo: boolean; resumen: string }
 
   // En una aclaración de esta misma fase, "asistio" ya es un hecho
   // confirmado del turno anterior (si no hubiera asistido, ya estaríamos
@@ -471,10 +472,20 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
   }
 
   if (clasificacion.resultado_cliente === 'reservo') {
-    // "Reservo" es la intención verbal del cliente, no una reserva ya
-    // formalizada — el lead se queda en "visita_realizada" y se gestiona
-    // con una acción de seguimiento. Nunca se salta directo a "reservada",
-    // y el ciclo de 24h sigue (seguimiento_recurrente) hasta Ganada/Perdida.
+    // El asesor confirmó que la reserva YA SE REALIZÓ (no solo intención)
+    // — recién aquí se mueve directo a "Reservada" y se cierra el
+    // seguimiento de esta cita.
+    if (clasificacion.ya_reservo) {
+      await registrarComentario(seguimiento.actividad_id, `Cliente reservó. ${clasificacion.resumen}`)
+      await moverEtapa(seguimiento, 'reservada', clasificacion.resumen)
+      await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_RESERVADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+      await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+      return
+    }
+    // Todavía es solo intención verbal, no una reserva formalizada — el
+    // lead se queda en "visita_realizada" y se gestiona con una acción de
+    // seguimiento; el ciclo de 24h (seguimiento_recurrente) sigue y ahí
+    // se puede confirmar la reserva más adelante.
     await moverEtapa(seguimiento, 'visita_realizada', clasificacion.resumen)
     let mensajeRespuesta: string
     if (clasificacion.requiere_revision_documentos) {
@@ -663,6 +674,13 @@ async function procesarSeguimientoRecurrente(seguimiento: SeguimientoRow, mensaj
     await llamarGroq(construirPrompt('seguimiento_recurrente', mensajeAsesor, seguimiento.es_reintento_aclaracion))
   ) as { resultado: string; fecha_hora_iso: string | null; confianza_fecha: string }
 
+  if (clasificacion.resultado === 'reservo') {
+    await moverEtapa(seguimiento, 'reservada', 'El cliente confirmó la reserva.')
+    await registrarComentario(seguimiento.actividad_id, 'El cliente confirmó la reserva.')
+    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_RESERVADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+    return
+  }
   if (clasificacion.resultado === 'agendar_firma') {
     if (clasificacion.confianza_fecha === 'baja' || clasificacion.confianza_fecha === 'ninguna' || !clasificacion.fecha_hora_iso) {
       if (seguimiento.es_reintento_aclaracion) {
