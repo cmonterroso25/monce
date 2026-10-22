@@ -1,7 +1,57 @@
 import { createClient } from '@/lib/supabase/server'
 import { urlSitio } from '@/lib/url'
-import { notificarWhatsapp, obtenerChatIdGrupo, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
+import { notificarWhatsapp, obtenerChatIdGrupo, telefonoAChatId, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
 import { mensajeWhatsappPropiedad, type PropiedadMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
+
+const ETAPAS_TERMINALES_LEAD = ['ganada', 'reservada', 'perdida']
+
+// Avisa por WhatsApp a cada asesor que tenga leads (no terminales)
+// interesados en esta propiedad — por leads.propiedad_id (interés
+// principal) o por la tabla lead_propiedades (interés adicional). Un solo
+// mensaje por asesor aunque tenga varios leads interesados en la misma
+// propiedad; construirMensaje recibe los nombres de esos contactos ya
+// unidos en texto.
+export async function notificarLeadsInteresadosPropiedad(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  propiedadId: string,
+  organizationId: string,
+  tipoNotificacion: string,
+  construirMensaje: (nombresContactos: string) => string
+) {
+  const [{ data: directos }, { data: relacionados }] = await Promise.all([
+    supabase.from('leads').select('id').eq('propiedad_id', propiedadId).eq('organization_id', organizationId),
+    supabase.from('lead_propiedades').select('lead_id').eq('propiedad_id', propiedadId),
+  ])
+  const idsLeads = Array.from(new Set([...(directos ?? []).map((l) => l.id), ...(relacionados ?? []).map((r) => r.lead_id)]))
+  if (idsLeads.length === 0) return
+
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('id, agente_id, etapa, contacto:contactos(nombre_completo), agente:perfiles(nombre_completo, telefono)')
+    .in('id', idsLeads)
+    .not('etapa', 'in', `(${ETAPAS_TERMINALES_LEAD.join(',')})`)
+  if (!leads || leads.length === 0) return
+
+  const porAsesor = new Map<string, { telefono: string; contactos: string[] }>()
+  for (const l of leads as any[]) {
+    const agente = Array.isArray(l.agente) ? l.agente[0] : l.agente
+    const contacto = Array.isArray(l.contacto) ? l.contacto[0] : l.contacto
+    if (!agente?.telefono) continue
+    const entrada = porAsesor.get(l.agente_id) ?? { telefono: agente.telefono, contactos: [] as string[] }
+    entrada.contactos.push(contacto?.nombre_completo ?? 'un cliente')
+    porAsesor.set(l.agente_id, entrada)
+  }
+
+  for (const [agenteId, { telefono, contactos }] of porAsesor) {
+    await notificarWhatsapp({
+      chatId: telefonoAChatId(telefono),
+      mensaje: construirMensaje(contactos.join(', ')),
+      organizationId,
+      tipoNotificacion,
+      agenteId,
+    })
+  }
+}
 export const SELECT_PROPIEDAD_CON_MUNICIPIO = `
   *,
   municipio:municipios (nombre),

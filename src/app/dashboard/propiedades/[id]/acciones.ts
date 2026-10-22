@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
-import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad, aPropiedadMarketplace, SELECT_PROPIEDAD_CON_MUNICIPIO } from '@/lib/whatsapp/notificar-propiedad'
+import { grupoParaOperacion, urlPropiedadParaWhatsapp, obtenerUrlPortada, notificarFichaPropiedad, notificarLeadsInteresadosPropiedad, aPropiedadMarketplace, SELECT_PROPIEDAD_CON_MUNICIPIO } from '@/lib/whatsapp/notificar-propiedad'
 import { generarTextoMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
 // Mensaje que se envía al grupo de WhatsApp al entrar a cada estado. "reservada"
 // tiene su propio aviso (distinto de las bajas definitivas) porque es reversible.
@@ -66,6 +66,22 @@ export async function actualizarEstadoPropiedad(propiedadId: string, nuevoEstado
       })
     }
   }
+  // Avisa individualmente (no al grupo) a cada asesor con leads interesados
+  // en esta propiedad puntual, cuando deja de estar disponible — para que
+  // pueda avisarle a su cliente y ofrecerle otras opciones antes de que se
+  // entere por su cuenta.
+  const ETIQUETA_ESTADO_LEAD: Record<string, string> = { vendida: 'Vendida', rentada: 'Rentada', inactiva: 'Inactiva', reservada: 'Reservada' }
+  if (propiedad && estadoAnterior === 'disponible' && nuevoEstado !== 'disponible' && ETIQUETA_ESTADO_LEAD[nuevoEstado]) {
+    await notificarLeadsInteresadosPropiedad(
+      supabase,
+      propiedadId,
+      propiedad.organization_id,
+      'alerta_lead_propiedad_no_disponible',
+      (nombres) =>
+        `Hola, soy Ben 😊 La propiedad "${propiedad.titulo}" ya no está disponible (ahora: ${ETIQUETA_ESTADO_LEAD[nuevoEstado]}). Tenías lead(s) interesados: ${nombres}. Puede que quieras avisarles y ofrecerles otras opciones.`
+    )
+  }
+
   // Reactivación: la propiedad vuelve a "disponible" desde cualquier otro
   // estado (vendida, rentada, inactiva, reservada, etc.). Se envía la
   // ficha completa igual que en "propiedad nueva" y en las ediciones

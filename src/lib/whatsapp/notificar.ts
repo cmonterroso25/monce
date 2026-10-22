@@ -1,5 +1,15 @@
 export type GrupoWhatsapp = 'ventas' | 'rentas' | 'citas'
 
+// 8 dígitos locales de Guatemala -> chatId individual de Green API. Mismo
+// criterio que telefonoAChatId en las Edge Functions del agente de
+// seguimiento (supabase/functions/seguimiento-ia-*), duplicado aquí porque
+// este archivo corre en el runtime de Next.js, no en Deno.
+export function telefonoAChatId(telefono: string): string {
+  const soloDigitos = telefono.replace(/\D/g, '')
+  const conCodigoPais = soloDigitos.length === 8 ? `502${soloDigitos}` : soloDigitos
+  return `${conCodigoPais}@c.us`
+}
+
 interface ClienteConsulta {
   from: (tabla: string) => any
 }

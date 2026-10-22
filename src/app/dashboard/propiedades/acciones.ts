@@ -4,7 +4,7 @@ import { subirImagen, eliminarImagenR2, copiarImagenR2 } from '@/lib/r2/subir-im
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { urlSitio } from '@/lib/url'
-import { notificarFichaPropiedad } from '@/lib/whatsapp/notificar-propiedad'
+import { notificarFichaPropiedad, notificarLeadsInteresadosPropiedad } from '@/lib/whatsapp/notificar-propiedad'
 import { parsearUbicacion } from '@/lib/ubicaciones/parsear'
 
 function generarSlug(titulo: string) {
@@ -396,6 +396,24 @@ export async function actualizarPropiedadDatos(formData: FormData): Promise<{
       encabezado,
       tipoNotificacion
     )
+
+    // Aviso individual (no al grupo) a cada asesor con leads interesados en
+    // ESTA propiedad puntual, cuando cambia el precio — para que pueda
+    // contactar a su cliente antes de que se entere por su cuenta.
+    if (tipoNotificacion === 'baja_precio' || tipoNotificacion === 'sube_precio') {
+      const direccion = tipoNotificacion === 'baja_precio' ? 'bajó' : 'subió'
+      const moneda = nuevosDatos.moneda ?? 'GTQ'
+      const precioAnteriorTxt = precioAnterior != null ? precioAnterior.toLocaleString('es-GT') : '—'
+      const precioNuevoTxt = precioNuevo.toLocaleString('es-GT')
+      await notificarLeadsInteresadosPropiedad(
+        supabase,
+        propiedadId,
+        organizationId,
+        tipoNotificacion,
+        (nombres) =>
+          `Hola, soy Ben 😊 La propiedad "${titulo}" ${direccion} de precio: ${moneda} ${precioAnteriorTxt} → ${moneda} ${precioNuevoTxt}. Tenías lead(s) interesados: ${nombres}. Puede ser buen momento para contactarlos.`
+      )
+    }
   }
 
   revalidatePath('/dashboard/propiedades')
