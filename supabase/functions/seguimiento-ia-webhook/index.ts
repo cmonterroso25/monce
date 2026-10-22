@@ -28,7 +28,10 @@ const WHATSAPP_ENVIAR_URL = `${SUPABASE_URL}/functions/v1/whatsapp-enviar`
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-const ETAPAS_TERMINALES = ['ganada', 'reservada', 'perdida']
+// Solo las verdaderamente finales — "reservada" ya no bloquea moverEtapa,
+// porque el seguimiento continúa después de reservar hasta la firma
+// (eventualmente debe poder pasar de reservada -> ganada).
+const ETAPAS_TERMINALES = ['ganada', 'perdida']
 
 // ---------------------------------------------------------------------
 // Groq (API compatible con OpenAI): se usa en vez de Gemini porque el
@@ -315,8 +318,11 @@ async function obtenerNombreContacto(contactoId: string | null): Promise<string>
 // terminal sin una actividad futura con fecha ya agendada (reservo
 // pendiente, documentación en revisión, "ninguno por ahora", etc.) — se
 // repite cada 24h hasta que el lead llegue a Ganada o Perdida.
-async function preguntaSeguimientoRecurrente(contactoId: string | null): Promise<string> {
+async function preguntaSeguimientoRecurrente(contactoId: string | null, yaReservada = false): Promise<string> {
   const nombreContacto = await obtenerNombreContacto(contactoId)
+  if (yaReservada) {
+    return `¿Cómo va la firma de contrato con ${nombreContacto}? ¿Ya se agendó, ya se realizó, se perdió el trato, o seguimos esperando? Si se agendó, dime para cuándo. Responde citando este mensaje.`
+  }
   return `¿Cómo va todo con ${nombreContacto}? ¿Ya reservó, ya agendaron la firma de contrato, se ganó el trato, se perdió, o seguimos esperando? Si agendan la firma, dime para cuándo. Responde citando este mensaje.`
 }
 
@@ -473,13 +479,14 @@ async function procesarResultadoVisita(seguimiento: SeguimientoRow, mensajeAseso
 
   if (clasificacion.resultado_cliente === 'reservo') {
     // El asesor confirmó que la reserva YA SE REALIZÓ (no solo intención)
-    // — recién aquí se mueve directo a "Reservada" y se cierra el
-    // seguimiento de esta cita.
+    // — recién aquí se mueve directo a "Reservada". El ciclo NO se cierra:
+    // continúa cada 24h enfocado en la firma de contrato, hasta Ganada.
     if (clasificacion.ya_reservo) {
       await registrarComentario(seguimiento.actividad_id, `Cliente reservó. ${clasificacion.resumen}`)
       await moverEtapa(seguimiento, 'reservada', clasificacion.resumen)
       await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_RESERVADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
-      await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+      const preguntaFirma = await preguntaSeguimientoRecurrente(seguimiento.contacto_id, true)
+      await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', preguntaFirma, new Date(Date.now() + 24 * 3600_000))
       return
     }
     // Todavía es solo intención verbal, no una reserva formalizada — el
@@ -675,10 +682,18 @@ async function procesarSeguimientoRecurrente(seguimiento: SeguimientoRow, mensaj
   ) as { resultado: string; fecha_hora_iso: string | null; confianza_fecha: string }
 
   if (clasificacion.resultado === 'reservo') {
-    await moverEtapa(seguimiento, 'reservada', 'El cliente confirmó la reserva.')
-    await registrarComentario(seguimiento.actividad_id, 'El cliente confirmó la reserva.')
-    await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_RESERVADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
-    await supabase.from('seguimientos_ia').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', seguimiento.id)
+    // Si ya estaba en "reservada" (ej. el asesor vuelve a confirmar algo
+    // que ya se sabía), no se repite el comentario ni el mensaje de
+    // felicitación — solo se sigue preguntando por la firma.
+    const { data: leadActual } = await supabase.from('leads').select('etapa').eq('id', seguimiento.lead_id).maybeSingle()
+    if (leadActual?.etapa !== 'reservada') {
+      await moverEtapa(seguimiento, 'reservada', 'El cliente confirmó la reserva.')
+      await registrarComentario(seguimiento.actividad_id, 'El cliente confirmó la reserva.')
+      await responderAsesor(seguimiento.chat_id_asesor, MENSAJE_RESERVADA, seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
+    }
+    // No se cierra: el ciclo de 24h sigue, ahora enfocado en la firma.
+    const preguntaFirma = await preguntaSeguimientoRecurrente(seguimiento.contacto_id, true)
+    await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', preguntaFirma, new Date(Date.now() + 24 * 3600_000))
     return
   }
   if (clasificacion.resultado === 'agendar_firma') {
@@ -713,9 +728,12 @@ async function procesarSeguimientoRecurrente(seguimiento: SeguimientoRow, mensaj
   }
   // seguir_esperando: se responde ahora y se reprograma la MISMA pregunta
   // para dentro de 24h (intento se reinicia, así que un asesor que sigue
-  // respondiendo nunca llega a "vencido" por esta vía).
+  // respondiendo nunca llega a "vencido" por esta vía). Si el lead ya
+  // está reservado, la pregunta se mantiene enfocada en la firma en vez
+  // de volver a preguntar "¿ya reservó?".
   await responderAsesor(seguimiento.chat_id_asesor, 'Entendido, sin problema 😊 Te pregunto de nuevo en 24 horas. ¡Gracias por mantenerme al tanto!', seguimiento.organization_id, seguimiento.agente_id, seguimiento.actividad_id)
-  const pregunta = await preguntaSeguimientoRecurrente(seguimiento.contacto_id)
+  const { data: leadParaPregunta } = await supabase.from('leads').select('etapa').eq('id', seguimiento.lead_id).maybeSingle()
+  const pregunta = await preguntaSeguimientoRecurrente(seguimiento.contacto_id, leadParaPregunta?.etapa === 'reservada')
   await programarPreguntaFutura(seguimiento, 'seguimiento_recurrente', pregunta, new Date(Date.now() + 24 * 3600_000))
 }
 

@@ -22,7 +22,15 @@ const WHATSAPP_ENVIAR_URL = `${SUPABASE_URL}/functions/v1/whatsapp-enviar`
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 const TIPOS_SEGUIMIENTO = ['cita', 'reunion', 'video_llamada', 'llamada', 'firma_contrato']
+// "Reservada" ya NO es terminal para efectos de seguir dando seguimiento
+// (el ciclo continúa hasta la firma) — ETAPAS_TERMINALES sigue incluyéndola
+// solo para las señales de "lead frío"/resumen diario (una vez reservada,
+// el lead tiene su propio seguimiento dedicado cada 24h, no necesita
+// además la alerta genérica de inactividad). ETAPAS_CERRADAS son las
+// verdaderamente finales, usadas para no reabrir un seguimiento de cita
+// sobre un trato ya cerrado.
 const ETAPAS_TERMINALES = ['ganada', 'reservada', 'perdida']
+const ETAPAS_CERRADAS = ['ganada', 'perdida']
 
 // Cadencia de reintentos por fase: la mayoría son "no respondió, insiste
 // cada 24h hasta 3 veces". confirmar_envio_propiedades es distinta: el
@@ -139,7 +147,7 @@ async function procesarCandidatasNuevas() {
   for (const a of actividades) {
     if (idsConSeguimiento.has(a.id)) continue
     const lead = Array.isArray(a.lead) ? a.lead[0] : a.lead
-    if (!lead || ETAPAS_TERMINALES.includes(lead.etapa)) continue
+    if (!lead || ETAPAS_CERRADAS.includes(lead.etapa)) continue
     const agente = Array.isArray(a.agente) ? a.agente[0] : a.agente
     const contacto = Array.isArray(a.contacto) ? a.contacto[0] : a.contacto
     if (!agente?.telefono) {

@@ -203,8 +203,10 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
     if (clasificacion.ya_reservo) {
       return {
         clasificacion,
-        accion_descrita: `Se mueve el lead a "Reservada" y se cierra el seguimiento de esta cita. Mensaje al asesor: "${MENSAJE_RESERVADA}"`,
-        siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
+        accion_descrita: `Se mueve el lead a "Reservada". NO se cierra: sigue cada 24h enfocado en la firma. Mensaje al asesor: "${MENSAJE_RESERVADA}"`,
+        siguiente_fase: 'seguimiento_recurrente',
+        siguiente_pregunta: '¿Cómo va la firma de contrato? ¿Ya se agendó, ya se realizó, se perdió el trato, o seguimos esperando? Si se agendó, dime para cuándo. Responde citando este mensaje.',
+        es_reintento_aclaracion_siguiente: false, terminal: false,
       }
     }
     if (clasificacion.requiere_revision_documentos) {
@@ -329,7 +331,13 @@ function evaluarConfirmarEnvioPropiedades(clasificacion: any): Resultado {
 
 function evaluarSeguimientoRecurrente(clasificacion: any, esAclaracion: boolean): Resultado {
   if (clasificacion.resultado === 'reservo') {
-    return { clasificacion, accion_descrita: `Se mueve el lead a "Reservada". Fin del ciclo. Mensaje al asesor: "${MENSAJE_RESERVADA}"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
+    return {
+      clasificacion,
+      accion_descrita: `Se mueve el lead a "Reservada" (si no lo estaba ya). NO se cierra: sigue cada 24h enfocado en la firma. Mensaje al asesor: "${MENSAJE_RESERVADA}"`,
+      siguiente_fase: 'seguimiento_recurrente',
+      siguiente_pregunta: '¿Cómo va la firma de contrato? ¿Ya se agendó, ya se realizó, se perdió el trato, o seguimos esperando? Si se agendó, dime para cuándo. Responde citando este mensaje.',
+      es_reintento_aclaracion_siguiente: false, terminal: false,
+    }
   }
   if (clasificacion.resultado === 'agendar_firma') {
     const confianza = clasificacion.confianza_fecha as string
