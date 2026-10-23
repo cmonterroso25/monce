@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { urlSitio } from '@/lib/url'
 import { notificarWhatsapp, obtenerChatIdGrupo, telefonoAChatId, type GrupoWhatsapp } from '@/lib/whatsapp/notificar'
 import { mensajeWhatsappPropiedad, type PropiedadMarketplace } from '@/lib/whatsapp/mensaje-marketplace'
+import { ETIQUETAS_CARACTERISTICA } from '@/app/dashboard/requerimientos/constantes'
 
 const ETAPAS_TERMINALES_LEAD = ['ganada', 'reservada', 'perdida']
 
@@ -188,4 +189,174 @@ export async function notificarFichaPropiedad(
     agenteId,
     imagenUrl,
   })
+}
+
+// ---------------------------------------------------------------------
+// Ben: avisa a un agente cuando una propiedad recién ingresada coincide
+// con un requerimiento que él registró. dormitorios/banos/niveles son
+// columnas de texto en propiedades (igual que en el resto del proyecto),
+// por eso se parsean con Number(...) en vez de compararse directo.
+// ---------------------------------------------------------------------
+
+const UMBRAL_COINCIDENCIA_REQUERIMIENTO = 80
+
+function numeroONull(valor: unknown): number | null {
+  const n = Number(valor)
+  return Number.isFinite(n) ? n : null
+}
+
+function propiedadTieneCaracteristica(propiedad: any, caracteristica: string): boolean {
+  const texto = `${propiedad.amenidades ?? ''} ${propiedad.extras ?? ''} ${propiedad.descripcion ?? ''}`.toLowerCase()
+  switch (caracteristica) {
+    case 'mascotas': return !!propiedad.mascota && propiedad.mascota.trim().toLowerCase() !== 'no'
+    case 'closets': return texto.includes('closet')
+    case 'pergola': return texto.includes('pérgola') || texto.includes('pergola')
+    case 'parqueo_techado': return texto.includes('techado')
+    case 'piscina': return texto.includes('piscina')
+    case 'gimnasio': return texto.includes('gimnasio') || texto.includes('gym')
+    case 'salon_eventos': return texto.includes('salón') || texto.includes('salon') || texto.includes('eventos')
+    case 'seguridad_24h': return texto.includes('seguridad')
+    case 'cancha_deportiva': return texto.includes('cancha')
+    case 'area_de_juegos': return texto.includes('juegos')
+    case 'amueblado': return texto.includes('amueblado') || texto.includes('amoblad')
+    case 'jardin': return !!propiedad.jardin || texto.includes('jardín') || texto.includes('jardin')
+    case 'terraza': return texto.includes('terraza')
+    case 'bodega': return propiedad.bodega === 'Si' || texto.includes('bodega')
+    default: return false
+  }
+}
+
+// Puntaje 0-100: se reparte en 6 "cubetas" (operación, tipo, ubicación,
+// precio, distribución de ambientes, características) de peso fijo. Una
+// cubeta solo cuenta si el requerimiento de verdad pidió algo en ella —
+// si no, no entra ni al numerador ni al denominador, para que un
+// requerimiento con pocos criterios llenados igual pueda llegar a 100%
+// en vez de quedar artificialmente bajo por campos que nunca se pidieron.
+export function evaluarCoincidenciaRequerimiento(
+  propiedad: any,
+  requerimiento: any
+): { score: number; caracteristicasCoincidentes: string[] } {
+  let ganados = 0
+  let aplicables = 0
+
+  if (requerimiento.tipo_operacion) {
+    aplicables += 10
+    if (propiedad.tipo_operacion === requerimiento.tipo_operacion) ganados += 10
+  }
+
+  if (requerimiento.tipo_propiedad) {
+    aplicables += 10
+    if (propiedad.tipo_propiedad === requerimiento.tipo_propiedad) ganados += 10
+  }
+
+  if (requerimiento.zona || requerimiento.sector || requerimiento.municipio_id) {
+    aplicables += 20
+    const zonaOk = !!requerimiento.zona && !!propiedad.zona && propiedad.zona.toLowerCase().includes(String(requerimiento.zona).toLowerCase())
+    const sectorOk = !!requerimiento.sector && !!propiedad.sector && propiedad.sector.toLowerCase().includes(String(requerimiento.sector).toLowerCase())
+    const municipioOk = !!requerimiento.municipio_id && requerimiento.municipio_id === propiedad.municipio_id
+    if (zonaOk || sectorOk || municipioOk) ganados += 20
+  }
+
+  // Si las monedas no coinciden no se compara (evita asumir un tipo de
+  // cambio que podría quedar desactualizado) — esa cubeta simplemente no aplica.
+  if ((requerimiento.precio_min || requerimiento.precio_max) && requerimiento.moneda === propiedad.moneda) {
+    aplicables += 20
+    const min = requerimiento.precio_min ?? 0
+    const max = requerimiento.precio_max ?? Infinity
+    const precioProp = Number(propiedad.precio ?? NaN)
+    if (Number.isFinite(precioProp) && precioProp >= min && precioProp <= max) ganados += 20
+  }
+
+  const subcriteriosDistribucion: Array<[number | null | undefined, number | null]> = [
+    [requerimiento.dormitorios_min, numeroONull(propiedad.dormitorios)],
+    [requerimiento.banos_min, numeroONull(propiedad.banos)],
+    [requerimiento.niveles_min, numeroONull(propiedad.niveles)],
+    [requerimiento.parqueos_min, propiedad.parqueos ?? null],
+    [requerimiento.area_min, propiedad.area_construccion_m2 ?? propiedad.area_terreno_m2 ?? null],
+  ]
+  const aplicablesDistribucion = subcriteriosDistribucion.filter(([req]) => req !== null && req !== undefined)
+  if (aplicablesDistribucion.length > 0) {
+    aplicables += 20
+    const cumplidos = aplicablesDistribucion.filter(([req, val]) => val !== null && val >= req!).length
+    ganados += 20 * (cumplidos / aplicablesDistribucion.length)
+  }
+
+  const caracteristicasPedidas: string[] = requerimiento.caracteristicas_deseadas ?? []
+  const otras = String(requerimiento.otras_caracteristicas ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  const totalCaracteristicas = caracteristicasPedidas.length + otras.length
+  const caracteristicasCoincidentes: string[] = []
+  if (totalCaracteristicas > 0) {
+    aplicables += 20
+    const textoPropiedad = `${propiedad.amenidades ?? ''} ${propiedad.extras ?? ''} ${propiedad.descripcion ?? ''}`.toLowerCase()
+    for (const c of caracteristicasPedidas) {
+      if (propiedadTieneCaracteristica(propiedad, c)) caracteristicasCoincidentes.push(ETIQUETAS_CARACTERISTICA[c] ?? c)
+    }
+    for (const o of otras) {
+      if (textoPropiedad.includes(o.toLowerCase())) caracteristicasCoincidentes.push(o)
+    }
+    ganados += 20 * (caracteristicasCoincidentes.length / totalCaracteristicas)
+  }
+
+  if (aplicables === 0) return { score: 0, caracteristicasCoincidentes: [] }
+  return { score: Math.round((ganados / aplicables) * 100), caracteristicasCoincidentes }
+}
+
+// Se llama al crear una propiedad (no al editarla): recorre los
+// requerimientos de la organización y avisa por WhatsApp, en privado, al
+// agente que registró cada uno que llegue al umbral — nunca al grupo, esto
+// es un aviso dirigido a una sola persona sobre su propio cliente.
+export async function notificarRequerimientosCoincidentes(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  propiedadId: string,
+  organizationId: string
+) {
+  const { data: propiedad } = await supabase.from('propiedades').select('*').eq('id', propiedadId).single()
+  if (!propiedad) return
+
+  const { data: requerimientos } = await supabase
+    .from('requerimientos')
+    .select('*, contacto:contactos(nombre_completo), creador:perfiles!creado_por(nombre_completo, telefono)')
+    .eq('organization_id', organizationId)
+  if (!requerimientos || requerimientos.length === 0) return
+
+  for (const requerimiento of requerimientos as any[]) {
+    const { score, caracteristicasCoincidentes } = evaluarCoincidenciaRequerimiento(propiedad, requerimiento)
+    if (score < UMBRAL_COINCIDENCIA_REQUERIMIENTO) continue
+
+    const creador = Array.isArray(requerimiento.creador) ? requerimiento.creador[0] : requerimiento.creador
+    const contacto = Array.isArray(requerimiento.contacto) ? requerimiento.contacto[0] : requerimiento.contacto
+    if (!creador?.telefono) continue
+
+    const ubicacion = [propiedad.zona ? `Zona ${propiedad.zona}` : null, propiedad.sector].filter(Boolean).join(' · ')
+    const area = propiedad.area_construccion_m2 ?? propiedad.area_terreno_m2
+    const detalles = [
+      propiedad.dormitorios ? `${propiedad.dormitorios} hab` : null,
+      propiedad.banos ? `${propiedad.banos} baños` : null,
+      area ? `${area} m²` : null,
+    ].filter(Boolean).join(' · ')
+    const precioTxt = `${propiedad.moneda ?? 'GTQ'} ${Number(propiedad.precio ?? 0).toLocaleString()}`
+
+    const mensaje = [
+      `🎯 *¡Posible coincidencia con un requerimiento!* (${score}%)`,
+      `Esta propiedad recién ingresada podría interesarle a ${contacto?.nombre_completo ?? 'tu cliente'}:`,
+      '',
+      `🏠 ${propiedad.titulo}`,
+      `🔑 Código: ${propiedad.codigo}`,
+      ubicacion ? `📍 ${ubicacion}` : null,
+      `💰 ${precioTxt}`,
+      detalles ? `📐 ${detalles}` : null,
+      caracteristicasCoincidentes.length > 0 ? `✅ Coincide en: ${caracteristicasCoincidentes.join(', ')}` : null,
+      '',
+      urlPropiedadParaWhatsapp(propiedadId),
+    ].filter(Boolean).join('\n')
+
+    await notificarWhatsapp({
+      chatId: telefonoAChatId(creador.telefono),
+      mensaje,
+      organizationId,
+      tipoNotificacion: 'requerimiento_coincidente',
+      agenteId: requerimiento.creado_por,
+      contactoId: requerimiento.contacto_id,
+    })
+  }
 }

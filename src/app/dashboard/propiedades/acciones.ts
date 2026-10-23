@@ -4,7 +4,7 @@ import { subirImagen, eliminarImagenR2, copiarImagenR2 } from '@/lib/r2/subir-im
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { urlSitio } from '@/lib/url'
-import { notificarFichaPropiedad, notificarLeadsInteresadosPropiedad } from '@/lib/whatsapp/notificar-propiedad'
+import { notificarFichaPropiedad, notificarLeadsInteresadosPropiedad, notificarRequerimientosCoincidentes } from '@/lib/whatsapp/notificar-propiedad'
 import { parsearUbicacion } from '@/lib/ubicaciones/parsear'
 
 function generarSlug(titulo: string) {
@@ -232,6 +232,14 @@ export async function crearPropiedadDatos(formData: FormData): Promise<{
   // La notificación de "nueva propiedad" ya NO se dispara aquí: se movió a
   // subir-foto/route.ts, en la primera foto subida, para que el enlace
   // siempre tenga imagen cuando WhatsApp genere la vista previa.
+
+  // El aviso de "coincide con un requerimiento" SÍ se dispara aquí (no
+  // espera a la primera foto): es un mensaje privado al agente con los
+  // datos y el código para que la busque en el CRM, no una vista previa
+  // pública que necesite imagen.
+  if (organizationId) {
+    await notificarRequerimientosCoincidentes(supabase, propiedad.id as string, organizationId)
+  }
 
   revalidatePath('/dashboard/propiedades')
   return { ok: true, propiedadId: propiedad.id as string }
