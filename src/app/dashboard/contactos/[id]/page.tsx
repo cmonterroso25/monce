@@ -6,6 +6,12 @@ import { BuscarCoincidencias, MarcarNotificada, MarcarNotificadaExterna } from '
 import { CompartirPropiedad } from '../compartir-propiedad'
 import BotonEliminarContacto from '../boton-eliminar-contacto'
 import { ETIQUETAS_ETAPA, COLORES_ETAPA } from '../../leads/constantes'
+import { ETIQUETAS_TIPO_OPERACION } from '../../requerimientos/constantes'
+import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
+
+const ETIQUETA_TIPO_PROPIEDAD: Record<string, string> = Object.fromEntries(
+  TIPOS_PROPIEDAD.map((t) => [t.value, t.label])
+)
 
 const R2_PUBLIC_URL = 'https://pub-55c4b2ef6141404ea53237416303a621.r2.dev'
 
@@ -39,6 +45,13 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
     .select('id, etapa, valor_negocio, propiedad:propiedades(titulo)')
     .eq('contacto_id', id)
     .order('creado_en', { ascending: false })
+
+  const { data: requerimientosData } = await supabase
+    .from('requerimientos')
+    .select('id, tipo_operacion, tipo_propiedad, precio_min, precio_max, moneda, zona, sector, municipio:municipios(nombre)')
+    .eq('contacto_id', id)
+    .order('creado_en', { ascending: false })
+  const requerimientos = (requerimientosData ?? []) as any[]
 
   const { data: coincidenciasData } = await supabase
     .from('coincidencias_propiedad')
@@ -149,6 +162,50 @@ export default async function DetalleContacto({ params }: { params: Promise<{ id
               </div>
             </Link>
           ))}
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Requerimientos</h2>
+          <Link
+            href={`/dashboard/requerimientos/nuevo?contacto_id=${id}`}
+            className="text-sm font-medium text-[#38B6FF] hover:underline"
+          >
+            + Agregar requerimiento
+          </Link>
+        </div>
+
+        {requerimientos.length === 0 && (
+          <p className="text-sm text-slate-400">Este contacto aún no tiene requerimientos registrados.</p>
+        )}
+
+        <div className="space-y-2">
+          {requerimientos.map((r) => {
+            const municipio = Array.isArray(r.municipio) ? r.municipio[0] : r.municipio
+            const ubicacion = [r.zona ? `Zona ${r.zona}` : null, r.sector, municipio?.nombre].filter(Boolean).join(' · ')
+            const presupuesto =
+              r.precio_min || r.precio_max
+                ? `${r.moneda ?? 'GTQ'} ${Number(r.precio_min ?? 0).toLocaleString()}${r.precio_max ? ` - ${Number(r.precio_max).toLocaleString()}` : '+'}`
+                : null
+            return (
+              <Link
+                key={r.id}
+                href={`/dashboard/requerimientos/${r.id}/editar`}
+                className="flex items-center justify-between rounded border border-slate-100 px-3 py-2 text-sm transition hover:bg-slate-50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-[#2C3E50]">
+                    {[r.tipo_operacion ? ETIQUETAS_TIPO_OPERACION[r.tipo_operacion] : null, r.tipo_propiedad ? ETIQUETA_TIPO_PROPIEDAD[r.tipo_propiedad] : null]
+                      .filter(Boolean)
+                      .join(' · ') || 'Cualquier tipo'}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">{ubicacion || 'Sin ubicación especificada'}{presupuesto ? ` · ${presupuesto}` : ''}</p>
+                </div>
+                <ArrowUpRight size={14} className="flex-shrink-0 text-slate-400" />
+              </Link>
+            )
+          })}
         </div>
       </div>
 
