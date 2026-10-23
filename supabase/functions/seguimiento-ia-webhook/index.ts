@@ -981,21 +981,24 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     contextoFecha,
     'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
     `Mensaje: "${mensaje}"`,
-    'Clasifica la intención en exactamente una de estas 6 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Clasifica la intención en exactamente una de estas 7 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
     'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
     '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
     '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
     '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
-    '- zona: el texto de zona/ubicación mencionado, o null.',
-    '- precio_min, precio_max, dormitorios_min, banos_min: número o null.',
+    '- zona: el texto de zona/ubicación general mencionado (ej. "zona 14"), o null.',
+    '- sector, condominio: para "buscar_propiedades", el sector o el nombre del condominio mencionados (ubicación más específica que zona), o null cada uno.',
+    '- municipio: para "buscar_propiedades", el municipio mencionado (ej. "Mixco", "Santa Catarina Pinula"), o null.',
+    '- amenidades: para "buscar_propiedades", arreglo de palabras clave de amenidades o características mencionadas (ej. ["piscina","gimnasio"]), o null si no mencionó ninguna.',
+    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
-    '- nombre_contacto: para crear_tarea, el nombre de la persona mencionada si la tarea es sobre un cliente específico, o null.',
-    '- fecha_hora_iso: para crear_tarea, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
+    '- nombre_contacto: para crear_tarea o agendar_cita, el nombre completo del cliente/contacto mencionado, o null.',
+    '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
     '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
-    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "zona": string|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "zona": string|null, "sector": string|null, "condominio": string|null, "municipio": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
   ].join('\n')
 }
 
@@ -1024,6 +1027,7 @@ function mensajeConversacionGeneral(nombreCompleto: string): string {
     '• "¿Qué citas tengo hoy?"',
     '• "Busca casas en zona 10 hasta Q1.8M"',
     '• "Créame una tarea para llamar a Juan mañana a las 10am"',
+    '• "Agéndame una cita con Juan Pérez el jueves a las 3pm"',
     '¿En qué te ayudo? 🙂',
   ].join('\n')
 }
@@ -1207,22 +1211,48 @@ async function responderConsultaCitas(perfil: PerfilAsistente, chatId: string, c
   )
 }
 
+// dormitorios/banos/niveles son columnas de TEXTO en la BD (aceptan input
+// libre del formulario, ej. "2.5" o "N/A"), así que un mínimo nunca se
+// compara con gte en la consulta (compararía como texto: "10" < "9"). Se
+// filtran en código con Number(...) después de traer un lote más amplio.
+function numeroONull(valor: unknown): number | null {
+  const n = Number(valor)
+  return Number.isFinite(n) ? n : null
+}
+
 async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
   let query = supabase
     .from('propiedades')
-    .select('id, titulo, tipo_operacion, zona, ciudad, precio, moneda, dormitorios, banos, area_construccion_m2')
+    .select('id, titulo, tipo_operacion, zona, ciudad, sector, condominio, niveles, precio, moneda, dormitorios, banos, area_construccion_m2, area_terreno_m2, amenidades, municipio:municipios(nombre)')
     .eq('organization_id', perfil.organization_id)
     .eq('estado', 'disponible')
     .order('creado_en', { ascending: false })
-    .limit(5)
+    .limit(60)
 
   if (c.tipo_operacion === 'venta' || c.tipo_operacion === 'renta') query = query.eq('tipo_operacion', c.tipo_operacion)
   if (TIPOS_PROPIEDAD_VALIDOS.includes(c.tipo_propiedad)) query = query.eq('tipo_propiedad', c.tipo_propiedad)
   if (c.zona) query = query.ilike('zona', `%${String(c.zona).trim()}%`)
+  if (c.sector) query = query.ilike('sector', `%${String(c.sector).trim()}%`)
+  if (c.condominio) query = query.ilike('condominio', `%${String(c.condominio).trim()}%`)
   if (typeof c.precio_min === 'number') query = query.gte('precio', c.precio_min)
   if (typeof c.precio_max === 'number') query = query.lte('precio', c.precio_max)
-  if (typeof c.dormitorios_min === 'number') query = query.gte('dormitorios', c.dormitorios_min)
-  if (typeof c.banos_min === 'number') query = query.gte('banos', c.banos_min)
+  if (Array.isArray(c.amenidades)) {
+    for (const termino of c.amenidades) {
+      if (typeof termino === 'string' && termino.trim()) query = query.ilike('amenidades', `%${termino.trim()}%`)
+    }
+  }
+
+  if (c.municipio) {
+    const { data: municipioMatch } = await supabase
+      .from('municipios')
+      .select('id')
+      .ilike('nombre', `%${String(c.municipio).trim()}%`)
+      .limit(1)
+      .maybeSingle()
+    // Si no hay match, se ignora el filtro de municipio en vez de forzar
+    // cero resultados (puede ser un nombre mal escrito o un alias).
+    if (municipioMatch) query = query.eq('municipio_id', municipioMatch.id)
+  }
 
   const { data, error } = await query
   if (error) {
@@ -1231,21 +1261,42 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
     return
   }
 
-  if (!data || data.length === 0) {
+  let resultados = (data ?? []) as any[]
+  if (typeof c.dormitorios_min === 'number') {
+    resultados = resultados.filter((p) => { const n = numeroONull(p.dormitorios); return n !== null && n >= c.dormitorios_min })
+  }
+  if (typeof c.banos_min === 'number') {
+    resultados = resultados.filter((p) => { const n = numeroONull(p.banos); return n !== null && n >= c.banos_min })
+  }
+  if (typeof c.niveles_min === 'number') {
+    resultados = resultados.filter((p) => { const n = numeroONull(p.niveles); return n !== null && n >= c.niveles_min })
+  }
+  const total = resultados.length
+  resultados = resultados.slice(0, 5)
+
+  if (resultados.length === 0) {
     await responderAsesor(chatId, 'No encontré propiedades disponibles con esos criterios 😕 ¿Quieres que busque con otros filtros?', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
     return
   }
-  const lineas = data.map((p: any) => {
-    const zonaTxt = formatearZonaDup(p.zona) ?? p.ciudad ?? ''
-    const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
-    const detalles = [p.dormitorios ? `${p.dormitorios} hab` : null, p.banos ? `${p.banos} baños` : null, p.area_construccion_m2 ? `${p.area_construccion_m2} m²` : null]
+  const lineas = resultados.map((p: any) => {
+    const municipioNombre = Array.isArray(p.municipio) ? p.municipio[0]?.nombre : p.municipio?.nombre
+    const zonaTxt = formatearZonaDup(p.zona) ?? municipioNombre ?? p.ciudad ?? ''
+    const ubicacionExtra = [p.condominio, municipioNombre && municipioNombre !== zonaTxt ? municipioNombre : null]
       .filter(Boolean)
       .join(' · ')
-    return `• ${p.titulo} — ${zonaTxt} — ${precioTxt}${detalles ? ` (${detalles})` : ''}\n  ${urlPropiedadWhatsapp(p.id)}`
+    const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
+    const area = p.area_construccion_m2 ?? p.area_terreno_m2
+    const detalles = [
+      p.dormitorios ? `${p.dormitorios} hab` : null,
+      p.banos ? `${p.banos} baños` : null,
+      p.niveles ? `${p.niveles} niveles` : null,
+      area ? `${area} m²` : null,
+    ].filter(Boolean).join(' · ')
+    return `• ${p.titulo} — ${zonaTxt}${ubicacionExtra ? ' · ' + ubicacionExtra : ''} — ${precioTxt}${detalles ? ` (${detalles})` : ''}\n  ${urlPropiedadWhatsapp(p.id)}`
   })
   await responderAsesor(
     chatId,
-    [`🏠 Encontré ${data.length} propiedad${data.length === 1 ? '' : 'es'}:`, '', ...lineas].join('\n'),
+    [`🏠 Encontré ${total} propiedad${total === 1 ? '' : 'es'}${total > resultados.length ? ` (muestro ${resultados.length})` : ''}:`, '', ...lineas].join('\n'),
     perfil.organization_id,
     perfil.id,
     null,
@@ -1333,6 +1384,97 @@ async function responderCrearTarea(perfil: PerfilAsistente, chatId: string, c: R
   await crearTareaDesdeAsistente(perfil, chatId, titulo, c.nombre_contacto ?? null, c.fecha_hora_iso, prioridad)
 }
 
+// La cita creada por Ben no dispara el aviso al grupo de WhatsApp "citas"
+// ni el recordatorio automático al cliente que sí dispara crearActividad
+// en la web — decisión explícita: Ben solo confirma al asesor, igual que
+// el resto de sus respuestas.
+async function crearCitaDesdeAsistente(perfil: PerfilAsistente, chatId: string, nombreContacto: string, fechaHoraIso: string) {
+  const vinculo = await resolverLeadPorNombreContacto(nombreContacto, perfil)
+  if (!vinculo) {
+    await responderAsesor(
+      chatId,
+      `No encontré (o hay varios) un lead de "${nombreContacto}" entre los que puedes ver 😕 Agenda la cita manualmente desde el CRM, o intenta con el nombre completo tal como aparece ahí.`,
+      perfil.organization_id,
+      perfil.id,
+      null,
+      'asistente_ia_respuesta'
+    )
+    return
+  }
+
+  const { data: lead } = await supabase.from('leads').select('etapa, agente_id').eq('id', vinculo.leadId).single()
+
+  const { error } = await supabase.from('actividades').insert({
+    contacto_id: vinculo.contactoId,
+    lead_id: vinculo.leadId,
+    agente_id: lead?.agente_id ?? perfil.id,
+    creado_por: perfil.id,
+    tipo_actividad: 'cita',
+    programada_en: fechaHoraIso,
+    organization_id: perfil.organization_id,
+  })
+  if (error) {
+    console.error('No se pudo crear la cita desde el asistente IA:', error)
+    await responderAsesor(chatId, 'Uy, no pude crear la cita 😓 Intenta de nuevo o créala manualmente desde el CRM.', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  // Solo se avanza la etapa desde "contacto_inicial": si el lead ya iba más
+  // adelante (visita_realizada, reservada, etc.) agendar una cita nueva
+  // (ej. la firma) no debe retroceder ni alterar su etapa actual.
+  let avisoEtapa = ''
+  if (lead?.etapa === 'contacto_inicial') {
+    await supabase.from('leads').update({ etapa: 'visita_agendada', actualizado_en: new Date().toISOString() }).eq('id', vinculo.leadId).eq('etapa', 'contacto_inicial')
+    avisoEtapa = ' Moví el lead a *Visita agendada*.'
+  }
+
+  await responderAsesor(
+    chatId,
+    `✅ Listo, agendé la cita con ${nombreContacto} para el ${formatearFechaHoraGT(fechaHoraIso)}.${avisoEtapa}`,
+    perfil.organization_id,
+    perfil.id,
+    null,
+    'asistente_ia_respuesta'
+  )
+}
+
+async function responderAgendarCita(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+  const nombreContacto = c.nombre_contacto ? String(c.nombre_contacto).trim() : null
+  const fechaConfiable = fechaEsConfiable(c.fecha_hora_iso, c.confianza_fecha)
+
+  if (!nombreContacto) {
+    const pregunta = '¿Cuál es el nombre completo del cliente para la cita? Responde citando este mensaje 🙂'
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'agendar_cita',
+      contexto: { esperando: 'nombre_contacto', fecha_hora_iso: fechaConfiable ? c.fecha_hora_iso : null },
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  if (!fechaConfiable) {
+    const pregunta = `¿Para qué fecha y hora quieres agendar la cita con ${nombreContacto}? Responde citando este mensaje 🙂`
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'agendar_cita',
+      contexto: { esperando: 'fecha_hora_iso', nombre_contacto: nombreContacto },
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  await crearCitaDesdeAsistente(perfil, chatId, nombreContacto, c.fecha_hora_iso)
+}
+
 async function manejarConsultaGeneral(perfil: PerfilAsistente, chatId: string, mensaje: string, idMessageEntrante: string | null) {
   if (await yaFueProcesadoMensajeEntrante(idMessageEntrante)) return
 
@@ -1349,16 +1491,17 @@ async function manejarConsultaGeneral(perfil: PerfilAsistente, chatId: string, m
   else if (c.intencion === 'consultar_citas') await responderConsultaCitas(perfil, chatId, c)
   else if (c.intencion === 'buscar_propiedades') await responderBusquedaPropiedades(perfil, chatId, c)
   else if (c.intencion === 'crear_tarea') await responderCrearTarea(perfil, chatId, c)
+  else if (c.intencion === 'agendar_cita') await responderAgendarCita(perfil, chatId, c)
   else if (c.intencion === 'reporte_desempeno') await responderReporteDesempeno(perfil, chatId, c)
   else await responderAsesor(chatId, mensajeConversacionGeneral(perfil.nombre_completo), perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
 }
 
-type PendienteAsistenteRow = { id: string; chat_id_asesor: string; perfil_id: string; organization_id: string; contexto: Record<string, any>; creado_en: string }
+type PendienteAsistenteRow = { id: string; chat_id_asesor: string; perfil_id: string; organization_id: string; intencion: string; contexto: Record<string, any>; creado_en: string }
 
 async function resolverAclaracionPendienteAsistente(chatId: string): Promise<PendienteAsistenteRow | null> {
   const { data } = await supabase
     .from('asistente_ia_pendientes')
-    .select('id, chat_id_asesor, perfil_id, organization_id, contexto, creado_en')
+    .select('id, chat_id_asesor, perfil_id, organization_id, intencion, contexto, creado_en')
     .eq('chat_id_asesor', chatId)
     .eq('estado', 'pendiente')
     .order('creado_en', { ascending: false })
@@ -1385,7 +1528,43 @@ async function reclamarAclaracionPendiente(id: string): Promise<boolean> {
   return !!data && data.length > 0
 }
 
+async function procesarAclaracionAgendarCita(pendiente: PendienteAsistenteRow, mensaje: string, perfil: PerfilAsistente, chatId: string) {
+  const ctx = pendiente.contexto as { esperando: 'nombre_contacto' | 'fecha_hora_iso'; nombre_contacto?: string; fecha_hora_iso?: string | null }
+
+  if (ctx.esperando === 'nombre_contacto') {
+    const nombreContacto = mensaje.trim()
+    if (ctx.fecha_hora_iso) {
+      await crearCitaDesdeAsistente(perfil, chatId, nombreContacto, ctx.fecha_hora_iso)
+      return
+    }
+    const pregunta = `¿Para qué fecha y hora quieres agendar la cita con ${nombreContacto}? Responde citando este mensaje 🙂`
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'agendar_cita',
+      contexto: { esperando: 'fecha_hora_iso', nombre_contacto: nombreContacto },
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  // ctx.esperando === 'fecha_hora_iso'
+  const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptAclaracionFecha(mensaje))) as { fecha_hora_iso: string | null; confianza_fecha: string }
+  if (!fechaEsConfiable(clasificacion.fecha_hora_iso, clasificacion.confianza_fecha)) {
+    await responderAsesor(chatId, 'Sigue sin quedarme clara la fecha 😅 Mejor agenda la cita manualmente desde el CRM con la fecha exacta.', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+  await crearCitaDesdeAsistente(perfil, chatId, ctx.nombre_contacto!, clasificacion.fecha_hora_iso)
+}
+
 async function procesarAclaracionPendiente(pendiente: PendienteAsistenteRow, mensaje: string, perfil: PerfilAsistente, chatId: string) {
+  if (pendiente.intencion === 'agendar_cita') {
+    await procesarAclaracionAgendarCita(pendiente, mensaje, perfil, chatId)
+    return
+  }
   const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptAclaracionFecha(mensaje))) as { fecha_hora_iso: string | null; confianza_fecha: string }
   if (!fechaEsConfiable(clasificacion.fecha_hora_iso, clasificacion.confianza_fecha)) {
     await responderAsesor(chatId, 'Sigue sin quedarme clara la fecha 😅 Mejor créala manualmente desde el CRM con la fecha exacta que necesitas.', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')

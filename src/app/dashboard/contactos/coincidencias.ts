@@ -64,16 +64,21 @@ export async function buscarCoincidencias(contactoId: string) {
   // ---------------------------------------------------------------
   const { data: propiedades } = await supabase
     .from('propiedades')
-    .select('id, precio, zona, tipo_propiedad, municipio:municipios(nombre)')
+    .select('id, precio, zona, sector, condominio, tipo_propiedad, municipio:municipios(nombre)')
     .eq('estado', 'disponible')
 
+  // Habitaciones, baños, m2 y amenidades deseadas NO entran en este puntaje:
+  // el contacto solo guarda presupuesto, zonas_interes (texto libre) y tipo
+  // de propiedad — no hay dónde guardar esas preferencias del cliente, así
+  // que solo se amplía qué textos de la propiedad se comparan contra
+  // zonas_interes (antes solo zona/municipio, ahora también sector/condominio).
   const candidatosInternos = (propiedades ?? []).map((p: any) => ({
     propiedad_id: p.id,
     puntaje_coincidencia: calcularPuntaje(
       contacto,
       zonasInteres,
       p.precio,
-      [p.zona, p.municipio?.nombre],
+      [p.zona, p.municipio?.nombre, p.sector, p.condominio],
       p.tipo_propiedad
     ),
   }))
