@@ -111,10 +111,12 @@ function construirPrompt(fase: string, mensajeAsesor: string, esAclaracion: bool
   if (fase === 'confirmar_reintento_24h') {
     return [
       contextoFecha,
-      'Se le preguntó al asesor si quiere que se le vuelva a consultar en 24 horas sobre si pudieron reprogramar la visita, o si prefiere marcar el lead como perdido de una vez.',
+      esAclaracion
+        ? 'Se le volvió a preguntar al asesor si quiere que se le consulte de nuevo en 24 horas sobre esta visita, o si prefiere marcar el lead como perdido — su respuesta anterior no dejó claro cuál de las dos opciones quería.'
+        : 'Se le preguntó al asesor si quiere que se le vuelva a consultar en 24 horas sobre si pudieron reprogramar la visita, o si prefiere marcar el lead como perdido de una vez.',
       `Respuesta del asesor: "${mensajeAsesor}"`,
-      'Determina volver_a_consultar: true si quiere que se le pregunte de nuevo en 24 horas, false si prefiere marcarlo como perdido ahora.',
-      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente este campo: {"volver_a_consultar": true|false}.',
+      'Determina resultado: "volver_a_consultar" SOLO si pide explícitamente que se le pregunte de nuevo en 24 horas; "perdida" SOLO si confirma explícitamente que el lead ya no sigue interesado o prefiere marcarlo perdido; "no_concluyente" en cualquier otro caso — por ejemplo si la respuesta no tiene relación con esta pregunta (habla de otro cliente, de otro trato, o de algo que claramente no responde ni "sí, pregúntame después" ni "no, ya no sigue"). Ante la duda usa "no_concluyente": nunca asumas "perdida" si el texto no lo confirma explícitamente.',
+      'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente este campo: {"resultado": "volver_a_consultar"|"perdida"|"no_concluyente"}.',
     ].join('\n')
   }
   if (fase === 'confirmar_envio_propiedades') {
@@ -167,7 +169,7 @@ type Resultado = {
   terminal: boolean
 }
 
-function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resultado {
+function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean, nombreContacto: string): Resultado {
   // En una aclaración de esta fase, "asistio" ya es un hecho confirmado
   // del turno anterior — se fuerza para no dejar que el modelo lo
   // reclasifique mal con un texto que ya no habla de eso.
@@ -177,7 +179,7 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
       clasificacion,
       accion_descrita: `Se registra en Seguimientos: "El cliente no asistió/atendió. ${clasificacion.resumen}". No se mueve el lead todavía.`,
       siguiente_fase: 'reprogramar',
-      siguiente_pregunta: '¿Quieren reprogramar la visita? Si es así, dime para cuándo. Responde citando este mensaje.',
+      siguiente_pregunta: `¿Quieren reprogramar la visita con ${nombreContacto}? Si es así, dime para cuándo. Responde citando este mensaje.`,
       es_reintento_aclaracion_siguiente: false,
       terminal: false,
     }
@@ -248,7 +250,7 @@ function evaluarResultadoVisita(clasificacion: any, esAclaracion: boolean): Resu
   }
 }
 
-function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean): Resultado {
+function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean, nombreContacto: string): Resultado {
   const campoDecision = fase === 'reprogramar' ? 'quiere_reprogramar' : 'proximo_paso'
   const decision = clasificacion[campoDecision]
   const fechaIso = clasificacion.fecha_hora_iso as string | null
@@ -278,7 +280,7 @@ function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean
         clasificacion,
         accion_descrita: 'El asesor no confirma reprogramar ahora: se le pregunta si quiere que se le consulte de nuevo en 24h o prefiere marcar perdida.',
         siguiente_fase: 'confirmar_reintento_24h',
-        siguiente_pregunta: '¿Quieres que te vuelva a preguntar en 24 horas sobre esto, o prefieres que marque el lead como perdido ahora? Responde citando este mensaje.',
+        siguiente_pregunta: `¿Quieres que te vuelva a preguntar en 24 horas sobre la visita con ${nombreContacto}, o prefieres que marque ese lead como perdido ahora? Responde citando este mensaje.`,
         es_reintento_aclaracion_siguiente: false,
         terminal: false,
       }
@@ -303,13 +305,34 @@ function evaluarConFecha(fase: string, clasificacion: any, esAclaracion: boolean
   return { clasificacion, accion_descrita: `Se crea una nueva ${ETIQUETA_TIPO[tipo]} de seguimiento para ${fechaIso}. Mensaje al asesor: "¡Perfecto! 📅 Ya agendé la ${ETIQUETA_TIPO[tipo]}. Te escribo un par de horas después para ver cómo te fue. ¡Gracias por el seguimiento!"`, siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true }
 }
 
-function evaluarConfirmarReintento24h(clasificacion: any): Resultado {
-  if (clasificacion.volver_a_consultar) {
+function evaluarConfirmarReintento24h(clasificacion: any, esAclaracion: boolean, nombreContacto: string): Resultado {
+  // Antes era un booleano forzado a true/false, así que una respuesta que
+  // no encajaba con ninguna de las dos opciones (ej. el asesor hablando en
+  // realidad de OTRO lead) terminaba cerrando como "perdida" por descarte.
+  // Ahora, si no es explícito, se repregunta en vez de asumir.
+  if (clasificacion.resultado === 'no_concluyente') {
+    if (esAclaracion) {
+      return {
+        clasificacion,
+        accion_descrita: 'Sigue sin ser claro tras una aclaración: se CIERRA para revisión manual del admin. No se mueve el lead.',
+        siguiente_fase: null, siguiente_pregunta: null, es_reintento_aclaracion_siguiente: false, terminal: true,
+      }
+    }
+    return {
+      clasificacion,
+      accion_descrita: 'No quedó claro si reintentar en 24h o marcar perdido: se pide una aclaración (una sola vez), mencionando el nombre del cliente para evitar confundirlo con otro lead.',
+      siguiente_fase: 'confirmar_reintento_24h',
+      siguiente_pregunta: `No me quedó claro — hablo del seguimiento de ${nombreContacto}: ¿quieres que te pregunte de nuevo en 24 horas, o prefieres que lo marque como perdido? Responde citando este mensaje.`,
+      es_reintento_aclaracion_siguiente: true,
+      terminal: false,
+    }
+  }
+  if (clasificacion.resultado === 'volver_a_consultar') {
     return {
       clasificacion,
       accion_descrita: 'Mensaje al asesor: "¡Va! 😊 Te pregunto de nuevo en 24 horas. Gracias por el seguimiento." (no se envía la siguiente pregunta ahora; se programa para dentro de 24h).',
       siguiente_fase: 'reprogramar',
-      siguiente_pregunta: '¿Qué me cuentas, pudieron reprogramar la visita con el cliente? Responde citando este mensaje.',
+      siguiente_pregunta: `¿Qué me cuentas, pudieron reprogramar la visita con ${nombreContacto}? Responde citando este mensaje.`,
       es_reintento_aclaracion_siguiente: false,
       terminal: true, // en la simulación se trata como fin de turno; el aviso real llega 24h después, fuera de este chat de prueba
     }
@@ -434,7 +457,7 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     contextoFecha,
     'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
     `Mensaje: "${mensaje}"`,
-    'Clasifica la intención en exactamente una de estas 7 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Clasifica la intención en exactamente una de estas 8 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "cambiar_etapa_lead" (instrucción directa de mover un lead a una etapa específica, ej. "marca a Juan como ganado", "mueve el lead de María a perdida" — NO uses esto para preguntas, solo para órdenes explícitas), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
     'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
     '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
     '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
@@ -446,11 +469,12 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
     '- area_exacta, area_min, area_max: metros cuadrados mencionados (construcción o terreno), número o null. Si da un metraje SIN calificarlo (ej. "de 100m2", "casa de 100 metros") usa area_exacta — debe coincidir EXACTO, ni más ni menos. Usa area_min SOLO si dijo explícitamente "más de", "mayor a", "mínimo", "arriba de" o similar. Usa area_max SOLO si dijo explícitamente "menos de", "menor a", "máximo", "hasta" o similar. Si mencionó un rango explícito (ej. "entre 100 y 150 m2") usa area_min Y area_max juntos. Nunca combines area_exacta con area_min/area_max.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
-    '- nombre_contacto: para crear_tarea o agendar_cita, el nombre completo del cliente/contacto mencionado, o null.',
+    '- nombre_contacto: para crear_tarea, agendar_cita o cambiar_etapa_lead, el nombre completo del cliente/contacto mencionado, o null.',
+    '- etapa_nueva: SOLO para cambiar_etapa_lead, la etapa de destino: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida" (interpreta "ganado"→"ganada", "perdido"→"perdida", "reservó"→"reservada", etc.), o null si no quedó claro a cuál etapa.',
     '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
     '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
-    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_exacta": number|null, "area_min": number|null, "area_max": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_exacta": number|null, "area_min": number|null, "area_max": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "etapa_nueva": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
   ].join('\n')
 }
 
@@ -467,6 +491,17 @@ function construirPromptAclaracionFecha(mensaje: string): string {
 
 function fechaEsConfiable(fechaIso: unknown, confianza: unknown): fechaIso is string {
   return typeof fechaIso === 'string' && (confianza === 'alta' || confianza === 'media')
+}
+
+const ETAPAS_VALIDAS_LEAD = ['contacto_inicial', 'visita_agendada', 'visita_realizada', 'reservada', 'ganada', 'perdida']
+
+function construirPromptAclaracionEtapa(mensaje: string): string {
+  return [
+    'El asesor ya pidió cambiar la etapa de un lead, pero no dejó clara a cuál etapa. Se le volvió a preguntar.',
+    `Respuesta: "${mensaje}"`,
+    'Determina etapa_nueva: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida" (interpreta "ganado"→"ganada", "perdido"→"perdida", "reservó"→"reservada", etc.), o null si sigue sin quedar claro.',
+    'Responde ÚNICAMENTE con un objeto JSON válido: {"etapa_nueva": string|null}.',
+  ].join('\n')
 }
 
 function inicioRangoLeadsGT(rango: string): Date | null {
@@ -730,6 +765,14 @@ async function calcularAccionAgendarCita(perfil: PerfilAsistente, nombreContacto
   return `Se crearía la cita con ${vinculo.nombre} para ${formatearFechaHoraGT(fechaHoraIso)}, vinculada a su lead (${ETIQUETAS_ETAPA[lead?.etapa ?? ''] ?? 'etapa actual'}).${avisoEtapa}`
 }
 
+async function calcularAccionCambiarEtapaLead(perfil: PerfilAsistente, nombreContacto: string, etapaNueva: string): Promise<string> {
+  const vinculo = await resolverLeadPorNombreContacto(nombreContacto, perfil)
+  if (!vinculo) {
+    return `No encontré (o hay varios) un lead de "${nombreContacto}" entre los que puedes ver — no se podría cambiar así, habría que hacerlo manualmente desde el CRM.`
+  }
+  return `Se movería el lead de ${vinculo.nombre} a *${ETIQUETAS_ETAPA[etapaNueva] ?? etapaNueva}*.`
+}
+
 type ResultadoAsistenteGeneral = {
   ok: boolean
   error?: string
@@ -792,6 +835,27 @@ async function manejarAsistenteGeneral(perfil: PerfilAsistente, mensaje: string)
     }
     return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, accion_descrita: await calcularAccionAgendarCita(perfil, nombreContacto, c.fecha_hora_iso) }
   }
+  if (c.intencion === 'cambiar_etapa_lead') {
+    const nombreContacto = c.nombre_contacto ? String(c.nombre_contacto).trim() : null
+    const etapaNueva = ETAPAS_VALIDAS_LEAD.includes(c.etapa_nueva) ? (c.etapa_nueva as string) : null
+    if (!nombreContacto) {
+      return {
+        ok: true, prompt_enviado_a_ia: prompt, clasificacion: c,
+        requiere_aclaracion: true,
+        siguiente_pregunta: '¿El lead de qué cliente quieres cambiar de etapa? Responde citando este mensaje 🙂',
+        contexto_para_siguiente_turno: { intencion: 'cambiar_etapa_lead', esperando: 'nombre_contacto', etapa_nueva: etapaNueva },
+      }
+    }
+    if (!etapaNueva) {
+      return {
+        ok: true, prompt_enviado_a_ia: prompt, clasificacion: c,
+        requiere_aclaracion: true,
+        siguiente_pregunta: `¿A qué etapa muevo el lead de ${nombreContacto}? (contacto inicial, visita agendada, visita realizada, reservada, ganada o perdida). Responde citando este mensaje 🙂`,
+        contexto_para_siguiente_turno: { intencion: 'cambiar_etapa_lead', esperando: 'etapa_nueva', nombre_contacto: nombreContacto },
+      }
+    }
+    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, accion_descrita: await calcularAccionCambiarEtapaLead(perfil, nombreContacto, etapaNueva) }
+  }
   const nombre = perfil.nombre_completo.split(' ')[0]
   return {
     ok: true,
@@ -812,6 +876,7 @@ async function manejarAsistenteGeneral(perfil: PerfilAsistente, mensaje: string)
 type ContextoPrevioAsistente =
   | { intencion: 'crear_tarea'; titulo_tarea: string; nombre_contacto: string | null; prioridad_tarea: string }
   | { intencion: 'agendar_cita'; esperando: 'nombre_contacto' | 'fecha_hora_iso'; nombre_contacto?: string; fecha_hora_iso?: string | null }
+  | { intencion: 'cambiar_etapa_lead'; esperando: 'nombre_contacto' | 'etapa_nueva'; nombre_contacto?: string; etapa_nueva?: string | null }
 
 async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaje: string, contextoPrevio: ContextoPrevioAsistente): Promise<ResultadoAsistenteGeneral> {
   if (contextoPrevio.intencion === 'agendar_cita') {
@@ -835,6 +900,31 @@ async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaj
     return {
       ok: true, prompt_enviado_a_ia: prompt, clasificacion,
       accion_descrita: await calcularAccionAgendarCita(perfil, contextoPrevio.nombre_contacto!, clasificacion.fecha_hora_iso),
+    }
+  }
+
+  if (contextoPrevio.intencion === 'cambiar_etapa_lead') {
+    if (contextoPrevio.esperando === 'nombre_contacto') {
+      const nombreContacto = mensaje.trim()
+      if (contextoPrevio.etapa_nueva) {
+        return { ok: true, clasificacion: { nombre_contacto: nombreContacto }, accion_descrita: await calcularAccionCambiarEtapaLead(perfil, nombreContacto, contextoPrevio.etapa_nueva) }
+      }
+      return {
+        ok: true, clasificacion: { nombre_contacto: nombreContacto },
+        requiere_aclaracion: true,
+        siguiente_pregunta: `¿A qué etapa muevo el lead de ${nombreContacto}? (contacto inicial, visita agendada, visita realizada, reservada, ganada o perdida). Responde citando este mensaje 🙂`,
+        contexto_para_siguiente_turno: { intencion: 'cambiar_etapa_lead', esperando: 'etapa_nueva', nombre_contacto: nombreContacto },
+      }
+    }
+    const prompt = construirPromptAclaracionEtapa(mensaje)
+    const clasificacion = parsearRespuestaGroq(await llamarGroq(prompt)) as { etapa_nueva: string | null }
+    const etapaNueva = ETAPAS_VALIDAS_LEAD.includes(clasificacion.etapa_nueva as string) ? clasificacion.etapa_nueva! : null
+    if (!etapaNueva) {
+      return { ok: true, prompt_enviado_a_ia: prompt, clasificacion, mensaje_respuesta: 'Sigue sin quedarme clara la etapa 😅 Mejor hazlo manualmente desde el CRM.' }
+    }
+    return {
+      ok: true, prompt_enviado_a_ia: prompt, clasificacion,
+      accion_descrita: await calcularAccionCambiarEtapaLead(perfil, contextoPrevio.nombre_contacto!, etapaNueva),
     }
   }
 
@@ -923,12 +1013,13 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const nombreContacto = body.contacto_nombre || 'el cliente'
     const prompt = construirPrompt(fase, mensajeAsesor, esAclaracion)
     const clasificacion = parsearRespuestaGroq(await llamarGroq(prompt))
     const resultado =
-      fase === 'resultado_visita' ? evaluarResultadoVisita(clasificacion, esAclaracion) :
-      fase === 'reprogramar' || fase === 'ofrecer_siguiente_paso' ? evaluarConFecha(fase, clasificacion, esAclaracion) :
-      fase === 'confirmar_reintento_24h' ? evaluarConfirmarReintento24h(clasificacion) :
+      fase === 'resultado_visita' ? evaluarResultadoVisita(clasificacion, esAclaracion, nombreContacto) :
+      fase === 'reprogramar' || fase === 'ofrecer_siguiente_paso' ? evaluarConFecha(fase, clasificacion, esAclaracion, nombreContacto) :
+      fase === 'confirmar_reintento_24h' ? evaluarConfirmarReintento24h(clasificacion, esAclaracion, nombreContacto) :
       fase === 'confirmar_envio_propiedades' ? evaluarConfirmarEnvioPropiedades(clasificacion) :
       fase === 'seguimiento_recurrente' ? evaluarSeguimientoRecurrente(clasificacion, esAclaracion) :
       evaluarResultadoFirma(clasificacion)
