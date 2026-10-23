@@ -9,7 +9,7 @@ const ESTADOS_EN_CURSO = ['QUEUED', 'PUBLICANDO', 'WAITING_APPROVAL', 'APPROVED'
 const ESTADOS_ERROR = ['FAILED', 'VALIDATION_ERROR', 'ADAPTER_MISMATCH']
 const ESTADOS_PANEL = ['PUBLICADO', 'NEEDS_REVIEW', ...ESTADOS_EN_CURSO, ...ESTADOS_ERROR]
 const VENTANA_ERROR_HORAS = 24
-const TOPE_24H = 15
+const TOPE_24H = 30
 // Plataforma de cuenta social que usa cada canal (para saber si está publicado en todas las cuentas).
 const PLATAFORMA_CANAL: Record<string, string> = {
   facebook_marketplace: 'facebook',

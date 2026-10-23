@@ -51,7 +51,7 @@ const MAX_DESCRIPCION_MARKETPLACE = 2000;
 
 // Tope de publicaciones por cuenta de Facebook en 24 h (protege la cuenta).
 // Valor prudente elegido por nosotros; Facebook no publica un límite oficial.
-const MAX_PUBLICACIONES_POR_CUENTA_24H = 15;
+const MAX_PUBLICACIONES_POR_CUENTA_24H = 30;
 const ESTADOS_QUE_CUENTAN_EN_TOPE = [
   "QUEUED", "PUBLICANDO", "WAITING_APPROVAL", "APPROVED", "VERIFICANDO", "PUBLICADO", "NEEDS_REVIEW",
 ];
