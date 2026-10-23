@@ -990,13 +990,14 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
     '- ubicacion: para "buscar_propiedades", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
     '- amenidades: para "buscar_propiedades", arreglo de palabras clave de amenidades o características mencionadas (ej. ["piscina","gimnasio"]), o null si no mencionó ninguna.',
-    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min, area_min: número o null (area_min son metros cuadrados mínimos, de construcción o de terreno).',
+    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
+    '- area_exacta, area_min, area_max: metros cuadrados mencionados (construcción o terreno), número o null. Si da un metraje SIN calificarlo (ej. "de 100m2", "casa de 100 metros") usa area_exacta — debe coincidir EXACTO, ni más ni menos. Usa area_min SOLO si dijo explícitamente "más de", "mayor a", "mínimo", "arriba de" o similar. Usa area_max SOLO si dijo explícitamente "menos de", "menor a", "máximo", "hasta" o similar. Si mencionó un rango explícito (ej. "entre 100 y 150 m2") usa area_min Y area_max juntos. Nunca combines area_exacta con area_min/area_max.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
     '- nombre_contacto: para crear_tarea o agendar_cita, el nombre completo del cliente/contacto mencionado, o null.',
     '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
     '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
-    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_exacta": number|null, "area_min": number|null, "area_max": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
   ].join('\n')
 }
 
@@ -1228,6 +1229,24 @@ function escaparValorFiltro(valor: string): string {
   return valor.replace(/[(),]/g, ' ').trim()
 }
 
+// Un metraje mencionado sin calificar ("casa de 100m2") es una búsqueda
+// EXACTA, no un mínimo — a diferencia de dormitorios/baños, donde "3
+// habitaciones" sí se trata como mínimo. Solo se vuelve mínimo/máximo/rango
+// si el asesor lo dice explícitamente ("mayor a", "hasta", "entre X y Y").
+function construirCondicionArea(c: Record<string, any>): string | null {
+  const exacta = typeof c.area_exacta === 'number' ? c.area_exacta : null
+  const min = typeof c.area_min === 'number' ? c.area_min : null
+  const max = typeof c.area_max === 'number' ? c.area_max : null
+
+  if (exacta !== null) return `area_construccion_m2.eq.${exacta},area_terreno_m2.eq.${exacta}`
+  if (min !== null && max !== null) {
+    return `and(area_construccion_m2.gte.${min},area_construccion_m2.lte.${max}),and(area_terreno_m2.gte.${min},area_terreno_m2.lte.${max})`
+  }
+  if (min !== null) return `area_construccion_m2.gte.${min},area_terreno_m2.gte.${min}`
+  if (max !== null) return `area_construccion_m2.lte.${max},area_terreno_m2.lte.${max}`
+  return null
+}
+
 async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
   let query = supabase
     .from('propiedades')
@@ -1241,7 +1260,8 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
   if (TIPOS_PROPIEDAD_VALIDOS.includes(c.tipo_propiedad)) query = query.eq('tipo_propiedad', c.tipo_propiedad)
   if (typeof c.precio_min === 'number') query = query.gte('precio', c.precio_min)
   if (typeof c.precio_max === 'number') query = query.lte('precio', c.precio_max)
-  if (typeof c.area_min === 'number') query = query.or(`area_construccion_m2.gte.${c.area_min},area_terreno_m2.gte.${c.area_min}`)
+  const condicionArea = construirCondicionArea(c)
+  if (condicionArea) query = query.or(condicionArea)
   if (Array.isArray(c.amenidades)) {
     for (const termino of c.amenidades) {
       if (typeof termino === 'string' && termino.trim()) query = query.ilike('amenidades', `%${termino.trim()}%`)
