@@ -25,9 +25,56 @@ export default function BotonGuardarPropiedad({
 }) {
   const botonRef = useRef<HTMLButtonElement>(null)
   const router = useRouter()
-  const [fase, setFase] = useState<'idle' | 'guardando' | 'subiendo' | 'duplicando' | 'error'>('idle')
+  const [fase, setFase] = useState<'idle' | 'guardando' | 'subiendo' | 'duplicando' | 'error' | 'error_duplicado'>('idle')
   const [progreso, setProgreso] = useState({ actual: 0, total: 0 })
   const [mensajeError, setMensajeError] = useState<string | null>(null)
+  // Se guarda el id ya creado para poder reintentar SOLO el paso de
+  // duplicar (sin volver a crear ni resubir fotos) si ese paso falla.
+  const [propiedadIdGuardada, setPropiedadIdGuardada] = useState<string | null>(null)
+
+  async function intentarDuplicar(propiedadId: string): Promise<boolean> {
+    if (!duplicarAccion || !datosOperacionAlterna) return true
+    setFase('duplicando')
+    try {
+      const resultadoDup = await duplicarAccion(propiedadId, datosOperacionAlterna)
+      if (!resultadoDup.ok) {
+        console.error('No se pudo crear la propiedad duplicada (venta/renta):', resultadoDup.mensaje)
+        setFase('error_duplicado')
+        setMensajeError(
+          resultadoDup.mensaje ?? `No se pudo crear automáticamente la versión de ${datosOperacionAlterna.tipo_operacion}.`
+        )
+        return false
+      }
+      return true
+    } catch (err) {
+      console.error('Error al duplicar la propiedad para la otra operación:', err)
+      setFase('error_duplicado')
+      setMensajeError(
+        `No se pudo crear automáticamente la versión de ${datosOperacionAlterna.tipo_operacion}: ${
+          err instanceof Error ? err.message : 'error desconocido'
+        }`
+      )
+      return false
+    }
+  }
+
+  // La propiedad original (ya guardada, con sus fotos) nunca se pierde: si
+  // falla aquí, solo se queda sin crear automáticamente la de la otra
+  // operación. Por eso NO se redirige en caso de fallo — antes se navegaba
+  // igual al listado y el agente nunca se enteraba de que faltó crearla.
+  async function reintentarDuplicado() {
+    if (!propiedadIdGuardada) return
+    const ok = await intentarDuplicar(propiedadIdGuardada)
+    if (ok) {
+      router.push(redirectTo)
+      router.refresh()
+    }
+  }
+
+  function continuarSinDuplicar() {
+    router.push(redirectTo)
+    router.refresh()
+  }
 
   async function alHacerClick() {
     const form = botonRef.current?.closest('form')
@@ -56,6 +103,7 @@ export default function BotonGuardarPropiedad({
     }
 
     const propiedadId = resultado.propiedadId
+    setPropiedadIdGuardada(propiedadId)
 
     if (archivos.length > 0) {
       setFase('subiendo')
@@ -82,22 +130,15 @@ export default function BotonGuardarPropiedad({
     }
 
     // Si el extractor de IA detectó venta y renta en el mismo texto, se
-    // crea automáticamente la propiedad de la otra operación, copiando
-    // las mismas fotos en R2 (sin volver a subirlas desde el navegador).
-    // Un fallo aquí no revierte ni bloquea el guardado de la propiedad
-    // original, que ya quedó guardada correctamente: solo se registra en
-    // consola para que se pueda duplicar a mano si algo salió mal.
-    if (duplicarAccion && datosOperacionAlterna) {
-      setFase('duplicando')
-      try {
-        const resultadoDup = await duplicarAccion(propiedadId, datosOperacionAlterna)
-        if (!resultadoDup.ok) {
-          console.error('No se pudo crear la propiedad duplicada (venta/renta):', resultadoDup.mensaje)
-        }
-      } catch (err) {
-        console.error('Error al duplicar la propiedad para la otra operación:', err)
-      }
-    }
+    // crea automáticamente la propiedad de la otra operación, copiando las
+    // mismas fotos en R2 (sin volver a subirlas desde el navegador). Un
+    // fallo aquí no revierte ni bloquea el guardado de la propiedad
+    // original, que ya quedó guardada correctamente — pero SÍ detiene la
+    // redirección automática (ver intentarDuplicar/reintentarDuplicado):
+    // antes se navegaba igual al listado y el agente nunca se enteraba de
+    // que la otra operación no se creó.
+    const duplicadoOk = await intentarDuplicar(propiedadId)
+    if (!duplicadoOk) return
 
     router.push(redirectTo)
     router.refresh()
@@ -125,15 +166,41 @@ export default function BotonGuardarPropiedad({
       {mensajeError && (
         <p className="mb-2 rounded bg-red-50 p-2 text-xs text-red-600">{mensajeError}</p>
       )}
-      <button
-        ref={botonRef}
-        type="button"
-        onClick={alHacerClick}
-        disabled={deshabilitado}
-        className={`${className ?? ''} ${deshabilitado ? 'cursor-not-allowed opacity-60' : ''}`}
-      >
-        {texto}
-      </button>
+
+      {fase === 'error_duplicado' ? (
+        <div className="space-y-2">
+          <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">
+            La propiedad ya se guardó con sus fotos — solo falta crear la versión de{' '}
+            {datosOperacionAlterna?.tipo_operacion ?? 'la otra operación'}.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={reintentarDuplicado}
+              className="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            >
+              Reintentar
+            </button>
+            <button
+              type="button"
+              onClick={continuarSinDuplicar}
+              className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-400"
+            >
+              Continuar sin crearla (la creo manualmente después)
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          ref={botonRef}
+          type="button"
+          onClick={alHacerClick}
+          disabled={deshabilitado}
+          className={`${className ?? ''} ${deshabilitado ? 'cursor-not-allowed opacity-60' : ''}`}
+        >
+          {texto}
+        </button>
+      )}
     </div>
   )
 }

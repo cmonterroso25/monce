@@ -94,6 +94,9 @@ export async function POST(request: NextRequest) {
         console.error(`--- ERROR AL NOTIFICAR WHATSAPP (propiedad ${propiedadId}) ---`, errNotif)
       }
     }
+  } else if (!esPortada) {
+    // Caso normal: cualquier foto que no sea la portada no participa en la
+    // notificación (ver comentario arriba). No es un error.
   } else {
     console.error(`Subida de foto para propiedad ${propiedadId}: no se resolvió organization_id del usuario; no se evaluó notificación.`)
   }
