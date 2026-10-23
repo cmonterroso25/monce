@@ -441,17 +441,15 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
     '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
-    '- zona: el texto de zona/ubicación general mencionado (ej. "zona 14"), o null.',
-    '- sector, condominio: para "buscar_propiedades", el sector o el nombre del condominio mencionados (ubicación más específica que zona), o null cada uno.',
-    '- municipio: para "buscar_propiedades", el municipio mencionado (ej. "Mixco", "Santa Catarina Pinula"), o null.',
+    '- ubicacion: para "buscar_propiedades", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
     '- amenidades: para "buscar_propiedades", arreglo de palabras clave de amenidades o características mencionadas (ej. ["piscina","gimnasio"]), o null si no mencionó ninguna.',
-    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
+    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min, area_min: número o null (area_min son metros cuadrados mínimos, de construcción o de terreno).',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
     '- nombre_contacto: para crear_tarea o agendar_cita, el nombre completo del cliente/contacto mencionado, o null.',
     '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
     '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
-    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "zona": string|null, "sector": string|null, "condominio": string|null, "municipio": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_min": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
   ].join('\n')
 }
 
@@ -612,6 +610,16 @@ function numeroONull(valor: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+// La IA no sabe (ni debe adivinar) en qué columna vive una ubicación libre
+// ("Vista Verde" puede ser el condominio de una propiedad y el sector o
+// zona de otra) — forzarla a elegir una sola columna llevaba a búsquedas
+// que no encontraban nada aunque la propiedad existiera. Por eso un solo
+// término de ubicación se compara contra zona, sector, condominio Y
+// municipio a la vez (OR), igual que en el webhook real.
+function escaparValorFiltro(valor: string): string {
+  return valor.replace(/[(),]/g, ' ').trim()
+}
+
 async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
   let query = supabase
     .from('propiedades')
@@ -619,27 +627,25 @@ async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: 
     .eq('organization_id', perfil.organization_id)
     .eq('estado', 'disponible')
     .order('creado_en', { ascending: false })
-    .limit(60)
+    .limit(80)
   if (c.tipo_operacion === 'venta' || c.tipo_operacion === 'renta') query = query.eq('tipo_operacion', c.tipo_operacion)
   if (TIPOS_PROPIEDAD_VALIDOS.includes(c.tipo_propiedad)) query = query.eq('tipo_propiedad', c.tipo_propiedad)
-  if (c.zona) query = query.ilike('zona', `%${String(c.zona).trim()}%`)
-  if (c.sector) query = query.ilike('sector', `%${String(c.sector).trim()}%`)
-  if (c.condominio) query = query.ilike('condominio', `%${String(c.condominio).trim()}%`)
   if (typeof c.precio_min === 'number') query = query.gte('precio', c.precio_min)
   if (typeof c.precio_max === 'number') query = query.lte('precio', c.precio_max)
+  if (typeof c.area_min === 'number') query = query.or(`area_construccion_m2.gte.${c.area_min},area_terreno_m2.gte.${c.area_min}`)
   if (Array.isArray(c.amenidades)) {
     for (const termino of c.amenidades) {
       if (typeof termino === 'string' && termino.trim()) query = query.ilike('amenidades', `%${termino.trim()}%`)
     }
   }
-  if (c.municipio) {
-    const { data: municipioMatch } = await supabase
-      .from('municipios')
-      .select('id')
-      .ilike('nombre', `%${String(c.municipio).trim()}%`)
-      .limit(1)
-      .maybeSingle()
-    if (municipioMatch) query = query.eq('municipio_id', municipioMatch.id)
+  const ubicacion = c.ubicacion ? escaparValorFiltro(String(c.ubicacion)) : null
+  if (ubicacion) {
+    const { data: municipiosCoincidentes } = await supabase.from('municipios').select('id').ilike('nombre', `%${ubicacion}%`)
+    const condiciones = [`zona.ilike.%${ubicacion}%`, `sector.ilike.%${ubicacion}%`, `condominio.ilike.%${ubicacion}%`]
+    if (municipiosCoincidentes && municipiosCoincidentes.length > 0) {
+      condiciones.push(`municipio_id.in.(${municipiosCoincidentes.map((m) => m.id).join(',')})`)
+    }
+    query = query.or(condiciones.join(','))
   }
 
   const { data, error } = await query
