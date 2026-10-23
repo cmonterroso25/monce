@@ -1,4 +1,4 @@
-export type GrupoWhatsapp = 'ventas' | 'rentas' | 'citas'
+export type GrupoWhatsapp = 'ventas' | 'rentas' | 'citas' | 'requerimientos'
 
 // 8 dígitos locales de Guatemala -> chatId individual de Green API. Mismo
 // criterio que telefonoAChatId en las Edge Functions del agente de
@@ -26,6 +26,7 @@ export async function obtenerChatIdGrupo(
   const columna =
     grupo === 'ventas' ? 'whatsapp_grupo_ventas' :
     grupo === 'rentas' ? 'whatsapp_grupo_rentas' :
+    grupo === 'requerimientos' ? 'whatsapp_grupo_requerimientos' :
     'whatsapp_grupo_citas'
   const { data, error } = await supabase
     .from('organizaciones')

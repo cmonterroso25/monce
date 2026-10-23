@@ -75,8 +75,8 @@ export async function crearRequerimiento(formData: FormData) {
         : Promise.resolve({ data: null }),
     ])
 
-    const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
-    if (chatIdCitas) {
+    const chatIdRequerimientos = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'requerimientos')
+    if (chatIdRequerimientos) {
       const ubicacion = [datos.zona ? `Zona ${datos.zona}` : null, datos.sector, municipio?.nombre].filter(Boolean).join(' · ')
       const presupuesto =
         datos.precio_min || datos.precio_max
@@ -105,7 +105,7 @@ export async function crearRequerimiento(formData: FormData) {
       ].filter(Boolean).join('\n')
 
       await notificarWhatsapp({
-        chatId: chatIdCitas,
+        chatId: chatIdRequerimientos,
         mensaje,
         organizationId: perfil.organization_id,
         tipoNotificacion: 'nuevo_requerimiento',
