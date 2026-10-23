@@ -2,6 +2,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { notificarWhatsapp, obtenerChatIdGrupo } from '@/lib/whatsapp/notificar'
+import { ETIQUETAS_TIPO_OPERACION, ETIQUETAS_CARACTERISTICA } from './constantes'
+import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
+
+const ETIQUETA_TIPO_PROPIEDAD: Record<string, string> = Object.fromEntries(
+  TIPOS_PROPIEDAD.map((t) => [t.value, t.label])
+)
 
 function textoOpcional(valor: FormDataEntryValue | null) {
   if (!valor || valor === '') return null
@@ -43,7 +50,7 @@ export async function crearRequerimiento(formData: FormData) {
 
   const { data: perfil } = await supabase
     .from('perfiles')
-    .select('organization_id')
+    .select('organization_id, nombre_completo')
     .eq('id', user.id)
     .single()
 
@@ -58,6 +65,54 @@ export async function crearRequerimiento(formData: FormData) {
   if (error) {
     console.error('--- ERROR AL CREAR REQUERIMIENTO ---', error)
     redirect(`/dashboard/requerimientos/nuevo?contacto_id=${datos.contacto_id}&error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (perfil?.organization_id) {
+    const [{ data: contacto }, { data: municipio }] = await Promise.all([
+      supabase.from('contactos').select('nombre_completo').eq('id', datos.contacto_id).maybeSingle(),
+      datos.municipio_id
+        ? supabase.from('municipios').select('nombre').eq('id', datos.municipio_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    const chatIdCitas = await obtenerChatIdGrupo(supabase, perfil.organization_id, 'citas')
+    if (chatIdCitas) {
+      const ubicacion = [datos.zona ? `Zona ${datos.zona}` : null, datos.sector, municipio?.nombre].filter(Boolean).join(' · ')
+      const presupuesto =
+        datos.precio_min || datos.precio_max
+          ? `${datos.moneda} ${datos.precio_min ? Number(datos.precio_min).toLocaleString() : '0'}${datos.precio_max ? ` - ${Number(datos.precio_max).toLocaleString()}` : '+'}`
+          : null
+      const distribucion = [
+        datos.dormitorios_min ? `${datos.dormitorios_min}+ hab` : null,
+        datos.banos_min ? `${datos.banos_min}+ baños` : null,
+        datos.niveles_min ? `${datos.niveles_min}+ niveles` : null,
+        datos.parqueos_min ? `${datos.parqueos_min}+ parqueos` : null,
+        datos.area_min ? `${datos.area_min}+ m²` : null,
+      ].filter(Boolean).join(' · ')
+      const caracteristicas = datos.caracteristicas_deseadas.map((c) => ETIQUETAS_CARACTERISTICA[c] ?? c)
+      if (datos.otras_caracteristicas) caracteristicas.push(datos.otras_caracteristicas)
+
+      const mensaje = [
+        `📋 *Nuevo requerimiento registrado*`,
+        `👤 Cliente: ${contacto?.nombre_completo ?? 'Contacto sin nombre'}`,
+        `🧑‍💼 Agente: ${perfil.nombre_completo ?? 'Sin asignar'}`,
+        `🏠 Busca: ${[datos.tipo_operacion ? ETIQUETAS_TIPO_OPERACION[datos.tipo_operacion] : null, datos.tipo_propiedad ? ETIQUETA_TIPO_PROPIEDAD[datos.tipo_propiedad] : null].filter(Boolean).join(' · ') || 'Cualquier tipo'}`,
+        presupuesto ? `💰 Presupuesto: ${presupuesto}` : null,
+        ubicacion ? `📍 Ubicación: ${ubicacion}` : null,
+        distribucion ? `📐 ${distribucion}` : null,
+        caracteristicas.length > 0 ? `✅ Características: ${caracteristicas.join(', ')}` : null,
+        datos.notas ? `📝 ${datos.notas}` : null,
+      ].filter(Boolean).join('\n')
+
+      await notificarWhatsapp({
+        chatId: chatIdCitas,
+        mensaje,
+        organizationId: perfil.organization_id,
+        tipoNotificacion: 'nuevo_requerimiento',
+        agenteId: user.id,
+        contactoId: datos.contacto_id,
+      })
+    }
   }
 
   revalidatePath('/dashboard/requerimientos')
