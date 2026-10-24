@@ -1007,24 +1007,25 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     contextoFecha,
     'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
     `Mensaje: "${mensaje}"`,
-    'Clasifica la intención en exactamente una de estas 10 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "cambiar_etapa_lead" (instrucción directa de mover un lead a una etapa específica, ej. "marca a Juan como ganado", "mueve el lead de María a perdida" — NO uses esto para preguntas, solo para órdenes explícitas), "consultar_requerimientos" (qué está buscando un cliente / qué requerimientos tiene abiertos, ej. "¿qué requerimientos tengo?", "¿hay algún requerimiento en zona 10?"), "cerrar_requerimiento" (instrucción explícita de cerrar/dar por resuelto un requerimiento, ej. "cierra el requerimiento de Juan", "ya no busca nada Juan" — NO uses esto para preguntas), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Clasifica la intención en exactamente una de estas 11 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "cambiar_etapa_lead" (instrucción directa de mover un lead a una etapa específica, ej. "marca a Juan como ganado", "mueve el lead de María a perdida" — NO uses esto para preguntas, solo para órdenes explícitas), "consultar_requerimientos" (qué está buscando un cliente / qué requerimientos tiene abiertos, ej. "¿qué requerimientos tengo?", "¿hay algún requerimiento en zona 10?"), "cerrar_requerimiento" (instrucción explícita de cerrar/dar por resuelto un requerimiento, ej. "cierra el requerimiento de Juan", "ya no busca nada Juan" — NO uses esto para preguntas), "crear_lead" (registrar un contacto y lead NUEVO que el asesor consiguió fuera del sistema, ej. "registra un lead nuevo: Juan Pérez, 5555-1234, busca casa en zona 15" — usa esto solo cuando quede claro que el cliente AÚN NO existe en el CRM, no para buscar o actualizar uno existente), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
     'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
     '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
     '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
-    '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
-    '- ubicacion: para "buscar_propiedades" o "consultar_requerimientos", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
+    '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null (para "buscar_propiedades" el tipo que busca en inventario; para "crear_lead" el tipo que le interesa al cliente nuevo).',
+    '- ubicacion: para "buscar_propiedades", "consultar_requerimientos" o "crear_lead", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
     '- amenidades: para "buscar_propiedades", arreglo de palabras clave de amenidades o características mencionadas (ej. ["piscina","gimnasio"]), o null si no mencionó ninguna.',
-    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
+    '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null (para "crear_lead", precio_min/precio_max son el presupuesto del cliente nuevo, si lo mencionó).',
     '- area_exacta, area_min, area_max: metros cuadrados mencionados (construcción o terreno), número o null. Si da un metraje SIN calificarlo (ej. "de 100m2", "casa de 100 metros") usa area_exacta — debe coincidir EXACTO, ni más ni menos. Usa area_min SOLO si dijo explícitamente "más de", "mayor a", "mínimo", "arriba de" o similar. Usa area_max SOLO si dijo explícitamente "menos de", "menor a", "máximo", "hasta" o similar. Si mencionó un rango explícito (ej. "entre 100 y 150 m2") usa area_min Y area_max juntos. Nunca combines area_exacta con area_min/area_max.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
-    '- nombre_contacto: para crear_tarea, agendar_cita, cambiar_etapa_lead o cerrar_requerimiento, el nombre completo del cliente/contacto mencionado, o null.',
+    '- nombre_contacto: para crear_tarea, agendar_cita, cambiar_etapa_lead, cerrar_requerimiento o crear_lead, el nombre completo del cliente/contacto mencionado, o null.',
+    '- telefono_contacto: SOLO para crear_lead, el teléfono del cliente nuevo tal como lo escribió (ej. "5555-1234"), o null si no lo mencionó.',
     '- etapa_nueva: SOLO para cambiar_etapa_lead, la etapa de destino: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida" (interpreta "ganado"→"ganada", "perdido"→"perdida", "reservó"→"reservada", etc.), o null si no quedó claro a cuál etapa.',
     '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
     '- prioridad_tarea: "baja"|"media"|"alta" (infiere la urgencia; si no es claro, usa "media").',
-    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_exacta": number|null, "area_min": number|null, "area_max": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "etapa_nueva": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
+    'Responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown), con exactamente estos campos: {"intencion": "...", "etapa_lead": string|null, "rango_fecha_leads": string|null, "rango_fecha_citas": string|null, "tipo_operacion": string|null, "tipo_propiedad": string|null, "ubicacion": string|null, "amenidades": string[]|null, "precio_min": number|null, "precio_max": number|null, "dormitorios_min": number|null, "banos_min": number|null, "niveles_min": number|null, "area_exacta": number|null, "area_min": number|null, "area_max": number|null, "titulo_tarea": string|null, "nombre_contacto": string|null, "telefono_contacto": string|null, "etapa_nueva": string|null, "fecha_hora_iso": string|null, "confianza_fecha": string|null, "prioridad_tarea": string|null}.',
   ].join('\n')
 }
 
@@ -1065,6 +1066,7 @@ function mensajeConversacionGeneral(nombreCompleto: string): string {
     '• "Busca casas en zona 10 hasta Q1.8M"',
     '• "Créame una tarea para llamar a Juan mañana a las 10am"',
     '• "Agéndame una cita con Juan Pérez el jueves a las 3pm"',
+    '• "Registra un lead nuevo: Juan Pérez, 5555-1234, busca casa en zona 15"',
     '¿En qué te ayudo? 🙂',
   ].join('\n')
 }
@@ -1496,6 +1498,149 @@ async function responderCerrarRequerimiento(perfil: PerfilAsistente, chatId: str
   await cerrarRequerimientoDesdeAsistente(perfil, chatId, nombreContacto)
 }
 
+type DatosLeadNuevo = { tipo_propiedad: string | null; ubicacion: string | null; precio_min: number | null; precio_max: number | null }
+
+// Mismo criterio que buscarDuplicadoTelefono en src/app/dashboard/contactos/acciones.ts
+// (normaliza quitando no-dígitos y el prefijo 502), para no crear un contacto
+// duplicado cuando Ben registra un lead nuevo por WhatsApp.
+function normalizarTelefonoContacto(telefono: string): string {
+  const soloDigitos = telefono.replace(/\D/g, '')
+  if (soloDigitos.startsWith('502') && soloDigitos.length > 8) return soloDigitos.slice(3)
+  return soloDigitos
+}
+
+async function buscarContactoDuplicadoPorTelefono(telefono: string, organizationId: string): Promise<{ nombre_completo: string } | null> {
+  const telefonoNormalizado = normalizarTelefonoContacto(telefono)
+  if (!telefonoNormalizado) return null
+  const { data: candidatos } = await supabase
+    .from('contactos')
+    .select('nombre_completo, telefono')
+    .eq('organization_id', organizationId)
+    .not('telefono', 'is', null)
+  const encontrado = (candidatos ?? []).find((c) => c.telefono && normalizarTelefonoContacto(c.telefono) === telefonoNormalizado)
+  return encontrado ? { nombre_completo: encontrado.nombre_completo } : null
+}
+
+async function crearLeadDesdeAsistente(perfil: PerfilAsistente, chatId: string, nombreContacto: string, telefonoContacto: string, datos: DatosLeadNuevo) {
+  const duplicado = await buscarContactoDuplicadoPorTelefono(telefonoContacto, perfil.organization_id)
+  if (duplicado) {
+    await responderAsesor(
+      chatId,
+      `⚠️ Ya existe un contacto con ese teléfono: ${duplicado.nombre_completo}. No registré uno nuevo para evitar duplicarlo — revísalo desde el CRM.`,
+      perfil.organization_id,
+      perfil.id,
+      null,
+      'asistente_ia_respuesta'
+    )
+    return
+  }
+
+  const { data: contacto, error: errorContacto } = await supabase
+    .from('contactos')
+    .insert({
+      nombre_completo: nombreContacto,
+      telefono: telefonoContacto,
+      tipo_contacto: 'lead',
+      estado: 'nuevo',
+      origen: 'WhatsApp (Ben)',
+      presupuesto_min: datos.precio_min,
+      presupuesto_max: datos.precio_max,
+      zonas_interes: datos.ubicacion ? [datos.ubicacion] : null,
+      tipo_propiedad_interes: datos.tipo_propiedad,
+      agente_asignado: perfil.id,
+      organization_id: perfil.organization_id,
+    })
+    .select('id')
+    .single()
+
+  if (errorContacto || !contacto) {
+    console.error('No se pudo crear contacto desde el asistente IA:', errorContacto)
+    await responderAsesor(chatId, 'Uy, no pude registrar el contacto 😓 Intenta de nuevo o créalo manualmente desde el CRM.', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  const { error: errorLead } = await supabase.from('leads').insert({
+    contacto_id: contacto.id,
+    agente_id: perfil.id,
+    etapa: 'contacto_inicial',
+    organization_id: perfil.organization_id,
+  })
+
+  if (errorLead) {
+    console.error('No se pudo crear lead desde el asistente IA:', errorLead)
+    await responderAsesor(
+      chatId,
+      `Registré a ${nombreContacto} como contacto, pero no pude crearle el lead 😓 Créalo manualmente desde su ficha.`,
+      perfil.organization_id,
+      perfil.id,
+      null,
+      'asistente_ia_respuesta'
+    )
+    return
+  }
+
+  const detalles: string[] = []
+  if (datos.tipo_propiedad) detalles.push(`busca ${datos.tipo_propiedad}`)
+  if (datos.ubicacion) detalles.push(`en ${datos.ubicacion}`)
+  if (datos.precio_min || datos.precio_max) {
+    const rango = datos.precio_min && datos.precio_max ? `${datos.precio_min}-${datos.precio_max}` : datos.precio_min ? `desde ${datos.precio_min}` : `hasta ${datos.precio_max}`
+    detalles.push(`presupuesto ${rango}`)
+  }
+  const detalleTxt = detalles.length > 0 ? ` (${detalles.join(', ')})` : ''
+
+  await responderAsesor(
+    chatId,
+    `✅ Listo, registré a ${nombreContacto} (${telefonoContacto}) como contacto nuevo${detalleTxt} y le creé su lead en "Contacto inicial".`,
+    perfil.organization_id,
+    perfil.id,
+    null,
+    'asistente_ia_respuesta'
+  )
+}
+
+async function responderCrearLead(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+  const nombreContacto = c.nombre_contacto ? String(c.nombre_contacto).trim() : null
+  const telefonoContacto = c.telefono_contacto ? String(c.telefono_contacto).trim() : null
+  const datos: DatosLeadNuevo = {
+    tipo_propiedad: c.tipo_propiedad ?? null,
+    ubicacion: c.ubicacion ?? null,
+    precio_min: c.precio_min ?? null,
+    precio_max: c.precio_max ?? null,
+  }
+
+  if (!nombreContacto) {
+    const pregunta = '¿Cuál es el nombre completo del cliente nuevo? Responde citando este mensaje 🙂'
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'crear_lead',
+      contexto: { esperando: 'nombre_contacto', telefono_contacto: telefonoContacto, ...datos },
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  if (!telefonoContacto) {
+    const pregunta = `¿Cuál es el teléfono de ${nombreContacto}? Responde citando este mensaje 🙂`
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'crear_lead',
+      contexto: { esperando: 'telefono_contacto', nombre_contacto: nombreContacto, ...datos },
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  await crearLeadDesdeAsistente(perfil, chatId, nombreContacto, telefonoContacto, datos)
+}
+
 function fechaEsConfiable(fechaIso: unknown, confianza: unknown): fechaIso is string {
   return typeof fechaIso === 'string' && (confianza === 'alta' || confianza === 'media')
 }
@@ -1759,6 +1904,7 @@ async function manejarConsultaGeneral(perfil: PerfilAsistente, chatId: string, m
   else if (c.intencion === 'cambiar_etapa_lead') await responderCambiarEtapaLead(perfil, chatId, c)
   else if (c.intencion === 'consultar_requerimientos') await responderConsultarRequerimientos(perfil, chatId, c)
   else if (c.intencion === 'cerrar_requerimiento') await responderCerrarRequerimiento(perfil, chatId, c)
+  else if (c.intencion === 'crear_lead') await responderCrearLead(perfil, chatId, c)
   else if (c.intencion === 'reporte_desempeno') await responderReporteDesempeno(perfil, chatId, c)
   else await responderAsesor(chatId, mensajeConversacionGeneral(perfil.nombre_completo), perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
 }
@@ -1871,6 +2017,42 @@ async function procesarAclaracionPendiente(pendiente: PendienteAsistenteRow, men
   }
   if (pendiente.intencion === 'cerrar_requerimiento') {
     await cerrarRequerimientoDesdeAsistente(perfil, chatId, mensaje.trim())
+    return
+  }
+  if (pendiente.intencion === 'crear_lead') {
+    const ctx = pendiente.contexto as {
+      esperando: 'nombre_contacto' | 'telefono_contacto'
+      nombre_contacto?: string
+      telefono_contacto?: string | null
+      tipo_propiedad: string | null
+      ubicacion: string | null
+      precio_min: number | null
+      precio_max: number | null
+    }
+    const datos: DatosLeadNuevo = { tipo_propiedad: ctx.tipo_propiedad, ubicacion: ctx.ubicacion, precio_min: ctx.precio_min, precio_max: ctx.precio_max }
+
+    if (ctx.esperando === 'nombre_contacto') {
+      const nombreContacto = mensaje.trim()
+      if (ctx.telefono_contacto) {
+        await crearLeadDesdeAsistente(perfil, chatId, nombreContacto, ctx.telefono_contacto, datos)
+        return
+      }
+      const pregunta = `¿Cuál es el teléfono de ${nombreContacto}? Responde citando este mensaje 🙂`
+      const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+      await supabase.from('asistente_ia_pendientes').insert({
+        chat_id_asesor: chatId,
+        perfil_id: perfil.id,
+        organization_id: perfil.organization_id,
+        intencion: 'crear_lead',
+        contexto: { esperando: 'telefono_contacto', nombre_contacto: nombreContacto, ...datos },
+        pregunta_texto: pregunta,
+        green_api_message_id: idMessage,
+      })
+      return
+    }
+
+    // ctx.esperando === 'telefono_contacto'
+    await crearLeadDesdeAsistente(perfil, chatId, ctx.nombre_contacto!, mensaje.trim(), datos)
     return
   }
   const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptAclaracionFecha(mensaje))) as { fecha_hora_iso: string | null; confianza_fecha: string }
