@@ -1287,10 +1287,12 @@ function construirCondicionArea(c: Record<string, any>): string | null {
   return null
 }
 
-async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+// Extraída de responderBusquedaPropiedades para reutilizarse también al
+// sugerir propiedades para asignar a un lead nuevo (crear_lead).
+async function buscarPropiedadesCandidatas(perfil: PerfilAsistente, c: Record<string, any>): Promise<any[]> {
   let query = supabase
     .from('propiedades')
-    .select('id, titulo, tipo_operacion, zona, ciudad, sector, condominio, niveles, precio, moneda, dormitorios, banos, area_construccion_m2, area_terreno_m2, amenidades, municipio:municipios(nombre)')
+    .select('id, codigo, titulo, tipo_operacion, zona, ciudad, sector, condominio, niveles, precio, moneda, dormitorios, banos, area_construccion_m2, area_terreno_m2, amenidades, municipio:municipios(nombre)')
     .eq('organization_id', perfil.organization_id)
     .eq('estado', 'disponible')
     .order('creado_en', { ascending: false })
@@ -1321,8 +1323,7 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
   const { data, error } = await query
   if (error) {
     console.error('Error buscando propiedades para asistente IA:', error)
-    await responderAsesor(chatId, 'Uy, no pude buscar en el inventario en este momento 😓', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
-    return
+    return []
   }
 
   let resultados = (data ?? []) as any[]
@@ -1335,6 +1336,28 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
   if (typeof c.niveles_min === 'number') {
     resultados = resultados.filter((p) => { const n = numeroONull(p.niveles); return n !== null && n >= c.niveles_min })
   }
+  return resultados
+}
+
+function formatearLineaPropiedad(p: any): string {
+  const municipioNombre = Array.isArray(p.municipio) ? p.municipio[0]?.nombre : p.municipio?.nombre
+  const zonaTxt = formatearZonaDup(p.zona) ?? municipioNombre ?? p.ciudad ?? ''
+  const ubicacionExtra = [p.condominio, municipioNombre && municipioNombre !== zonaTxt ? municipioNombre : null]
+    .filter(Boolean)
+    .join(' · ')
+  const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
+  const area = p.area_construccion_m2 ?? p.area_terreno_m2
+  const detalles = [
+    p.dormitorios ? `${p.dormitorios} hab` : null,
+    p.banos ? `${p.banos} baños` : null,
+    p.niveles ? `${p.niveles} niveles` : null,
+    area ? `${area} m²` : null,
+  ].filter(Boolean).join(' · ')
+  return `${p.titulo} — ${zonaTxt}${ubicacionExtra ? ' · ' + ubicacionExtra : ''} — ${precioTxt}${detalles ? ` (${detalles})` : ''}`
+}
+
+async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+  let resultados = await buscarPropiedadesCandidatas(perfil, c)
   const total = resultados.length
   resultados = resultados.slice(0, 5)
 
@@ -1342,22 +1365,7 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
     await responderAsesor(chatId, 'No encontré propiedades disponibles con esos criterios 😕 ¿Quieres que busque con otros filtros?', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
     return
   }
-  const lineas = resultados.map((p: any) => {
-    const municipioNombre = Array.isArray(p.municipio) ? p.municipio[0]?.nombre : p.municipio?.nombre
-    const zonaTxt = formatearZonaDup(p.zona) ?? municipioNombre ?? p.ciudad ?? ''
-    const ubicacionExtra = [p.condominio, municipioNombre && municipioNombre !== zonaTxt ? municipioNombre : null]
-      .filter(Boolean)
-      .join(' · ')
-    const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
-    const area = p.area_construccion_m2 ?? p.area_terreno_m2
-    const detalles = [
-      p.dormitorios ? `${p.dormitorios} hab` : null,
-      p.banos ? `${p.banos} baños` : null,
-      p.niveles ? `${p.niveles} niveles` : null,
-      area ? `${area} m²` : null,
-    ].filter(Boolean).join(' · ')
-    return `• ${p.titulo} — ${zonaTxt}${ubicacionExtra ? ' · ' + ubicacionExtra : ''} — ${precioTxt}${detalles ? ` (${detalles})` : ''}\n  ${urlPropiedadWhatsapp(p.id)}`
-  })
+  const lineas = resultados.map((p: any) => `• ${formatearLineaPropiedad(p)}\n  ${urlPropiedadWhatsapp(p.id)}`)
   await responderAsesor(
     chatId,
     [`🏠 Encontré ${total} propiedad${total === 1 ? '' : 'es'}${total > resultados.length ? ` (muestro ${resultados.length})` : ''}:`, '', ...lineas].join('\n'),
@@ -1559,14 +1567,18 @@ async function crearLeadDesdeAsistente(perfil: PerfilAsistente, chatId: string, 
     return
   }
 
-  const { error: errorLead } = await supabase.from('leads').insert({
-    contacto_id: contacto.id,
-    agente_id: perfil.id,
-    etapa: 'contacto_inicial',
-    organization_id: perfil.organization_id,
-  })
+  const { data: lead, error: errorLead } = await supabase
+    .from('leads')
+    .insert({
+      contacto_id: contacto.id,
+      agente_id: perfil.id,
+      etapa: 'contacto_inicial',
+      organization_id: perfil.organization_id,
+    })
+    .select('id')
+    .single()
 
-  if (errorLead) {
+  if (errorLead || !lead) {
     console.error('No se pudo crear lead desde el asistente IA:', errorLead)
     await responderAsesor(
       chatId,
@@ -1588,14 +1600,21 @@ async function crearLeadDesdeAsistente(perfil: PerfilAsistente, chatId: string, 
   }
   const detalleTxt = detalles.length > 0 ? ` (${detalles.join(', ')})` : ''
 
-  await responderAsesor(
-    chatId,
+  const pregunta = [
     `✅ Listo, registré a ${nombreContacto} (${telefonoContacto}) como contacto nuevo${detalleTxt} y le creé su lead en "Contacto inicial".`,
-    perfil.organization_id,
-    perfil.id,
-    null,
-    'asistente_ia_respuesta'
-  )
+    '',
+    '¿Le asigno alguna propiedad? Dime el código (ej. PROP-0618) o cuéntame qué busca (zona, precio, tipo) y te paso opciones. Si no quieres asignar ninguna por ahora, responde "no".',
+  ].join('\n')
+  const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+  await supabase.from('asistente_ia_pendientes').insert({
+    chat_id_asesor: chatId,
+    perfil_id: perfil.id,
+    organization_id: perfil.organization_id,
+    intencion: 'crear_lead_propiedad',
+    contexto: { lead_id: lead.id, contacto_id: contacto.id, nombre_contacto: nombreContacto, ...datos },
+    pregunta_texto: pregunta,
+    green_api_message_id: idMessage,
+  })
 }
 
 async function responderCrearLead(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
@@ -1639,6 +1658,180 @@ async function responderCrearLead(perfil: PerfilAsistente, chatId: string, c: Re
   }
 
   await crearLeadDesdeAsistente(perfil, chatId, nombreContacto, telefonoContacto, datos)
+}
+
+const PALABRAS_SIN_PROPIEDAD = ['no', 'ninguna', 'ninguno', 'no gracias', 'no por ahora', 'no todavía', 'no todavia', 'nada', 'ningun', 'ningúna', 'olvidalo', 'olvídalo']
+
+function esRespuestaSinPropiedad(mensaje: string): boolean {
+  const limpio = mensaje.trim().toLowerCase().replace(/[.!¡¿?]/g, '')
+  return limpio.length <= 20 && PALABRAS_SIN_PROPIEDAD.some((p) => limpio === p || limpio.startsWith(p + ' '))
+}
+
+function extraerCodigoPropiedad(mensaje: string): string | null {
+  const match = mensaje.match(/PROP[\s-]?(\d{1,6})/i)
+  if (!match) return null
+  return `PROP-${match[1].padStart(4, '0')}`
+}
+
+async function buscarPropiedadPorCodigo(perfil: PerfilAsistente, codigo: string): Promise<{ id: string; codigo: string; titulo: string; estado: string } | null> {
+  const { data } = await supabase
+    .from('propiedades')
+    .select('id, codigo, titulo, estado')
+    .eq('codigo', codigo)
+    .eq('organization_id', perfil.organization_id)
+    .maybeSingle()
+  return data ?? null
+}
+
+// Mismo criterio que crearLead en src/app/dashboard/leads/acciones.ts: solo
+// se asocian propiedades disponibles (no reservadas/vendidas/inactivas).
+async function asociarPropiedadALead(perfil: PerfilAsistente, leadId: string, contactoId: string, propiedadId: string) {
+  await supabase.from('leads').update({ propiedad_id: propiedadId }).eq('id', leadId)
+  const { data: previo } = await supabase
+    .from('envios_propiedad_contacto')
+    .select('id')
+    .eq('contacto_id', contactoId)
+    .eq('propiedad_id', propiedadId)
+    .limit(1)
+  if (!previo || previo.length === 0) {
+    await supabase.from('envios_propiedad_contacto').insert({
+      contacto_id: contactoId,
+      propiedad_id: propiedadId,
+      canal: 'manual',
+      enviado_por: perfil.id,
+      organization_id: perfil.organization_id,
+    })
+  }
+}
+
+type DatosLeadNuevoConLead = DatosLeadNuevo & { lead_id: string; contacto_id: string; nombre_contacto: string }
+
+async function procesarRespuestaPropiedadLead(perfil: PerfilAsistente, chatId: string, mensaje: string, ctx: DatosLeadNuevoConLead) {
+  if (esRespuestaSinPropiedad(mensaje)) {
+    await responderAsesor(chatId, 'Sin problema, no asigné ninguna propiedad. Puedes hacerlo luego desde el CRM cuando quieras 🙂', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  const codigo = extraerCodigoPropiedad(mensaje)
+  if (codigo) {
+    const propiedad = await buscarPropiedadPorCodigo(perfil, codigo)
+    if (!propiedad) {
+      const pregunta = `No encontré ninguna propiedad con el código ${codigo} 😕 ¿me das otro código, o me cuentas qué busca el cliente para sugerirte opciones?`
+      const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+      await supabase.from('asistente_ia_pendientes').insert({
+        chat_id_asesor: chatId, perfil_id: perfil.id, organization_id: perfil.organization_id,
+        intencion: 'crear_lead_propiedad', contexto: ctx, pregunta_texto: pregunta, green_api_message_id: idMessage,
+      })
+      return
+    }
+    if (propiedad.estado !== 'disponible') {
+      const pregunta = `La propiedad ${propiedad.codigo} (${propiedad.titulo}) no está disponible (estado: ${propiedad.estado}) 😕 ¿me das otro código, o me cuentas qué busca el cliente para sugerirte opciones?`
+      const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+      await supabase.from('asistente_ia_pendientes').insert({
+        chat_id_asesor: chatId, perfil_id: perfil.id, organization_id: perfil.organization_id,
+        intencion: 'crear_lead_propiedad', contexto: ctx, pregunta_texto: pregunta, green_api_message_id: idMessage,
+      })
+      return
+    }
+    await asociarPropiedadALead(perfil, ctx.lead_id, ctx.contacto_id, propiedad.id)
+    await responderAsesor(
+      chatId,
+      `✅ Le asigné la propiedad ${propiedad.codigo} (${propiedad.titulo}) al lead de ${ctx.nombre_contacto}.`,
+      perfil.organization_id,
+      perfil.id,
+      null,
+      'asistente_ia_respuesta'
+    )
+    return
+  }
+
+  // Sin código: se interpreta el mensaje como criterios de búsqueda,
+  // combinados con lo que ya se sabía del cliente desde crear_lead.
+  const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptConsultaGeneral(mensaje))) as Record<string, any>
+  const criterios: Record<string, any> = {
+    tipo_propiedad: clasificacion.tipo_propiedad ?? ctx.tipo_propiedad,
+    ubicacion: clasificacion.ubicacion ?? ctx.ubicacion,
+    precio_min: clasificacion.precio_min ?? ctx.precio_min,
+    precio_max: clasificacion.precio_max ?? ctx.precio_max,
+    tipo_operacion: clasificacion.tipo_operacion ?? null,
+    amenidades: clasificacion.amenidades ?? null,
+    dormitorios_min: clasificacion.dormitorios_min ?? null,
+    banos_min: clasificacion.banos_min ?? null,
+    niveles_min: clasificacion.niveles_min ?? null,
+    area_exacta: clasificacion.area_exacta ?? null,
+    area_min: clasificacion.area_min ?? null,
+    area_max: clasificacion.area_max ?? null,
+  }
+  const candidatas = (await buscarPropiedadesCandidatas(perfil, criterios)).slice(0, 5)
+  const ctxConCriterios: DatosLeadNuevoConLead = { ...ctx, tipo_propiedad: criterios.tipo_propiedad, ubicacion: criterios.ubicacion, precio_min: criterios.precio_min, precio_max: criterios.precio_max }
+
+  if (candidatas.length === 0) {
+    const pregunta = 'No encontré propiedades disponibles con esos criterios 😕 ¿me das un código directamente, o seguimos sin asignar ninguna (responde "no")?'
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId, perfil_id: perfil.id, organization_id: perfil.organization_id,
+      intencion: 'crear_lead_propiedad', contexto: ctxConCriterios, pregunta_texto: pregunta, green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  const opciones = candidatas.map((p: any) => ({ numero: 0, propiedad_id: p.id, codigo: p.codigo as string | null, titulo: p.titulo as string }))
+  opciones.forEach((o, i) => (o.numero = i + 1))
+  const lineas = candidatas.map((p: any, i: number) => `${i + 1}. ${formatearLineaPropiedad(p)}${p.codigo ? ` (${p.codigo})` : ''}`)
+  const pregunta = [
+    `Encontré estas opciones para ${ctx.nombre_contacto}:`,
+    ...lineas,
+    '',
+    '¿Cuál le asigno? Responde con el número o el código, o dime "ninguna" si no quieres asignar nada.',
+  ].join('\n')
+  const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+  await supabase.from('asistente_ia_pendientes').insert({
+    chat_id_asesor: chatId,
+    perfil_id: perfil.id,
+    organization_id: perfil.organization_id,
+    intencion: 'crear_lead_propiedad_elegir',
+    contexto: { lead_id: ctx.lead_id, contacto_id: ctx.contacto_id, nombre_contacto: ctx.nombre_contacto, opciones },
+    pregunta_texto: pregunta,
+    green_api_message_id: idMessage,
+  })
+}
+
+async function procesarEleccionPropiedadLead(
+  perfil: PerfilAsistente,
+  chatId: string,
+  mensaje: string,
+  ctx: { lead_id: string; contacto_id: string; nombre_contacto: string; opciones: { numero: number; propiedad_id: string; codigo: string | null; titulo: string }[] }
+) {
+  if (esRespuestaSinPropiedad(mensaje)) {
+    await responderAsesor(chatId, 'Sin problema, no asigné ninguna propiedad. Puedes hacerlo luego desde el CRM cuando quieras 🙂', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  const numero = parseInt(mensaje.trim(), 10)
+  const codigoMencionado = extraerCodigoPropiedad(mensaje)
+  const elegida =
+    (Number.isFinite(numero) ? ctx.opciones.find((o) => o.numero === numero) : null) ??
+    (codigoMencionado ? ctx.opciones.find((o) => o.codigo === codigoMencionado) : null)
+
+  if (!elegida) {
+    const pregunta = 'No identifiqué cuál de las opciones — responde con el número (1, 2, 3...) o el código 🙂'
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId, perfil_id: perfil.id, organization_id: perfil.organization_id,
+      intencion: 'crear_lead_propiedad_elegir', contexto: ctx, pregunta_texto: pregunta, green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  await asociarPropiedadALead(perfil, ctx.lead_id, ctx.contacto_id, elegida.propiedad_id)
+  await responderAsesor(
+    chatId,
+    `✅ Le asigné la propiedad${elegida.codigo ? ` ${elegida.codigo}` : ''} (${elegida.titulo}) al lead de ${ctx.nombre_contacto}.`,
+    perfil.organization_id,
+    perfil.id,
+    null,
+    'asistente_ia_respuesta'
+  )
 }
 
 function fechaEsConfiable(fechaIso: unknown, confianza: unknown): fechaIso is string {
@@ -2053,6 +2246,14 @@ async function procesarAclaracionPendiente(pendiente: PendienteAsistenteRow, men
 
     // ctx.esperando === 'telefono_contacto'
     await crearLeadDesdeAsistente(perfil, chatId, ctx.nombre_contacto!, mensaje.trim(), datos)
+    return
+  }
+  if (pendiente.intencion === 'crear_lead_propiedad') {
+    await procesarRespuestaPropiedadLead(perfil, chatId, mensaje, pendiente.contexto as DatosLeadNuevoConLead)
+    return
+  }
+  if (pendiente.intencion === 'crear_lead_propiedad_elegir') {
+    await procesarEleccionPropiedadLead(perfil, chatId, mensaje, pendiente.contexto as any)
     return
   }
   const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptAclaracionFecha(mensaje))) as { fecha_hora_iso: string | null; confianza_fecha: string }

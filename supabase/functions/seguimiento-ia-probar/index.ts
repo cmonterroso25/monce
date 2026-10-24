@@ -675,10 +675,10 @@ function construirCondicionArea(c: Record<string, any>): string | null {
   return null
 }
 
-async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+async function buscarPropiedadesCandidatas(perfil: PerfilAsistente, c: Record<string, any>): Promise<any[]> {
   let query = supabase
     .from('propiedades')
-    .select('id, titulo, tipo_operacion, zona, ciudad, sector, condominio, niveles, precio, moneda, dormitorios, banos, area_construccion_m2, area_terreno_m2, amenidades, municipio:municipios(nombre)')
+    .select('id, codigo, titulo, tipo_operacion, zona, ciudad, sector, condominio, niveles, precio, moneda, dormitorios, banos, area_construccion_m2, area_terreno_m2, amenidades, municipio:municipios(nombre)')
     .eq('organization_id', perfil.organization_id)
     .eq('estado', 'disponible')
     .order('creado_en', { ascending: false })
@@ -705,30 +705,37 @@ async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: 
   }
 
   const { data, error } = await query
-  if (error) return 'Uy, no pude buscar en el inventario en este momento 😓'
+  if (error) return []
 
   let resultados = (data ?? []) as any[]
   if (typeof c.dormitorios_min === 'number') resultados = resultados.filter((p) => { const n = numeroONull(p.dormitorios); return n !== null && n >= c.dormitorios_min })
   if (typeof c.banos_min === 'number') resultados = resultados.filter((p) => { const n = numeroONull(p.banos); return n !== null && n >= c.banos_min })
   if (typeof c.niveles_min === 'number') resultados = resultados.filter((p) => { const n = numeroONull(p.niveles); return n !== null && n >= c.niveles_min })
+  return resultados
+}
+
+function formatearLineaPropiedad(p: any): string {
+  const municipioNombre = Array.isArray(p.municipio) ? p.municipio[0]?.nombre : p.municipio?.nombre
+  const zonaTxt = formatearZonaDup(p.zona) ?? municipioNombre ?? p.ciudad ?? ''
+  const ubicacionExtra = [p.condominio, municipioNombre && municipioNombre !== zonaTxt ? municipioNombre : null].filter(Boolean).join(' · ')
+  const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
+  const area = p.area_construccion_m2 ?? p.area_terreno_m2
+  const detalles = [
+    p.dormitorios ? `${p.dormitorios} hab` : null,
+    p.banos ? `${p.banos} baños` : null,
+    p.niveles ? `${p.niveles} niveles` : null,
+    area ? `${area} m²` : null,
+  ].filter(Boolean).join(' · ')
+  return `${p.titulo} — ${zonaTxt}${ubicacionExtra ? ' · ' + ubicacionExtra : ''} — ${precioTxt}${detalles ? ` (${detalles})` : ''}`
+}
+
+async function calcularRespuestaBusquedaPropiedades(perfil: PerfilAsistente, c: Record<string, any>): Promise<string> {
+  let resultados = await buscarPropiedadesCandidatas(perfil, c)
   const total = resultados.length
   resultados = resultados.slice(0, 5)
 
   if (resultados.length === 0) return 'No encontré propiedades disponibles con esos criterios 😕 ¿Quieres que busque con otros filtros?'
-  const lineas = resultados.map((p: any) => {
-    const municipioNombre = Array.isArray(p.municipio) ? p.municipio[0]?.nombre : p.municipio?.nombre
-    const zonaTxt = formatearZonaDup(p.zona) ?? municipioNombre ?? p.ciudad ?? ''
-    const ubicacionExtra = [p.condominio, municipioNombre && municipioNombre !== zonaTxt ? municipioNombre : null].filter(Boolean).join(' · ')
-    const precioTxt = `${p.moneda ?? 'GTQ'} ${Number(p.precio ?? 0).toLocaleString('es-GT')}`
-    const area = p.area_construccion_m2 ?? p.area_terreno_m2
-    const detalles = [
-      p.dormitorios ? `${p.dormitorios} hab` : null,
-      p.banos ? `${p.banos} baños` : null,
-      p.niveles ? `${p.niveles} niveles` : null,
-      area ? `${area} m²` : null,
-    ].filter(Boolean).join(' · ')
-    return `• ${p.titulo} — ${zonaTxt}${ubicacionExtra ? ' · ' + ubicacionExtra : ''} — ${precioTxt}${detalles ? ` (${detalles})` : ''} [propiedad ${p.id}]`
-  })
+  const lineas = resultados.map((p: any) => `• ${formatearLineaPropiedad(p)} [propiedad ${p.id}]`)
   return [`🏠 Encontré ${total} propiedad${total === 1 ? '' : 'es'}${total > resultados.length ? ` (muestro ${resultados.length})` : ''}:`, '', ...lineas].join('\n')
 }
 
@@ -869,10 +876,40 @@ async function buscarContactoDuplicadoPorTelefono(telefono: string, organization
   return encontrado ? { nombre_completo: encontrado.nombre_completo } : null
 }
 
-async function calcularAccionCrearLead(perfil: PerfilAsistente, nombreContacto: string, telefonoContacto: string, datos: DatosLeadNuevo): Promise<string> {
+const PALABRAS_SIN_PROPIEDAD = ['no', 'ninguna', 'ninguno', 'no gracias', 'no por ahora', 'no todavía', 'no todavia', 'nada', 'ningun', 'ningúna', 'olvidalo', 'olvídalo']
+
+function esRespuestaSinPropiedad(mensaje: string): boolean {
+  const limpio = mensaje.trim().toLowerCase().replace(/[.!¡¿?]/g, '')
+  return limpio.length <= 20 && PALABRAS_SIN_PROPIEDAD.some((p) => limpio === p || limpio.startsWith(p + ' '))
+}
+
+function extraerCodigoPropiedad(mensaje: string): string | null {
+  const match = mensaje.match(/PROP[\s-]?(\d{1,6})/i)
+  if (!match) return null
+  return `PROP-${match[1].padStart(4, '0')}`
+}
+
+async function buscarPropiedadPorCodigo(perfil: PerfilAsistente, codigo: string): Promise<{ id: string; codigo: string; titulo: string; estado: string } | null> {
+  const { data } = await supabase
+    .from('propiedades')
+    .select('id, codigo, titulo, estado')
+    .eq('codigo', codigo)
+    .eq('organization_id', perfil.organization_id)
+    .maybeSingle()
+  return data ?? null
+}
+
+type ContextoLeadPropiedad = { nombre_contacto: string; tipo_propiedad: string | null; ubicacion: string | null; precio_min: number | null; precio_max: number | null }
+type OpcionPropiedad = { numero: number; propiedad_id: string; codigo: string | null; titulo: string }
+
+async function calcularResultadoCrearLead(perfil: PerfilAsistente, nombreContacto: string, telefonoContacto: string, datos: DatosLeadNuevo): Promise<ResultadoAsistenteGeneral> {
   const duplicado = await buscarContactoDuplicadoPorTelefono(telefonoContacto, perfil.organization_id)
   if (duplicado) {
-    return `⚠️ Ya existe un contacto con ese teléfono: ${duplicado.nombre_completo}. No se crearía uno nuevo para evitar duplicarlo — se debería revisar manualmente desde el CRM.`
+    return {
+      ok: true,
+      clasificacion: {},
+      accion_descrita: `⚠️ Ya existe un contacto con ese teléfono: ${duplicado.nombre_completo}. No se crearía uno nuevo para evitar duplicarlo — se debería revisar manualmente desde el CRM.`,
+    }
   }
   const detalles: string[] = []
   if (datos.tipo_propiedad) detalles.push(`busca ${datos.tipo_propiedad}`)
@@ -882,7 +919,121 @@ async function calcularAccionCrearLead(perfil: PerfilAsistente, nombreContacto: 
     detalles.push(`presupuesto ${rango}`)
   }
   const detalleTxt = detalles.length > 0 ? ` (${detalles.join(', ')})` : ''
-  return `Se registraría a ${nombreContacto} (${telefonoContacto}) como contacto nuevo${detalleTxt}, asignado a ${perfil.nombre_completo}, y se le crearía su lead en "Contacto inicial".`
+  return {
+    ok: true,
+    clasificacion: {},
+    requiere_aclaracion: true,
+    siguiente_pregunta: [
+      `Se registraría a ${nombreContacto} (${telefonoContacto}) como contacto nuevo${detalleTxt}, asignado a ${perfil.nombre_completo}, y se le crearía su lead en "Contacto inicial".`,
+      '',
+      '¿Le asigno alguna propiedad? Dime el código (ej. PROP-0618) o cuéntame qué busca (zona, precio, tipo) y te paso opciones. Si no quieres asignar ninguna por ahora, responde "no".',
+    ].join('\n'),
+    contexto_para_siguiente_turno: {
+      intencion: 'crear_lead_propiedad',
+      nombre_contacto: nombreContacto,
+      tipo_propiedad: datos.tipo_propiedad,
+      ubicacion: datos.ubicacion,
+      precio_min: datos.precio_min,
+      precio_max: datos.precio_max,
+    },
+  }
+}
+
+async function calcularResultadoPropiedadLead(perfil: PerfilAsistente, mensaje: string, ctx: ContextoLeadPropiedad): Promise<ResultadoAsistenteGeneral> {
+  if (esRespuestaSinPropiedad(mensaje)) {
+    return { ok: true, clasificacion: {}, accion_descrita: 'No se asignaría ninguna propiedad por ahora.' }
+  }
+
+  const codigo = extraerCodigoPropiedad(mensaje)
+  if (codigo) {
+    const propiedad = await buscarPropiedadPorCodigo(perfil, codigo)
+    if (!propiedad) {
+      return {
+        ok: true, clasificacion: {},
+        requiere_aclaracion: true,
+        siguiente_pregunta: `No encontré ninguna propiedad con el código ${codigo} 😕 ¿me das otro código, o me cuentas qué busca el cliente para sugerirte opciones?`,
+        contexto_para_siguiente_turno: { intencion: 'crear_lead_propiedad', ...ctx },
+      }
+    }
+    if (propiedad.estado !== 'disponible') {
+      return {
+        ok: true, clasificacion: {},
+        requiere_aclaracion: true,
+        siguiente_pregunta: `La propiedad ${propiedad.codigo} (${propiedad.titulo}) no está disponible (estado: ${propiedad.estado}) 😕 ¿me das otro código, o me cuentas qué busca el cliente para sugerirte opciones?`,
+        contexto_para_siguiente_turno: { intencion: 'crear_lead_propiedad', ...ctx },
+      }
+    }
+    return { ok: true, clasificacion: {}, accion_descrita: `Se le asignaría la propiedad ${propiedad.codigo} (${propiedad.titulo}) al lead de ${ctx.nombre_contacto}.` }
+  }
+
+  const prompt = construirPromptConsultaGeneral(mensaje)
+  const clasificacion = parsearRespuestaGroq(await llamarGroq(prompt)) as Record<string, any>
+  const criterios: Record<string, any> = {
+    tipo_propiedad: clasificacion.tipo_propiedad ?? ctx.tipo_propiedad,
+    ubicacion: clasificacion.ubicacion ?? ctx.ubicacion,
+    precio_min: clasificacion.precio_min ?? ctx.precio_min,
+    precio_max: clasificacion.precio_max ?? ctx.precio_max,
+    tipo_operacion: clasificacion.tipo_operacion ?? null,
+    amenidades: clasificacion.amenidades ?? null,
+    dormitorios_min: clasificacion.dormitorios_min ?? null,
+    banos_min: clasificacion.banos_min ?? null,
+    niveles_min: clasificacion.niveles_min ?? null,
+    area_exacta: clasificacion.area_exacta ?? null,
+    area_min: clasificacion.area_min ?? null,
+    area_max: clasificacion.area_max ?? null,
+  }
+  const candidatas = (await buscarPropiedadesCandidatas(perfil, criterios)).slice(0, 5)
+  const ctxConCriterios: ContextoLeadPropiedad = {
+    nombre_contacto: ctx.nombre_contacto,
+    tipo_propiedad: criterios.tipo_propiedad,
+    ubicacion: criterios.ubicacion,
+    precio_min: criterios.precio_min,
+    precio_max: criterios.precio_max,
+  }
+
+  if (candidatas.length === 0) {
+    return {
+      ok: true, prompt_enviado_a_ia: prompt, clasificacion,
+      requiere_aclaracion: true,
+      siguiente_pregunta: 'No encontré propiedades disponibles con esos criterios 😕 ¿me das un código directamente, o seguimos sin asignar ninguna (responde "no")?',
+      contexto_para_siguiente_turno: { intencion: 'crear_lead_propiedad', ...ctxConCriterios },
+    }
+  }
+
+  const opciones: OpcionPropiedad[] = candidatas.map((p: any, i: number) => ({ numero: i + 1, propiedad_id: p.id, codigo: p.codigo ?? null, titulo: p.titulo }))
+  const lineas = candidatas.map((p: any, i: number) => `${i + 1}. ${formatearLineaPropiedad(p)}${p.codigo ? ` (${p.codigo})` : ''}`)
+  return {
+    ok: true, prompt_enviado_a_ia: prompt, clasificacion,
+    requiere_aclaracion: true,
+    siguiente_pregunta: [
+      `Encontré estas opciones para ${ctx.nombre_contacto}:`,
+      ...lineas,
+      '',
+      '¿Cuál le asigno? Responde con el número o el código, o dime "ninguna" si no quieres asignar nada.',
+    ].join('\n'),
+    contexto_para_siguiente_turno: { intencion: 'crear_lead_propiedad_elegir', nombre_contacto: ctx.nombre_contacto, opciones },
+  }
+}
+
+async function calcularResultadoElegirPropiedadLead(mensaje: string, ctx: { nombre_contacto: string; opciones: OpcionPropiedad[] }): Promise<ResultadoAsistenteGeneral> {
+  if (esRespuestaSinPropiedad(mensaje)) {
+    return { ok: true, clasificacion: {}, accion_descrita: 'No se asignaría ninguna propiedad por ahora.' }
+  }
+  const numero = parseInt(mensaje.trim(), 10)
+  const codigoMencionado = extraerCodigoPropiedad(mensaje)
+  const elegida =
+    (Number.isFinite(numero) ? ctx.opciones.find((o) => o.numero === numero) : null) ??
+    (codigoMencionado ? ctx.opciones.find((o) => o.codigo === codigoMencionado) : null)
+
+  if (!elegida) {
+    return {
+      ok: true, clasificacion: {},
+      requiere_aclaracion: true,
+      siguiente_pregunta: 'No identifiqué cuál de las opciones — responde con el número (1, 2, 3...) o el código 🙂',
+      contexto_para_siguiente_turno: { intencion: 'crear_lead_propiedad_elegir', ...ctx },
+    }
+  }
+  return { ok: true, clasificacion: {}, accion_descrita: `Se le asignaría la propiedad${elegida.codigo ? ` ${elegida.codigo}` : ''} (${elegida.titulo}) al lead de ${ctx.nombre_contacto}.` }
 }
 
 type ResultadoAsistenteGeneral = {
@@ -1003,7 +1154,7 @@ async function manejarAsistenteGeneral(perfil: PerfilAsistente, mensaje: string)
         contexto_para_siguiente_turno: { intencion: 'crear_lead', esperando: 'telefono_contacto', nombre_contacto: nombreContacto, ...datos },
       }
     }
-    return { ok: true, prompt_enviado_a_ia: prompt, clasificacion: c, accion_descrita: await calcularAccionCrearLead(perfil, nombreContacto, telefonoContacto, datos) }
+    return { ...(await calcularResultadoCrearLead(perfil, nombreContacto, telefonoContacto, datos)), prompt_enviado_a_ia: prompt, clasificacion: c }
   }
   const nombre = perfil.nombre_completo.split(' ')[0]
   return {
@@ -1029,6 +1180,8 @@ type ContextoPrevioAsistente =
   | { intencion: 'cambiar_etapa_lead'; esperando: 'nombre_contacto' | 'etapa_nueva'; nombre_contacto?: string; etapa_nueva?: string | null }
   | { intencion: 'cerrar_requerimiento' }
   | { intencion: 'crear_lead'; esperando: 'nombre_contacto' | 'telefono_contacto'; nombre_contacto?: string; telefono_contacto?: string | null; tipo_propiedad: string | null; ubicacion: string | null; precio_min: number | null; precio_max: number | null }
+  | { intencion: 'crear_lead_propiedad'; nombre_contacto: string; tipo_propiedad: string | null; ubicacion: string | null; precio_min: number | null; precio_max: number | null }
+  | { intencion: 'crear_lead_propiedad_elegir'; nombre_contacto: string; opciones: OpcionPropiedad[] }
 
 async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaje: string, contextoPrevio: ContextoPrevioAsistente): Promise<ResultadoAsistenteGeneral> {
   if (contextoPrevio.intencion === 'cerrar_requerimiento') {
@@ -1064,7 +1217,7 @@ async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaj
     if (contextoPrevio.esperando === 'nombre_contacto') {
       const nombreContacto = mensaje.trim()
       if (contextoPrevio.telefono_contacto) {
-        return { ok: true, clasificacion: { nombre_contacto: nombreContacto }, accion_descrita: await calcularAccionCrearLead(perfil, nombreContacto, contextoPrevio.telefono_contacto, datos) }
+        return { ...(await calcularResultadoCrearLead(perfil, nombreContacto, contextoPrevio.telefono_contacto, datos)), clasificacion: { nombre_contacto: nombreContacto } }
       }
       return {
         ok: true, clasificacion: { nombre_contacto: nombreContacto },
@@ -1075,7 +1228,21 @@ async function manejarAsistenteGeneralAclaracion(perfil: PerfilAsistente, mensaj
     }
     // esperando === 'telefono_contacto'
     const telefonoContacto = mensaje.trim()
-    return { ok: true, clasificacion: { telefono_contacto: telefonoContacto }, accion_descrita: await calcularAccionCrearLead(perfil, contextoPrevio.nombre_contacto!, telefonoContacto, datos) }
+    return { ...(await calcularResultadoCrearLead(perfil, contextoPrevio.nombre_contacto!, telefonoContacto, datos)), clasificacion: { telefono_contacto: telefonoContacto } }
+  }
+
+  if (contextoPrevio.intencion === 'crear_lead_propiedad') {
+    return await calcularResultadoPropiedadLead(perfil, mensaje, {
+      nombre_contacto: contextoPrevio.nombre_contacto,
+      tipo_propiedad: contextoPrevio.tipo_propiedad,
+      ubicacion: contextoPrevio.ubicacion,
+      precio_min: contextoPrevio.precio_min,
+      precio_max: contextoPrevio.precio_max,
+    })
+  }
+
+  if (contextoPrevio.intencion === 'crear_lead_propiedad_elegir') {
+    return await calcularResultadoElegirPropiedadLead(mensaje, { nombre_contacto: contextoPrevio.nombre_contacto, opciones: contextoPrevio.opciones })
   }
 
   if (contextoPrevio.intencion === 'cambiar_etapa_lead') {
