@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 import { ETIQUETAS_TIPO_OPERACION, ETIQUETAS_CARACTERISTICA } from './constantes'
 import BotonEliminarRequerimiento from './boton-eliminar-requerimiento'
+import CambiarEstadoRequerimiento from './[id]/cambiar-estado'
 
 const ETIQUETA_TIPO_PROPIEDAD: Record<string, string> = Object.fromEntries(
   TIPOS_PROPIEDAD.map((t) => [t.value, t.label])
@@ -11,6 +12,7 @@ const ETIQUETA_TIPO_PROPIEDAD: Record<string, string> = Object.fromEntries(
 
 type Requerimiento = {
   id: string
+  estado: string
   tipo_operacion: string | null
   tipo_propiedad: string | null
   precio_min: number | null
@@ -26,7 +28,7 @@ type Requerimiento = {
   municipio: { nombre: string } | null
 }
 
-const GRID_COLS = 'grid-cols-[1.4fr_1fr_1.2fr_1fr_1.4fr_100px_40px]'
+const GRID_COLS = 'grid-cols-[1.3fr_1fr_1.1fr_1fr_1.2fr_100px_90px_40px]'
 
 export default async function ListadoRequerimientos() {
   const supabase = await createClient()
@@ -43,7 +45,7 @@ export default async function ListadoRequerimientos() {
   const { data } = await supabase
     .from('requerimientos')
     .select(
-      'id, tipo_operacion, tipo_propiedad, precio_min, precio_max, moneda, zona, sector, dormitorios_min, banos_min, caracteristicas_deseadas, creado_en, contacto:contactos(id, nombre_completo), municipio:municipios(nombre)'
+      'id, estado, tipo_operacion, tipo_propiedad, precio_min, precio_max, moneda, zona, sector, dormitorios_min, banos_min, caracteristicas_deseadas, creado_en, contacto:contactos(id, nombre_completo), municipio:municipios(nombre)'
     )
     .order('creado_en', { ascending: false })
 
@@ -93,7 +95,7 @@ export default async function ListadoRequerimientos() {
 
       {requerimientos.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="min-w-[1080px]">
+          <div className="min-w-[1180px]">
             <div
               className={`grid ${GRID_COLS} items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
             >
@@ -103,6 +105,7 @@ export default async function ListadoRequerimientos() {
               <div>Presupuesto</div>
               <div>Distribución / características</div>
               <div></div>
+              <div>Estado</div>
               <div />
             </div>
 
@@ -128,6 +131,9 @@ export default async function ListadoRequerimientos() {
                 </div>
                 <div className="text-xs text-slate-400">
                   {new Date(r.creado_en).toLocaleDateString('es-GT', { dateStyle: 'medium' })}
+                </div>
+                <div className="flex justify-end">
+                  <CambiarEstadoRequerimiento requerimientoId={r.id} estadoActual={r.estado} />
                 </div>
                 <div className="flex justify-center">
                   {esAdmin && <BotonEliminarRequerimiento requerimientoId={r.id} etiqueta={r.contacto?.nombre_completo ?? 'requerimiento'} />}

@@ -317,6 +317,7 @@ export async function notificarRequerimientosCoincidentes(
     .from('requerimientos')
     .select('*, contacto:contactos(nombre_completo), creador:perfiles!creado_por(nombre_completo, telefono)')
     .eq('organization_id', organizationId)
+    .eq('estado', 'abierto')
   if (!requerimientos || requerimientos.length === 0) return
 
   for (const requerimiento of requerimientos as any[]) {

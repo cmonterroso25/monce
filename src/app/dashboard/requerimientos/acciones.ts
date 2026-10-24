@@ -24,6 +24,9 @@ function numeroOpcional(valor: FormDataEntryValue | null) {
 function datosDesdeFormulario(formData: FormData) {
   return {
     contacto_id: formData.get('contacto_id') as string,
+    // El formulario de "nuevo" no tiene campo estado (siempre arranca
+    // abierto); solo el de "editar" lo incluye — de ahí el fallback.
+    estado: (formData.get('estado') as string) || 'abierto',
     tipo_operacion: textoOpcional(formData.get('tipo_operacion')),
     tipo_propiedad: textoOpcional(formData.get('tipo_propiedad')),
     precio_min: numeroOpcional(formData.get('precio_min')),
@@ -173,5 +176,26 @@ export async function eliminarRequerimiento(requerimientoId: string) {
   revalidatePath(`/dashboard/contactos/${requerimiento.contacto_id}`)
 
   if (error) return { ok: false, mensaje: error.message }
+  return { ok: true, mensaje: null }
+}
+
+// "Cerrar" saca el requerimiento de la comparación contra propiedades
+// nuevas (ver notificarRequerimientosCoincidentes) sin borrar el registro
+// — a diferencia de eliminar, cualquiera que pueda editar el requerimiento
+// puede cerrarlo/reabrirlo (mismo criterio de RLS que actualizarRequerimiento).
+export async function cambiarEstadoRequerimiento(requerimientoId: string, nuevoEstado: string) {
+  const supabase = await createClient()
+  const { data: requerimiento, error } = await supabase
+    .from('requerimientos')
+    .update({ estado: nuevoEstado, actualizado_en: new Date().toISOString() })
+    .eq('id', requerimientoId)
+    .select('contacto_id')
+    .maybeSingle()
+
+  revalidatePath('/dashboard/requerimientos')
+  if (requerimiento) revalidatePath(`/dashboard/contactos/${requerimiento.contacto_id}`)
+
+  if (error) return { ok: false, mensaje: error.message }
+  if (!requerimiento) return { ok: false, mensaje: 'No se pudo actualizar (sin permiso o no existe).' }
   return { ok: true, mensaje: null }
 }

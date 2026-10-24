@@ -1007,19 +1007,19 @@ function construirPromptConsultaGeneral(mensaje: string): string {
     contextoFecha,
     'Eres el asistente interno por WhatsApp de un CRM inmobiliario en Guatemala. Te escribe un asesor o administrador del equipo (nunca un cliente externo) con una consulta o instrucción sobre el CRM.',
     `Mensaje: "${mensaje}"`,
-    'Clasifica la intención en exactamente una de estas 8 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "cambiar_etapa_lead" (instrucción directa de mover un lead a una etapa específica, ej. "marca a Juan como ganado", "mueve el lead de María a perdida" — NO uses esto para preguntas, solo para órdenes explícitas), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
+    'Clasifica la intención en exactamente una de estas 10 categorías: "consultar_leads" (cuántos leads tiene o en qué etapa están, o resumen de ganados/perdidos), "consultar_citas" (qué citas/visitas/llamadas tiene agendadas), "buscar_propiedades" (buscar propiedades del inventario por criterios), "crear_tarea" (crear una tarea o recordatorio para sí mismo), "agendar_cita" (agendar una cita o visita con un cliente/lead existente), "cambiar_etapa_lead" (instrucción directa de mover un lead a una etapa específica, ej. "marca a Juan como ganado", "mueve el lead de María a perdida" — NO uses esto para preguntas, solo para órdenes explícitas), "consultar_requerimientos" (qué está buscando un cliente / qué requerimientos tiene abiertos, ej. "¿qué requerimientos tengo?", "¿hay algún requerimiento en zona 10?"), "cerrar_requerimiento" (instrucción explícita de cerrar/dar por resuelto un requerimiento, ej. "cierra el requerimiento de Juan", "ya no busca nada Juan" — NO uses esto para preguntas), "reporte_desempeno" (pedir un reporte de desempeño del equipo: conversión por asesor, motivos de pérdida más comunes, tiempo promedio de cierre — solo tiene sentido para un administrador), "conversacion_general" (cualquier otra cosa, saludos incluidos).',
     'Llena solo los campos que correspondan a la intención detectada; deja los demás en null:',
     '- etapa_lead: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida"|"activos"|"todos" (usa "activos" si no mencionó etapa; "todos" solo si pidió el total incluyendo ganados y perdidos).',
     '- rango_fecha_leads: "hoy"|"esta_semana"|"este_mes"|"todo" (para "consultar_leads" solo si etapa_lead es "ganada" o "perdida"; para "reporte_desempeno" siempre aplica como el periodo del reporte; si no especificó, usa "este_mes").',
     '- rango_fecha_citas: "hoy"|"mañana"|"esta_semana"|"vencidas" (si no especificó, usa "hoy").',
     '- tipo_operacion: "venta"|"renta"|null.',
     '- tipo_propiedad: "casa"|"apartamento"|"terreno"|"bodega"|"oficina"|"ofibodega"|"finca"|"granja"|"local"|"edificio"|null.',
-    '- ubicacion: para "buscar_propiedades", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
+    '- ubicacion: para "buscar_propiedades" o "consultar_requerimientos", CUALQUIER zona, sector, condominio, colonia o municipio mencionado, como un solo texto (no sabes en qué columna vive en la base de datos, así que no intentes clasificarlo — solo transcribe la ubicación tal como la dijo). Si mencionó un número de zona, incluye SOLO el número (ej. "10", no "zona 10"). Si mencionó varias ubicaciones, usa solo la más específica. Null si no mencionó ubicación.',
     '- amenidades: para "buscar_propiedades", arreglo de palabras clave de amenidades o características mencionadas (ej. ["piscina","gimnasio"]), o null si no mencionó ninguna.',
     '- precio_min, precio_max, dormitorios_min, banos_min, niveles_min: número o null.',
     '- area_exacta, area_min, area_max: metros cuadrados mencionados (construcción o terreno), número o null. Si da un metraje SIN calificarlo (ej. "de 100m2", "casa de 100 metros") usa area_exacta — debe coincidir EXACTO, ni más ni menos. Usa area_min SOLO si dijo explícitamente "más de", "mayor a", "mínimo", "arriba de" o similar. Usa area_max SOLO si dijo explícitamente "menos de", "menor a", "máximo", "hasta" o similar. Si mencionó un rango explícito (ej. "entre 100 y 150 m2") usa area_min Y area_max juntos. Nunca combines area_exacta con area_min/area_max.',
     '- titulo_tarea: para crear_tarea, un título breve (ej. "Llamar a Juan Pérez"), o null.',
-    '- nombre_contacto: para crear_tarea, agendar_cita o cambiar_etapa_lead, el nombre completo del cliente/contacto mencionado, o null.',
+    '- nombre_contacto: para crear_tarea, agendar_cita, cambiar_etapa_lead o cerrar_requerimiento, el nombre completo del cliente/contacto mencionado, o null.',
     '- etapa_nueva: SOLO para cambiar_etapa_lead, la etapa de destino: "contacto_inicial"|"visita_agendada"|"visita_realizada"|"reservada"|"ganada"|"perdida" (interpreta "ganado"→"ganada", "perdido"→"perdida", "reservó"→"reservada", etc.), o null si no quedó claro a cuál etapa.',
     '- fecha_hora_iso: para crear_tarea o agendar_cita, la fecha/hora convertida a ISO 8601 con zona -06:00 (usa la fecha actual de arriba para expresiones relativas como "mañana"), o null si no la mencionó.',
     '- confianza_fecha: "alta"|"media"|"baja"|"ninguna" (alta solo si es inequívoca — no inventes fecha).',
@@ -1366,6 +1366,136 @@ async function responderBusquedaPropiedades(perfil: PerfilAsistente, chatId: str
   )
 }
 
+const ETIQUETAS_TIPO_OPERACION_REQ: Record<string, string> = { venta: 'Venta', renta: 'Renta' }
+
+async function responderConsultarRequerimientos(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+  let query = supabase
+    .from('requerimientos')
+    .select('id, tipo_operacion, tipo_propiedad, precio_min, precio_max, moneda, zona, sector, contacto:contactos(nombre_completo), municipio:municipios(nombre)')
+    .eq('organization_id', perfil.organization_id)
+    .eq('estado', 'abierto')
+    .order('creado_en', { ascending: false })
+    .limit(10)
+  if (perfil.rol === 'agente') query = query.eq('creado_por', perfil.id)
+
+  const ubicacion = c.ubicacion ? escaparValorFiltro(String(c.ubicacion)) : null
+  if (ubicacion) {
+    const { data: municipiosCoincidentes } = await supabase
+      .from('municipios')
+      .select('id')
+      .ilike('nombre', `%${ubicacion}%`)
+    const condiciones = [`zona.ilike.%${ubicacion}%`, `sector.ilike.%${ubicacion}%`]
+    if (municipiosCoincidentes && municipiosCoincidentes.length > 0) {
+      condiciones.push(`municipio_id.in.(${municipiosCoincidentes.map((m) => m.id).join(',')})`)
+    }
+    query = query.or(condiciones.join(','))
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error('Error consultando requerimientos para asistente IA:', error)
+    await responderAsesor(chatId, 'Uy, no pude consultar los requerimientos en este momento 😓', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  if (!data || data.length === 0) {
+    await responderAsesor(chatId, 'No hay requerimientos abiertos que coincidan 🙂', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  const lineas = (data as any[]).map((r) => {
+    const contacto = Array.isArray(r.contacto) ? r.contacto[0] : r.contacto
+    const municipio = Array.isArray(r.municipio) ? r.municipio[0] : r.municipio
+    const tipo = [r.tipo_operacion ? ETIQUETAS_TIPO_OPERACION_REQ[r.tipo_operacion] : null, r.tipo_propiedad].filter(Boolean).join(' · ') || 'Cualquier tipo'
+    const ubicacionTxt = [r.zona ? `Zona ${r.zona}` : null, r.sector, municipio?.nombre].filter(Boolean).join(' · ')
+    const presupuesto = r.precio_min || r.precio_max
+      ? `${r.moneda ?? 'GTQ'} ${r.precio_min ? Number(r.precio_min).toLocaleString() : '0'}${r.precio_max ? ` - ${Number(r.precio_max).toLocaleString()}` : '+'}`
+      : null
+    return `• ${contacto?.nombre_completo ?? 'Cliente'} — ${tipo}${ubicacionTxt ? ' · ' + ubicacionTxt : ''}${presupuesto ? ' · ' + presupuesto : ''}`
+  })
+
+  await responderAsesor(
+    chatId,
+    [`📋 ${data.length} requerimiento${data.length === 1 ? '' : 's'} abierto${data.length === 1 ? '' : 's'}:`, ...lineas].join('\n'),
+    perfil.organization_id,
+    perfil.id,
+    null,
+    'asistente_ia_respuesta'
+  )
+}
+
+// Igual que resolverLeadPorNombreContacto: solo vincula si hay EXACTAMENTE
+// un contacto coincidente, y además solo si ese contacto tiene EXACTAMENTE
+// un requerimiento abierto — si tiene varios, no se puede adivinar cuál
+// cerrar, así que se pide hacerlo manualmente en vez de asumir.
+async function resolverRequerimientoAbiertoPorNombreContacto(nombreContacto: string | null, perfil: PerfilAsistente): Promise<{ requerimientoId: string; contactoId: string } | null> {
+  if (!nombreContacto || !nombreContacto.trim()) return null
+  const { data: contactosCoincidentes } = await supabase.from('contactos').select('id').ilike('nombre_completo', `%${nombreContacto.trim()}%`)
+  const contactoIds = (contactosCoincidentes ?? []).map((c) => c.id)
+  if (contactoIds.length === 0) return null
+
+  let query = supabase
+    .from('requerimientos')
+    .select('id, contacto_id')
+    .eq('organization_id', perfil.organization_id)
+    .eq('estado', 'abierto')
+    .in('contacto_id', contactoIds)
+    .order('creado_en', { ascending: false })
+  if (perfil.rol === 'agente') query = query.eq('creado_por', perfil.id)
+  const { data: requerimientosCoincidentes } = await query
+  if (!requerimientosCoincidentes || requerimientosCoincidentes.length === 0) return null
+
+  const contactosDistintos = new Set(requerimientosCoincidentes.map((r) => r.contacto_id))
+  if (contactosDistintos.size !== 1 || requerimientosCoincidentes.length !== 1) return null
+  const unico = requerimientosCoincidentes[0]
+  return { requerimientoId: unico.id, contactoId: unico.contacto_id }
+}
+
+async function cerrarRequerimientoDesdeAsistente(perfil: PerfilAsistente, chatId: string, nombreContacto: string) {
+  const vinculo = await resolverRequerimientoAbiertoPorNombreContacto(nombreContacto, perfil)
+  if (!vinculo) {
+    await responderAsesor(
+      chatId,
+      `No encontré (o hay varios) un requerimiento abierto de "${nombreContacto}" entre los que puedes ver 😕 Ciérralo manualmente desde el CRM.`,
+      perfil.organization_id,
+      perfil.id,
+      null,
+      'asistente_ia_respuesta'
+    )
+    return
+  }
+
+  const { error } = await supabase.from('requerimientos').update({ estado: 'cerrado', actualizado_en: new Date().toISOString() }).eq('id', vinculo.requerimientoId)
+  if (error) {
+    console.error('No se pudo cerrar el requerimiento desde el asistente IA:', error)
+    await responderAsesor(chatId, 'Uy, no pude cerrarlo 😓 Intenta de nuevo o hazlo manualmente desde el CRM.', perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    return
+  }
+
+  await responderAsesor(chatId, `✅ Listo, cerré el requerimiento de ${nombreContacto}.`, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+}
+
+async function responderCerrarRequerimiento(perfil: PerfilAsistente, chatId: string, c: Record<string, any>) {
+  const nombreContacto = c.nombre_contacto ? String(c.nombre_contacto).trim() : null
+
+  if (!nombreContacto) {
+    const pregunta = '¿El requerimiento de qué cliente quieres cerrar? Responde citando este mensaje 🙂'
+    const idMessage = await responderAsesor(chatId, pregunta, perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
+    await supabase.from('asistente_ia_pendientes').insert({
+      chat_id_asesor: chatId,
+      perfil_id: perfil.id,
+      organization_id: perfil.organization_id,
+      intencion: 'cerrar_requerimiento',
+      contexto: {},
+      pregunta_texto: pregunta,
+      green_api_message_id: idMessage,
+    })
+    return
+  }
+
+  await cerrarRequerimientoDesdeAsistente(perfil, chatId, nombreContacto)
+}
+
 function fechaEsConfiable(fechaIso: unknown, confianza: unknown): fechaIso is string {
   return typeof fechaIso === 'string' && (confianza === 'alta' || confianza === 'media')
 }
@@ -1627,6 +1757,8 @@ async function manejarConsultaGeneral(perfil: PerfilAsistente, chatId: string, m
   else if (c.intencion === 'crear_tarea') await responderCrearTarea(perfil, chatId, c)
   else if (c.intencion === 'agendar_cita') await responderAgendarCita(perfil, chatId, c)
   else if (c.intencion === 'cambiar_etapa_lead') await responderCambiarEtapaLead(perfil, chatId, c)
+  else if (c.intencion === 'consultar_requerimientos') await responderConsultarRequerimientos(perfil, chatId, c)
+  else if (c.intencion === 'cerrar_requerimiento') await responderCerrarRequerimiento(perfil, chatId, c)
   else if (c.intencion === 'reporte_desempeno') await responderReporteDesempeno(perfil, chatId, c)
   else await responderAsesor(chatId, mensajeConversacionGeneral(perfil.nombre_completo), perfil.organization_id, perfil.id, null, 'asistente_ia_respuesta')
 }
@@ -1735,6 +1867,10 @@ async function procesarAclaracionPendiente(pendiente: PendienteAsistenteRow, men
   }
   if (pendiente.intencion === 'cambiar_etapa_lead') {
     await procesarAclaracionCambiarEtapaLead(pendiente, mensaje, perfil, chatId)
+    return
+  }
+  if (pendiente.intencion === 'cerrar_requerimiento') {
+    await cerrarRequerimientoDesdeAsistente(perfil, chatId, mensaje.trim())
     return
   }
   const clasificacion = parsearRespuestaGroq(await llamarGroq(construirPromptAclaracionFecha(mensaje))) as { fecha_hora_iso: string | null; confianza_fecha: string }

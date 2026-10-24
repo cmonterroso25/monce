@@ -1,3 +1,13 @@
+export const ESTADOS_REQUERIMIENTO = ['abierto', 'cerrado']
+export const ETIQUETAS_ESTADO_REQUERIMIENTO: Record<string, string> = {
+  abierto: 'Abierto',
+  cerrado: 'Cerrado',
+}
+export const COLORES_ESTADO_REQUERIMIENTO: Record<string, string> = {
+  abierto: 'bg-blue-100 text-blue-700',
+  cerrado: 'bg-slate-100 text-slate-600',
+}
+
 export const TIPOS_OPERACION = ['venta', 'renta']
 export const ETIQUETAS_TIPO_OPERACION: Record<string, string> = {
   venta: 'Venta',

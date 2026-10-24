@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { actualizarRequerimiento } from '../../acciones'
-import { TIPOS_OPERACION, ETIQUETAS_TIPO_OPERACION, CARACTERISTICAS_DESEADAS } from '../../constantes'
+import { TIPOS_OPERACION, ETIQUETAS_TIPO_OPERACION, CARACTERISTICAS_DESEADAS, ESTADOS_REQUERIMIENTO, ETIQUETAS_ESTADO_REQUERIMIENTO } from '../../constantes'
 import { TIPOS_PROPIEDAD } from '@/lib/tipos-propiedad'
 
 export default async function EditarRequerimiento({
@@ -34,6 +34,15 @@ export default async function EditarRequerimiento({
 
       <form action={actualizarRequerimiento} className="space-y-4">
         <input type="hidden" name="requerimiento_id" value={requerimiento.id} />
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
+          <select name="estado" defaultValue={requerimiento.estado ?? 'abierto'} className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+            {ESTADOS_REQUERIMIENTO.map((e) => (
+              <option key={e} value={e}>{ETIQUETAS_ESTADO_REQUERIMIENTO[e]}</option>
+            ))}
+          </select>
+        </div>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Contacto</label>
